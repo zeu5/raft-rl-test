@@ -1,0 +1,54 @@
+package types
+
+type AgentConfig struct {
+	Episodes    int
+	Horizon     int
+	Policy      Policy
+	Environment Environment
+}
+
+type Agent struct {
+	config      *AgentConfig
+	traces      []*Trace
+	policy      Policy
+	environment Environment
+}
+
+func NewAgent(config *AgentConfig) *Agent {
+	return &Agent{
+		config:      config,
+		traces:      make([]*Trace, config.Episodes),
+		policy:      config.Policy,
+		environment: config.Environment,
+	}
+}
+
+func (a *Agent) Run() {
+	for i := 0; i < a.config.Episodes; i++ {
+		a.traces[i] = a.runEpisode()
+	}
+}
+
+func (a *Agent) runEpisode() *Trace {
+	state := a.environment.Reset()
+	trace := NewTrace()
+	actions := state.Actions()
+
+	for i := 0; i < a.config.Horizon; i++ {
+		if len(actions) == 0 {
+			break
+		}
+		nextAction, ok := a.policy.NextAction(i, state, actions)
+		if !ok {
+			break
+		}
+		nextState := a.environment.Step(nextAction)
+		a.policy.Update(i, state, nextAction, nextState)
+
+		trace.Append(i, state, nextAction, nextState)
+		state = nextState
+		actions = nextState.Actions()
+	}
+
+	return trace
+}
