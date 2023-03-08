@@ -25,11 +25,11 @@ func NewAgent(config *AgentConfig) *Agent {
 
 func (a *Agent) Run() {
 	for i := 0; i < a.config.Episodes; i++ {
-		a.traces[i] = a.runEpisode()
+		a.traces[i] = a.runEpisode(i)
 	}
 }
 
-func (a *Agent) runEpisode() *Trace {
+func (a *Agent) runEpisode(episode int) *Trace {
 	state := a.environment.Reset()
 	trace := NewTrace()
 	actions := state.Actions()
@@ -49,6 +49,7 @@ func (a *Agent) runEpisode() *Trace {
 		state = nextState
 		actions = nextState.Actions()
 	}
+	a.policy.UpdateIteration(episode, trace)
 
 	return trace
 }

@@ -21,10 +21,10 @@ func (e *Experiment) Run() {
 	agent := NewAgent(e.config)
 	for i := 0; i < e.config.Episodes; i++ {
 		fmt.Printf("\rExperiment: %s, Episode: %d/%d", e.name, i+1, e.config.Episodes)
-		agent.traces[i] = agent.runEpisode()
+		agent.traces[i] = agent.runEpisode(i)
 	}
 	e.Result = agent.traces
-	fmt.Printf("Finished Experiment: %s\n", e.name)
+	fmt.Println("")
 }
 
 type DataSet interface{}

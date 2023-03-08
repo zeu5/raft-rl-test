@@ -7,12 +7,13 @@ import (
 	"math/rand"
 	"time"
 
-	pb "github.com/zeu5/raft-rl-test/raft/raftpb"
 	"github.com/zeu5/raft-rl-test/types"
+	raft "go.etcd.io/raft/v3"
+	pb "go.etcd.io/raft/v3/raftpb"
 )
 
 type RaftState struct {
-	NodeStates   map[uint64]Status
+	NodeStates   map[uint64]raft.Status
 	Messages     map[string]pb.Message
 	WithTimeouts bool
 }
@@ -71,8 +72,8 @@ type RaftEnvironmentConfig struct {
 
 type RaftEnvironment struct {
 	config   RaftEnvironmentConfig
-	nodes    map[uint64]*RawNode
-	storages map[uint64]*MemoryStorage
+	nodes    map[uint64]*raft.RawNode
+	storages map[uint64]*raft.MemoryStorage
 	messages map[string]pb.Message
 	curState *RaftState
 	rand     *rand.Rand
@@ -81,8 +82,8 @@ type RaftEnvironment struct {
 func NewRaftEnvironment(config RaftEnvironmentConfig) *RaftEnvironment {
 	r := &RaftEnvironment{
 		config:   config,
-		nodes:    make(map[uint64]*RawNode),
-		storages: make(map[uint64]*MemoryStorage),
+		nodes:    make(map[uint64]*raft.RawNode),
+		storages: make(map[uint64]*raft.MemoryStorage),
 		messages: make(map[string]pb.Message),
 		rand:     rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
@@ -99,15 +100,15 @@ func NewRaftEnvironment(config RaftEnvironmentConfig) *RaftEnvironment {
 }
 
 func (r *RaftEnvironment) makeNodes() {
-	peers := make([]Peer, r.config.Replicas)
+	peers := make([]raft.Peer, r.config.Replicas)
 	for i := 0; i < r.config.Replicas; i++ {
-		peers[i] = Peer{ID: uint64(i + 1)}
+		peers[i] = raft.Peer{ID: uint64(i + 1)}
 	}
 	for i := 0; i < r.config.Replicas; i++ {
-		storage := NewMemoryStorage()
+		storage := raft.NewMemoryStorage()
 		nodeID := uint64(i + 1)
 		r.storages[nodeID] = storage
-		r.nodes[nodeID], _ = NewRawNode(&Config{
+		r.nodes[nodeID], _ = raft.NewRawNode(&raft.Config{
 			ID:                        nodeID,
 			ElectionTick:              r.config.ElectionTick,
 			HeartbeatTick:             r.config.HeartbeatTick,
@@ -115,12 +116,12 @@ func (r *RaftEnvironment) makeNodes() {
 			MaxSizePerMsg:             1024 * 1024,
 			MaxInflightMsgs:           256,
 			MaxUncommittedEntriesSize: 1 << 30,
-			Logger:                    &DefaultLogger{Logger: log.New(io.Discard, "", 0)},
+			Logger:                    &raft.DefaultLogger{Logger: log.New(io.Discard, "", 0)},
 		})
 		r.nodes[nodeID].Bootstrap(peers)
 	}
 	initState := &RaftState{
-		NodeStates:   make(map[uint64]Status),
+		NodeStates:   make(map[uint64]raft.Status),
 		Messages:     r.messages,
 		WithTimeouts: r.config.Timeouts,
 	}
@@ -153,7 +154,7 @@ func (r *RaftEnvironment) Step(action types.Action) types.State {
 			haveLeader := false
 			leader := uint64(0)
 			for id, node := range r.nodes {
-				if node.Status().RaftState == StateLeader {
+				if node.Status().RaftState == raft.StateLeader {
 					haveLeader = true
 					leader = id
 					break
@@ -172,19 +173,19 @@ func (r *RaftEnvironment) Step(action types.Action) types.State {
 		}
 		// Take random number of ticks and update node states
 		for _, node := range r.nodes {
-			ticks := rand.Intn(r.config.ElectionTick)
+			ticks := 6
 			for i := 0; i < ticks; i++ {
 				node.Tick()
 			}
 		}
 		newState := &RaftState{
-			NodeStates:   make(map[uint64]Status),
+			NodeStates:   make(map[uint64]raft.Status),
 			WithTimeouts: r.config.Timeouts,
 		}
 		for id, node := range r.nodes {
 			if node.HasReady() {
 				ready := node.Ready()
-				if !IsEmptySnap(ready.Snapshot) {
+				if !raft.IsEmptySnap(ready.Snapshot) {
 					r.storages[id].ApplySnapshot(ready.Snapshot)
 				}
 				r.storages[id].Append(ready.Entries)

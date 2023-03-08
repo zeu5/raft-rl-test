@@ -9,6 +9,7 @@ import (
 )
 
 type Policy interface {
+	UpdateIteration(int, *Trace)
 	NextAction(int, State, []Action) (Action, bool)
 	Update(int, State, Action, State)
 }
@@ -28,6 +29,10 @@ func NewSoftMaxNegPolicy(alpha, gamma float64) *SoftMaxNegPolicy {
 }
 
 var _ Policy = &SoftMaxNegPolicy{}
+
+func (s *SoftMaxNegPolicy) UpdateIteration(_ int, _ *Trace) {
+
+}
 
 func (s *SoftMaxNegPolicy) NextAction(step int, state State, actions []Action) (Action, bool) {
 	stateHash := state.Hash()
@@ -96,6 +101,10 @@ func NewRandomPolicy() *RandomPolicy {
 	return &RandomPolicy{
 		rand: rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
+}
+
+func (r *RandomPolicy) UpdateIteration(_ int, _ *Trace) {
+
 }
 
 func (r *RandomPolicy) NextAction(step int, state State, actions []Action) (Action, bool) {

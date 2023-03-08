@@ -30,3 +30,14 @@ func (t *Trace) Get(i int) (State, Action, State, bool) {
 	}
 	return t.states[i], t.actions[i], t.nextStates[i], true
 }
+
+func (t *Trace) GetPrefix(i int) (*Trace, bool) {
+	if i > len(t.states) {
+		return nil, false
+	}
+	return &Trace{
+		states:     t.states[0:i],
+		actions:    t.actions[0:i],
+		nextStates: t.nextStates[0:i],
+	}, true
+}
