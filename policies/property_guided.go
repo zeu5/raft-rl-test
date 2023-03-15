@@ -107,10 +107,11 @@ func NewPropertyGuidedPolicy(properties []*types.Monitor, alpha, gamma, epsilon 
 		// general exploration table, update it all the times, use it when not following any prop or state is unknown for the prop
 		expQTable: NewQTable(),
 		// list of QTables, one for each prop, updated only for trajectories that fulfill the prop
-		propQTables: make([]*QTable, len(properties)),
-		alpha:       alpha,
-		gamma:       gamma,
-		epsilon:     epsilon,
+		propQTables:  make([]*QTable, len(properties)),
+		alpha:        alpha,
+		gamma:        gamma,
+		epsilon:      epsilon,
+		propEpisodes: make([]int, len(properties)),
 		// start with no property
 		currentProp: -1,
 		rand:        rand.New(rand.NewSource(time.Now().UnixNano())),
