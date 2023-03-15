@@ -10,7 +10,7 @@ import (
 type PropertyGuidedPolicy struct {
 	properties []*types.Monitor
 	QTableExp   map[string]map[string]float64
-	QTablesProp	*map[string]map[string]float64
+	QTablesProp	[]map[string]map[string]float64
 	alpha    float64
 	gamma    float64
 	epsilon	float64 // probability to still follow general Exploration instead of prop, greedy over QTablesProp[prop] otherwise
@@ -68,11 +68,11 @@ func (p *PropertyGuidedPolicy) updatePolicy(prop property, trace *types.Trace) {
 
 		nextStateHash := nextState.Hash()
 		actionKey := action.Hash()
-		if _, ok := p.QTable[stateHash]; !ok {
-			return
+		if _, ok := p.QTable[stateHash]; !ok { // TO UPDATE, QTable of the property QTablesProp[i]
+			return // create a new map
 		}
 		if _, ok := p.QTable[stateHash][actionKey]; !ok {
-			return
+			return // init to 0
 		}
 		curVal := p.QTable[stateHash][actionKey]
 		max := float64(0)
@@ -85,9 +85,9 @@ func (p *PropertyGuidedPolicy) updatePolicy(prop property, trace *types.Trace) {
 		}
 
 		if i == prefix.Len() - 1 { // last step, give 1 reward and 0 for next state
-			nextVal := (1-p.alpha)*curVal + p.alpha*(p.gamma*1)
+			nextVal := (1-p.alpha)*curVal + p.alpha*(1 + p.gamma*max)
 		} else { // otherwise, update with zero reward + V(nextState)
-			nextVal := (1-p.alpha)*curVal + p.alpha*(p.gamma*max)
+			nextVal := (1-p.alpha)*curVal + p.alpha*(0 + p.gamma*max)
 		}
 		
 		p.QTable[stateHash][actionKey] = nextVal
