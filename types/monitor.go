@@ -13,6 +13,24 @@ type MonitorState struct {
 
 type MonitorCondition func(trace *Trace) bool
 
+func (m MonitorCondition) Not() MonitorCondition {
+	return func(trace *Trace) bool {
+		return !m(trace)
+	}
+}
+
+func (m MonitorCondition) Or(other MonitorCondition) MonitorCondition {
+	return func(trace *Trace) bool {
+		return m(trace) || other(trace)
+	}
+}
+
+func (m MonitorCondition) And(other MonitorCondition) MonitorCondition {
+	return func(trace *Trace) bool {
+		return m(trace) && other(trace)
+	}
+}
+
 type Monitor struct {
 	states map[string]*MonitorState
 }
@@ -27,17 +45,17 @@ func (m *Monitor) Check(t *Trace) (*Trace, bool) {
 	}
 	for i := 1; i <= t.Len(); i++ {
 		prefix, _ := t.GetPrefix(i)
-		transitioned := false
+		// transitioned := false
 		for next, cond := range curState.transitions {
 			if cond(prefix) {
-				transitioned = true
+				// transitioned = true
 				curState = m.states[next]
 			}
 		}
-		if !transitioned {
-			// The case when there is no transition defined
-			return nil, false
-		}
+		// if !transitioned {
+		// 	// The case when there is no transition defined
+		// 	return nil, false
+		// }
 		if curState.Success {
 			return prefix, true
 		}

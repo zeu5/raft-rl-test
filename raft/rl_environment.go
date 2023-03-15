@@ -30,7 +30,9 @@ func (r *RaftState) Actions() []types.Action {
 	if r.WithTimeouts {
 		processes := map[uint64]bool{}
 		for _, m := range r.Messages {
-			processes[m.To] = true
+			if m.To != 0 {
+				processes[m.To] = true
+			}
 		}
 		for p := range processes {
 			additional = append(additional, &RaftAction{
