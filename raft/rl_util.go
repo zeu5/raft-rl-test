@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/zeu5/raft-rl-test/types"
+	"github.com/zeu5/raft-rl-test/rl"
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
 	"gonum.org/v1/plot/plotutil"
@@ -16,7 +16,7 @@ type RaftDataSet struct {
 	uniqueStates []int
 }
 
-func RaftAnalyzer(traces []*types.Trace) types.DataSet {
+func RaftAnalyzer(traces []*rl.Trace) rl.DataSet {
 	dataSet := &RaftDataSet{
 		statesMap:    make(map[string]bool),
 		uniqueStates: make([]int, 0),
@@ -38,17 +38,17 @@ func RaftAnalyzer(traces []*types.Trace) types.DataSet {
 	return dataSet
 }
 
-var _ types.Analyzer = RaftAnalyzer
+var _ rl.Analyzer = RaftAnalyzer
 
-func RaftComparator(names []string, datasets []types.DataSet) {
+func RaftComparator(names []string, datasets []rl.DataSet) {
 	for i := 0; i < len(names); i++ {
 		raftDataSet := datasets[i].(*RaftDataSet)
 		fmt.Printf("Coverage for experiment: %s, states: %d\n", names[i], len(raftDataSet.statesMap))
 	}
 }
 
-func RaftPlotComparator(figPath string) types.Comparator {
-	return func(names []string, datasets []types.DataSet) {
+func RaftPlotComparator(figPath string) rl.Comparator {
+	return func(names []string, datasets []rl.DataSet) {
 		p := plot.New()
 		p.Title.Text = "Comparison"
 		p.X.Label.Text = "Iteration"
@@ -79,4 +79,4 @@ func RaftPlotComparator(figPath string) types.Comparator {
 	}
 }
 
-var _ types.Comparator = RaftComparator
+var _ rl.Comparator = RaftComparator

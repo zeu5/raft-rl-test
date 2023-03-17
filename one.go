@@ -3,7 +3,7 @@ package main
 import (
 	"github.com/spf13/cobra"
 	"github.com/zeu5/raft-rl-test/raft"
-	"github.com/zeu5/raft-rl-test/types"
+	"github.com/zeu5/raft-rl-test/rl"
 )
 
 func One(episodes, horizon int, saveFile string) {
@@ -13,30 +13,30 @@ func One(episodes, horizon int, saveFile string) {
 		HeartbeatTick: 1,
 		Timeouts:      true,
 	}
-	c := types.NewComparison(raft.RaftAnalyzer, raft.RaftPlotComparator(saveFile))
-	c.AddExperiment(types.NewExperiment("RL", &types.AgentConfig{
+	c := rl.NewComparison(raft.RaftAnalyzer, raft.RaftPlotComparator(saveFile))
+	c.AddExperiment(rl.NewExperiment("RL", &rl.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
-		Policy:      types.NewSoftMaxNegPolicy(0.3, 0.7),
+		Policy:      rl.NewSoftMaxNegPolicy(0.3, 0.7),
 		Environment: raft.NewRaftEnvironment(raftConfig),
 	}))
-	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
+	c.AddExperiment(rl.NewExperiment("Random", &rl.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
-		Policy:      types.NewRandomPolicy(),
+		Policy:      rl.NewRandomPolicy(),
 		Environment: raft.NewRaftEnvironment(raftConfig),
 	}))
 	raftConfig.Timeouts = false
-	c.AddExperiment(types.NewExperiment("RL-NoTimeouts", &types.AgentConfig{
+	c.AddExperiment(rl.NewExperiment("RL-NoTimeouts", &rl.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
-		Policy:      types.NewSoftMaxNegPolicy(0.3, 0.7),
+		Policy:      rl.NewSoftMaxNegPolicy(0.3, 0.7),
 		Environment: raft.NewRaftEnvironment(raftConfig),
 	}))
-	c.AddExperiment(types.NewExperiment("Random-NoTimeouts", &types.AgentConfig{
+	c.AddExperiment(rl.NewExperiment("Random-NoTimeouts", &rl.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
-		Policy:      types.NewRandomPolicy(),
+		Policy:      rl.NewRandomPolicy(),
 		Environment: raft.NewRaftEnvironment(raftConfig),
 	}))
 

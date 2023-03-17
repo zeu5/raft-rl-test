@@ -1,20 +1,20 @@
 package raft
 
 import (
-	"github.com/zeu5/raft-rl-test/types"
+	"github.com/zeu5/raft-rl-test/rl"
 	"go.etcd.io/raft/v3"
 )
 
-func LeaderElected() *types.Monitor {
-	monitor := types.NewMonitor()
+func LeaderElected() *rl.Monitor {
+	monitor := rl.NewMonitor()
 	builder := monitor.Build()
-	// builder.On(HasLeader().Not(), types.InitState)
+	// builder.On(HasLeader().Not(), rl.InitState)
 	builder.On(HasLeader(), "LeaderElected").MarkSuccess()
 	return monitor
 }
 
-func HasLeader() types.MonitorCondition {
-	return func(trace *types.Trace) bool {
+func HasLeader() rl.MonitorCondition {
+	return func(trace *rl.Trace) bool {
 		last, _, _, _ := trace.Get(trace.Len() - 1)
 		raftState, ok := last.(*RaftState)
 		if !ok {

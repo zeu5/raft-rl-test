@@ -1,4 +1,4 @@
-package types
+package rl
 
 var (
 	InitState string = "init"

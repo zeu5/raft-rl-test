@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/zeu5/raft-rl-test/types"
+	"github.com/zeu5/raft-rl-test/rl"
 	"gonum.org/v1/gonum/stat/sampleuv"
 )
 
@@ -82,7 +82,7 @@ func (q *QTable) MaxAmong(state string, actions []string, def float64) (string, 
 }
 
 type PropertyGuidedPolicy struct {
-	properties  []*types.Monitor
+	properties  []*rl.Monitor
 	expQTable   *QTable
 	propQTables []*QTable
 	alpha       float64
@@ -99,9 +99,9 @@ type PropertyGuidedPolicy struct {
 	rand        *rand.Rand
 }
 
-var _ types.Policy = &PropertyGuidedPolicy{}
+var _ rl.Policy = &PropertyGuidedPolicy{}
 
-func NewPropertyGuidedPolicy(properties []*types.Monitor, alpha, gamma, epsilon float64) *PropertyGuidedPolicy {
+func NewPropertyGuidedPolicy(properties []*rl.Monitor, alpha, gamma, epsilon float64) *PropertyGuidedPolicy {
 	policy := &PropertyGuidedPolicy{
 		properties: properties,
 		// general exploration table, update it all the times, use it when not following any prop or state is unknown for the prop
@@ -123,7 +123,7 @@ func NewPropertyGuidedPolicy(properties []*types.Monitor, alpha, gamma, epsilon 
 }
 
 // Run at the end of each episode, use the trace to update policies and choose next property
-func (p *PropertyGuidedPolicy) UpdateIteration(iteration int, trace *types.Trace) {
+func (p *PropertyGuidedPolicy) UpdateIteration(iteration int, trace *rl.Trace) {
 	// check and update policies for all properties
 	for i := 0; i < len(p.properties); i++ {
 		p.updatePolicy(i, trace)
@@ -146,7 +146,7 @@ func (p *PropertyGuidedPolicy) chooseProperty(iteration int) {
 
 // Takes a property and a trace and updates the Qvalues backwards giving reward 1 for the
 // last (state,action) pair.
-func (p *PropertyGuidedPolicy) updatePolicy(propertyIndex int, trace *types.Trace) {
+func (p *PropertyGuidedPolicy) updatePolicy(propertyIndex int, trace *rl.Trace) {
 	prop := p.properties[propertyIndex]
 	// last (s,a,s') should be where s' fulfills the property.
 	prefix, ok := prop.Check(trace)
@@ -178,7 +178,7 @@ func (p *PropertyGuidedPolicy) updatePolicy(propertyIndex int, trace *types.Trac
 	}
 }
 
-func (p *PropertyGuidedPolicy) NextAction(step int, state types.State, actions []types.Action) (types.Action, bool) {
+func (p *PropertyGuidedPolicy) NextAction(step int, state rl.State, actions []rl.Action) (rl.Action, bool) {
 	stateHash := state.Hash()
 
 	if p.currentProp != -1 {
@@ -197,7 +197,7 @@ func (p *PropertyGuidedPolicy) NextAction(step int, state types.State, actions [
 		if rand.Float64() < p.epsilon {
 			return p.nextActionExp(stateHash, actions)
 		}
-		actionMap := make(map[string]types.Action)
+		actionMap := make(map[string]rl.Action)
 		actionKeys := make([]string, len(actions))
 		for i, a := range actions {
 			actionKeys[i] = a.Hash()
@@ -214,7 +214,7 @@ func (p *PropertyGuidedPolicy) NextAction(step int, state types.State, actions [
 }
 
 // choose next action based on the general Exploration policy
-func (p *PropertyGuidedPolicy) nextActionExp(statehash string, actions []types.Action) (types.Action, bool) {
+func (p *PropertyGuidedPolicy) nextActionExp(statehash string, actions []rl.Action) (rl.Action, bool) {
 
 	// compute softmax and sample action according to the distribution
 	sum := float64(0)
@@ -240,7 +240,7 @@ func (p *PropertyGuidedPolicy) nextActionExp(statehash string, actions []types.A
 }
 
 // update the general Exploration policy, ??? it can be done at each step, or at the end of each episode ???
-func (p *PropertyGuidedPolicy) Update(step int, state types.State, action types.Action, nextState types.State) {
+func (p *PropertyGuidedPolicy) Update(step int, state rl.State, action rl.Action, nextState rl.State) {
 	stateHash := state.Hash()
 
 	nextStateHash := nextState.Hash()

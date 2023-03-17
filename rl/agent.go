@@ -1,4 +1,4 @@
-package types
+package rl
 
 type AgentConfig struct {
 	Episodes    int

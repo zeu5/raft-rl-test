@@ -7,7 +7,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/zeu5/raft-rl-test/types"
+	"github.com/zeu5/raft-rl-test/rl"
 	raft "go.etcd.io/raft/v3"
 	pb "go.etcd.io/raft/v3/raftpb"
 )
@@ -18,15 +18,15 @@ type RaftState struct {
 	WithTimeouts bool
 }
 
-var _ types.State = &RaftState{}
+var _ rl.State = &RaftState{}
 
 func (r *RaftState) Hash() string {
 	data, _ := json.Marshal(r)
 	return string(data)
 }
 
-func (r *RaftState) Actions() []types.Action {
-	additional := make([]types.Action, 0)
+func (r *RaftState) Actions() []rl.Action {
+	additional := make([]rl.Action, 0)
 	if r.WithTimeouts {
 		processes := map[uint64]bool{}
 		for _, m := range r.Messages {
@@ -41,7 +41,7 @@ func (r *RaftState) Actions() []types.Action {
 			})
 		}
 	}
-	result := make([]types.Action, len(r.Messages))
+	result := make([]rl.Action, len(r.Messages))
 	i := 0
 	for _, m := range r.Messages {
 		result[i] = &RaftAction{
@@ -63,7 +63,7 @@ func (r *RaftAction) Hash() string {
 	return ""
 }
 
-var _ types.Action = &RaftAction{}
+var _ rl.Action = &RaftAction{}
 
 type RaftEnvironmentConfig struct {
 	Replicas      int
@@ -133,7 +133,7 @@ func (r *RaftEnvironment) makeNodes() {
 	r.curState = initState
 }
 
-func (r *RaftEnvironment) Reset() types.State {
+func (r *RaftEnvironment) Reset() rl.State {
 	r.messages = make(map[string]pb.Message)
 	proposal := pb.Message{
 		Type: pb.MsgProp,
@@ -147,7 +147,7 @@ func (r *RaftEnvironment) Reset() types.State {
 	return r.curState
 }
 
-func (r *RaftEnvironment) Step(action types.Action) types.State {
+func (r *RaftEnvironment) Step(action rl.Action) rl.State {
 	raftAction := action.(*RaftAction)
 	switch raftAction.Type {
 	case "DeliverMessage":

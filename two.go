@@ -4,7 +4,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/zeu5/raft-rl-test/policies"
 	"github.com/zeu5/raft-rl-test/raft"
-	"github.com/zeu5/raft-rl-test/types"
+	"github.com/zeu5/raft-rl-test/rl"
 )
 
 func Two(episodes, horizon int, savefile string) {
@@ -16,31 +16,31 @@ func Two(episodes, horizon int, savefile string) {
 	}
 
 	leaderElectedProperty := raft.LeaderElected()
-	c := types.NewComparison(raft.RaftAnalyzer, raft.RaftPlotComparator(saveFile))
-	c.AddExperiment(types.NewExperimentWithProperties(
+	c := rl.NewComparison(raft.RaftAnalyzer, raft.RaftPlotComparator(saveFile))
+	c.AddExperiment(rl.NewExperimentWithProperties(
 		"RL",
-		&types.AgentConfig{
+		&rl.AgentConfig{
 			Episodes: episodes,
 			Horizon:  horizon,
 			Policy: policies.NewPropertyGuidedPolicy(
-				[]*types.Monitor{leaderElectedProperty},
+				[]*rl.Monitor{leaderElectedProperty},
 				0.3,
 				0.7,
 				0.2,
 			),
 			Environment: raft.NewRaftEnvironment(raftConfig),
 		},
-		[]*types.Monitor{leaderElectedProperty},
+		[]*rl.Monitor{leaderElectedProperty},
 	))
-	c.AddExperiment(types.NewExperimentWithProperties(
+	c.AddExperiment(rl.NewExperimentWithProperties(
 		"Random",
-		&types.AgentConfig{
+		&rl.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
-			Policy:      types.NewRandomPolicy(),
+			Policy:      rl.NewRandomPolicy(),
 			Environment: raft.NewRaftEnvironment(raftConfig),
 		},
-		[]*types.Monitor{leaderElectedProperty},
+		[]*rl.Monitor{leaderElectedProperty},
 	))
 
 	c.Run()
