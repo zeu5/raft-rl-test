@@ -94,9 +94,12 @@ type PropertyGuidedPolicy struct {
 	episodes int
 	// keep track of number of episodes each property has been followed
 	propEpisodes []int
-	// just an index for which property is being followed, 0 => no property
+	// just an index for which property is being followed, -1 => no property
 	currentProp int
 	rand        *rand.Rand
+	// bool to switch off the specific policy once the waypoint is reached
+	reached       bool
+	current_trace *types.Trace
 }
 
 var _ types.Policy = &PropertyGuidedPolicy{}
@@ -113,8 +116,10 @@ func NewPropertyGuidedPolicy(properties []*types.Monitor, alpha, gamma, epsilon 
 		epsilon:      epsilon,
 		propEpisodes: make([]int, len(properties)),
 		// start with no property
-		currentProp: -1,
-		rand:        rand.New(rand.NewSource(time.Now().UnixNano())),
+		currentProp:   -1,
+		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
+		reached:       false,
+		current_trace: types.NewTrace(),
 	}
 	for i := range properties {
 		policy.propQTables[i] = NewQTable()
@@ -131,6 +136,10 @@ func (p *PropertyGuidedPolicy) UpdateIteration(iteration int, trace *types.Trace
 
 	// choose prop to follow in next episode
 	p.chooseProperty(iteration)
+
+	// restart reached and current trace for the upcoming episode
+	p.reached = false
+	p.current_trace = types.NewTrace()
 
 	p.episodes += 1
 }
@@ -212,7 +221,7 @@ func (p *PropertyGuidedPolicy) updatePolicyUnsat(propertyIndex int, trace *types
 func (p *PropertyGuidedPolicy) NextAction(step int, state types.State, actions []types.Action) (types.Action, bool) {
 	stateHash := state.Hash()
 
-	if p.currentProp != -1 {
+	if p.currentProp != -1 && !p.reached {
 		propQTable := p.propQTables[p.currentProp]
 		// there is a selected prop policy
 		if !propQTable.HasState(stateHash) {
@@ -282,4 +291,20 @@ func (p *PropertyGuidedPolicy) Update(step int, state types.State, action types.
 	// update QVal
 	nextVal := (1-p.alpha)*curVal + p.alpha*(-1+p.gamma*max)
 	p.expQTable.Set(stateHash, actionKey, nextVal)
+
+	// check if prop has been reached, if so => shut down the specific policy
+	if p.currentProp != -1 && !p.reached { // if not no_property and not already reached
+		p.checkReached(step, state, action, nextState)
+	}
+}
+
+// Appends the current step (s,a,s') to the current trace and checks whether it satisfies or not the current prop,
+// if yes => sets reached to true, switching off the specific policy for the remaining steps of the episode
+func (p *PropertyGuidedPolicy) checkReached(step int, state types.State, action types.Action, nextState types.State) {
+	p.current_trace.Append(step, state, action, nextState)
+	prop := p.properties[p.currentProp]
+
+	if _, ok := prop.Check(p.current_trace); ok {
+		p.reached = true
+	}
 }
