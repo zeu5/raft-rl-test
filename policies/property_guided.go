@@ -150,7 +150,8 @@ func (p *PropertyGuidedPolicy) updatePolicy(propertyIndex int, trace *types.Trac
 	prop := p.properties[propertyIndex]
 	// last (s,a,s') should be where s' fulfills the property.
 	prefix, ok := prop.Check(trace)
-	if !ok {
+	if !ok { // update the policy without reward
+		p.updatePolicyUnsat(propertyIndex, trace)
 		return
 	}
 
@@ -175,6 +176,36 @@ func (p *PropertyGuidedPolicy) updatePolicy(propertyIndex int, trace *types.Trac
 		}
 
 		propQTable.Set(stateHash, actionKey, nextVal)
+	}
+}
+
+// Takes a property and a trace which does not satisfies the property, and updates the QValues
+// without adding any new state to the propQTable:
+//
+//	Evaluates as 0 all the states that are not in the table and does not updates them.
+func (p *PropertyGuidedPolicy) updatePolicyUnsat(propertyIndex int, trace *types.Trace) {
+
+	p.propEpisodes[propertyIndex] += 1
+	propQTable := p.propQTables[propertyIndex]
+	for i := trace.Len() - 1; i >= 0; i-- { // full trace
+		state, action, nextState, _ := trace.Get(i)
+		stateHash := state.Hash()
+		actionKey := action.Hash()
+
+		if _, ok := propQTable.table[stateHash][actionKey]; ok { // (s,a) is in the propQTable
+			curVal := propQTable.Get(stateHash, actionKey, 0)
+			max := 0.0 // Use zero as Vval if the nextState is not in the propQTable
+
+			nextStateHash := nextState.Hash()
+			if _, ok := propQTable.table[nextStateHash]; ok { // nextState is in the propQTable
+				_, max = propQTable.Max(nextStateHash, 0) // use Vval(nextState) for the update
+			}
+
+			nextVal := (1-p.alpha)*curVal + p.alpha*(0+p.gamma*max)
+
+			propQTable.Set(stateHash, actionKey, nextVal)
+		}
+
 	}
 }
 
