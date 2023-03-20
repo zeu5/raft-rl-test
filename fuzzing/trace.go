@@ -22,7 +22,7 @@ type SchedulingChoiceType string
 
 type SchedulingChoice struct {
 	Type          SchedulingChoiceType
-	NodeID        string
+	NodeID        uint64
 	BooleanChoice bool
 	IntegerChoice int
 }

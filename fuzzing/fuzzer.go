@@ -8,36 +8,39 @@ import (
 )
 
 type Fuzzer struct {
-	MessageQueues               map[string]*Queue[pb.Message]
-	Nodes                       []string
+	MessageQueues               map[uint64]*Queue[pb.Message]
+	Nodes                       []uint64
 	Config                      *FuzzerConfig
 	Mutator                     Mutator
-	MutatedNodeChoices          *Queue[string]
+	MutatedNodeChoices          *Queue[uint64]
 	CurEventTrace               EventTrace
 	CurTrace                    Trace
 	MutatedRandomBooleanChoices *Queue[bool]
 	MutatedRandomIntegerChoices *Queue[int]
 	rand                        *rand.Rand
+	RaftEnvironment             *RaftEnvironment
 }
 
 type FuzzerConfig struct {
-	Iterations int
-	Steps      int
-	Mutator    Mutator
+	Iterations            int
+	Steps                 int
+	Mutator               Mutator
+	RaftEnvironmentConfig RaftEnvironmentConfig
 }
 
 func NewFuzzer(config *FuzzerConfig) *Fuzzer {
 	return &Fuzzer{
 		Config:                      config,
-		Nodes:                       make([]string, 0),
-		MessageQueues:               make(map[string]*Queue[pb.Message]),
+		Nodes:                       make([]uint64, 0),
+		MessageQueues:               make(map[uint64]*Queue[pb.Message]),
 		Mutator:                     config.Mutator,
-		MutatedNodeChoices:          NewQueue[string](),
+		MutatedNodeChoices:          NewQueue[uint64](),
 		CurEventTrace:               NewEventTrace(),
 		CurTrace:                    NewTrace(),
 		MutatedRandomBooleanChoices: NewQueue[bool](),
 		MutatedRandomIntegerChoices: NewQueue[int](),
 		rand:                        rand.New(rand.NewSource(time.Now().UnixNano())),
+		RaftEnvironment:             NewRaftEnvironment(config.RaftEnvironmentConfig),
 	}
 }
 
@@ -80,7 +83,7 @@ func (f *Fuzzer) GetRandomInteger(max int) (choice int) {
 }
 
 func (f *Fuzzer) GetNextMessage() (message pb.Message, ok bool) {
-	var nextNode string
+	var nextNode uint64
 	if f.MutatedNodeChoices.Size() > 0 {
 		nextNode, _ = f.MutatedNodeChoices.Pop()
 	} else {
@@ -100,6 +103,12 @@ func (f *Fuzzer) GetNextMessage() (message pb.Message, ok bool) {
 }
 
 func (f *Fuzzer) Run() error {
+	for i := 0; i < f.Config.Iterations; i++ {
+		init := f.RaftEnvironment.Reset()
+		for _, m := range init {
+			f.MessageQueues[m.To].Push(m)
+		}
+	}
 	return nil
 }
 
