@@ -15,7 +15,10 @@ func LeaderElected() *types.Monitor {
 
 func HasLeader() types.MonitorCondition {
 	return func(trace *types.Trace) bool {
-		last, _, _, _ := trace.Get(trace.Len() - 1)
+		last, _, _, ok := trace.Last()
+		if !ok {
+			return false
+		}
 		raftState, ok := last.(*RaftState)
 		if !ok {
 			return false
@@ -27,4 +30,35 @@ func HasLeader() types.MonitorCondition {
 		}
 		return false
 	}
+}
+
+func LeaderApplied() types.MonitorCondition {
+	return func(trace *types.Trace) bool {
+		s1, _, s2, ok := trace.Last()
+		if !ok {
+			return false
+		}
+		rS1 := s1.(*RaftState)
+		rS2 := s2.(*RaftState)
+		var leader uint64 = 0
+		for node, s := range rS1.NodeStates {
+			if s.RaftState == raft.StateLeader {
+				leader = node
+				break
+			}
+		}
+		if leader == 0 {
+			return false
+		}
+		first := rS1.NodeStates[leader].Applied
+		second := rS2.NodeStates[leader].Applied
+		return second > first
+	}
+}
+
+func LeaderCommittedRequest() *types.Monitor {
+	monitor := types.NewMonitor()
+	builder := monitor.Build()
+	builder.On(LeaderApplied(), "LeaderCommittedRequest").MarkSuccess()
+	return monitor
 }

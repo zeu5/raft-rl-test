@@ -31,6 +31,14 @@ func (t *Trace) Get(i int) (State, Action, State, bool) {
 	return t.states[i], t.actions[i], t.nextStates[i], true
 }
 
+func (t *Trace) Last() (State, Action, State, bool) {
+	if len(t.states) < 1 {
+		return nil, nil, nil, false
+	}
+	lastIndex := len(t.states) - 1
+	return t.states[lastIndex], t.actions[lastIndex], t.nextStates[lastIndex], true
+}
+
 func (t *Trace) GetPrefix(i int) (*Trace, bool) {
 	if i > len(t.states) {
 		return nil, false

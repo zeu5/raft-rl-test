@@ -15,7 +15,8 @@ func Two(episodes, horizon int, savefile string) {
 		Timeouts:      true,
 	}
 
-	leaderElectedProperty := raft.LeaderElected()
+	// leaderElectedProperty := raft.LeaderElected()
+	leaderCommittedProperty := raft.LeaderCommittedRequest()
 	c := types.NewComparison(raft.RaftAnalyzer, raft.RaftPlotComparator(saveFile))
 	c.AddExperiment(types.NewExperimentWithProperties(
 		"RL",
@@ -23,14 +24,14 @@ func Two(episodes, horizon int, savefile string) {
 			Episodes: episodes,
 			Horizon:  horizon,
 			Policy: policies.NewPropertyGuidedPolicy(
-				[]*types.Monitor{leaderElectedProperty},
+				[]*types.Monitor{leaderCommittedProperty},
 				0.3,
 				0.7,
 				0.2,
 			),
 			Environment: raft.NewRaftEnvironment(raftConfig),
 		},
-		[]*types.Monitor{leaderElectedProperty},
+		[]*types.Monitor{leaderCommittedProperty},
 	))
 	c.AddExperiment(types.NewExperimentWithProperties(
 		"Random",
@@ -40,7 +41,7 @@ func Two(episodes, horizon int, savefile string) {
 			Policy:      types.NewRandomPolicy(),
 			Environment: raft.NewRaftEnvironment(raftConfig),
 		},
-		[]*types.Monitor{leaderElectedProperty},
+		[]*types.Monitor{leaderCommittedProperty},
 	))
 
 	c.Run()
