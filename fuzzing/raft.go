@@ -12,20 +12,23 @@ type RaftEnvironmentConfig struct {
 	Replicas      int
 	ElectionTick  int
 	HeartbeatTick int
-	Timeouts      bool
 }
 
 type RaftEnvironment struct {
-	config   RaftEnvironmentConfig
-	nodes    map[uint64]*raft.RawNode
-	storages map[uint64]*raft.MemoryStorage
+	config         RaftEnvironmentConfig
+	nodes          map[uint64]*raft.RawNode
+	storages       map[uint64]*raft.MemoryStorage
+	curStates      map[uint64]raft.Status
+	curCommitIndex uint64
 }
 
 func NewRaftEnvironment(config RaftEnvironmentConfig) *RaftEnvironment {
 	r := &RaftEnvironment{
-		config:   config,
-		nodes:    make(map[uint64]*raft.RawNode),
-		storages: make(map[uint64]*raft.MemoryStorage),
+		config:         config,
+		nodes:          make(map[uint64]*raft.RawNode),
+		storages:       make(map[uint64]*raft.MemoryStorage),
+		curStates:      make(map[uint64]raft.Status),
+		curCommitIndex: 0,
 	}
 	r.makeNodes()
 	return r
@@ -40,7 +43,7 @@ func (r *RaftEnvironment) makeNodes() {
 		storage := raft.NewMemoryStorage()
 		nodeID := uint64(i + 1)
 		r.storages[nodeID] = storage
-		r.nodes[nodeID], _ = raft.NewRawNode(&raft.Config{
+		node, _ := raft.NewRawNode(&raft.Config{
 			ID:                        nodeID,
 			ElectionTick:              r.config.ElectionTick,
 			HeartbeatTick:             r.config.HeartbeatTick,
@@ -50,8 +53,11 @@ func (r *RaftEnvironment) makeNodes() {
 			MaxUncommittedEntriesSize: 1 << 30,
 			Logger:                    &raft.DefaultLogger{Logger: log.New(io.Discard, "", 0)},
 		})
-		r.nodes[nodeID].Bootstrap(peers)
+		node.Bootstrap(peers)
+		r.curStates[nodeID] = node.Status()
+		r.nodes[nodeID] = node
 	}
+	r.curCommitIndex = 0
 }
 
 func (r *RaftEnvironment) Reset() []pb.Message {
@@ -97,6 +103,7 @@ func (r *RaftEnvironment) Step(ctx *FuzzContext, m pb.Message) []pb.Message {
 			node.Tick()
 		}
 	}
+	r.updateStates(ctx)
 	for id, node := range r.nodes {
 		if node.HasReady() {
 			ready := node.Ready()
@@ -109,4 +116,41 @@ func (r *RaftEnvironment) Step(ctx *FuzzContext, m pb.Message) []pb.Message {
 		}
 	}
 	return result
+}
+
+func (r *RaftEnvironment) updateStates(ctx *FuzzContext) {
+	for id, node := range r.nodes {
+		// Compare state and add timeouts
+		old := r.curStates[id].RaftState
+		new := node.Status().RaftState
+		if old != new && new == raft.StateLeader {
+			ctx.AddEvent(&Event{
+				Name: "BecomeLeader",
+				Params: map[string]interface{}{
+					"node": id,
+				},
+			})
+		} else if old != new && new == raft.StateCandidate {
+			ctx.AddEvent(&Event{
+				Name: "Timeout",
+				Params: map[string]interface{}{
+					"node": id,
+				},
+			})
+		}
+		// Compare commit index of leader and add advance commit index
+		if new == raft.StateLeader {
+			oldCommitIndex := r.curStates[id].Commit
+			newCommitIndex := node.Status().Commit
+			if newCommitIndex > oldCommitIndex {
+				ctx.AddEvent(&Event{
+					Name: "AdvanceCommitIndex",
+					Params: map[string]interface{}{
+						"node": id,
+					},
+				})
+			}
+		}
+		r.curStates[id] = node.Status()
+	}
 }

@@ -47,7 +47,7 @@ func NewFuzzer(config *FuzzerConfig) *Fuzzer {
 		tlcClient:                   NewTLCClient(config.TLCAddr),
 		statesMap:                   make(map[int64]bool),
 	}
-	for i := 0; i < f.config.RaftEnvironmentConfig.Replicas; i++ {
+	for i := 0; i <= f.config.RaftEnvironmentConfig.Replicas; i++ {
 		f.nodes = append(f.nodes, uint64(i))
 		f.messageQueues[uint64(i)] = NewQueue[pb.Message]()
 	}
@@ -107,16 +107,42 @@ func (f *Fuzzer) GetNextMessage() (message pb.Message, ok bool) {
 		nextNode = availableNodes[randIndex]
 	}
 	message, ok = f.messageQueues[nextNode].Pop()
-	// TODO: encode all message params
 	f.curEventTrace.Append(&Event{
-		Name:   message.Type.String(),
-		Params: map[string]interface{}{},
+		Name: "DeliverMessage",
+		Params: map[string]interface{}{
+			"type":     message.Type.String(),
+			"term":     message.Term,
+			"from":     message.From,
+			"to":       message.To,
+			"log_term": message.LogTerm,
+			"index":    message.Index,
+			"commit":   message.Commit,
+			"vote":     message.Vote,
+			"reject":   message.Reject,
+		},
 	})
 	f.curTrace.Append(&SchedulingChoice{
 		Type:   Node,
 		NodeID: nextNode,
 	})
 	return
+}
+
+func (f *Fuzzer) recordSend(message pb.Message) {
+	f.curEventTrace.Append(&Event{
+		Name: "SendMessage",
+		Params: map[string]interface{}{
+			"type":     message.Type.String(),
+			"term":     message.Term,
+			"from":     message.From,
+			"to":       message.To,
+			"log_term": message.LogTerm,
+			"index":    message.Index,
+			"commit":   message.Commit,
+			"vote":     message.Vote,
+			"reject":   message.Reject,
+		},
+	})
 }
 
 func (f *Fuzzer) Run() error {
@@ -130,19 +156,21 @@ func (f *Fuzzer) Run() error {
 		}
 		init := f.raftEnvironment.Reset()
 		for _, m := range init {
+			f.recordSend(m)
 			f.messageQueues[m.To].Push(m)
 		}
 
-		for j := 0; i < f.config.Steps; j++ {
+		for j := 0; j < f.config.Steps; j++ {
 			message, ok := f.GetNextMessage()
 			if !ok {
 				continue
 			}
 			new := f.raftEnvironment.Step(ctx, message)
 			for _, m := range new {
-				if q, ok := f.messageQueues[m.To]; ok {
-					q.Push(m)
+				if m.Type != pb.MsgProp {
+					f.recordSend(m)
 				}
+				f.messageQueues[m.To].Push(m)
 			}
 		}
 		f.mutatedNodeChoices.Reset()
