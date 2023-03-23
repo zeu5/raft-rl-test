@@ -32,7 +32,6 @@ func (e *Experiment) hasProperties() bool {
 }
 
 func (e *Experiment) Run() {
-	fmt.Printf("Running Experiment: %s\n", e.name)
 	agent := NewAgent(e.config)
 	for i := 0; i < e.config.Episodes; i++ {
 		fmt.Printf("\rExperiment: %s, Episode: %d/%d", e.name, i+1, e.config.Episodes)

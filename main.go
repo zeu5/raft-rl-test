@@ -19,6 +19,8 @@ func main() {
 	rootCommand.PersistentFlags().StringVarP(&saveFile, "save", "s", "save.png", "Save the plot to the specified file")
 	rootCommand.AddCommand(OneCommand())
 	rootCommand.AddCommand(TwoCommand())
+	rootCommand.AddCommand(ThreeCommand())
+	rootCommand.AddCommand(FourCommand())
 
 	if err := rootCommand.Execute(); err != nil {
 		fmt.Println(err)

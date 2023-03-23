@@ -1,6 +1,8 @@
 package raft
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"log"
@@ -60,7 +62,9 @@ type RaftAction struct {
 }
 
 func (r *RaftAction) Hash() string {
-	return ""
+	data, _ := json.Marshal(r)
+	hash := sha256.Sum256(data)
+	return hex.EncodeToString(hash[:])
 }
 
 var _ types.Action = &RaftAction{}
