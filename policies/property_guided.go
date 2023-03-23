@@ -62,6 +62,11 @@ func (q *QTable) Max(state string, def float64) (string, float64) {
 	return maxAction, maxVal
 }
 
+func (q *QTable) Exists(state string) bool {
+	_, ok := q.table[state]
+	return ok
+}
+
 func (q *QTable) MaxAmong(state string, actions []string, def float64) (string, float64) {
 	if _, ok := q.table[state]; !ok {
 		q.table[state] = make(map[string]float64)
@@ -206,7 +211,7 @@ func (p *PropertyGuidedPolicy) updatePolicyUnsat(propertyIndex int, trace *types
 			max := 0.0 // Use zero as Vval if the nextState is not in the propQTable
 
 			nextStateHash := nextState.Hash()
-			if _, ok := propQTable.table[nextStateHash]; ok { // nextState is in the propQTable
+			if propQTable.Exists(nextStateHash) { // nextState is in the propQTable
 				_, max = propQTable.Max(nextStateHash, 0) // use Vval(nextState) for the update
 			}
 

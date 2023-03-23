@@ -21,6 +21,7 @@ func main() {
 	rootCommand.AddCommand(TwoCommand())
 	rootCommand.AddCommand(ThreeCommand())
 	rootCommand.AddCommand(FourCommand())
+	rootCommand.AddCommand(FiveCommand())
 
 	if err := rootCommand.Execute(); err != nil {
 		fmt.Println(err)

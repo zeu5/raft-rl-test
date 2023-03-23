@@ -19,11 +19,12 @@ func HasLeader() types.MonitorCondition {
 		if !ok {
 			return false
 		}
-		raftState, ok := last.(*RaftState)
+		nodeStates, ok := getNodeStates(last)
 		if !ok {
 			return false
 		}
-		for _, s := range raftState.NodeStates {
+
+		for _, s := range nodeStates {
 			if s.RaftState == raft.StateLeader {
 				return true
 			}
@@ -32,16 +33,34 @@ func HasLeader() types.MonitorCondition {
 	}
 }
 
+func getNodeStates(state types.State) (map[uint64]raft.Status, bool) {
+	raftState, ok := state.(*RaftState)
+	if !ok {
+		absRaftState, ok := state.(*AbsRaftState)
+		if !ok {
+			return nil, false
+		}
+		return absRaftState.NodeStates, true
+	}
+	return raftState.NodeStates, true
+}
+
 func LeaderApplied() types.MonitorCondition {
 	return func(trace *types.Trace) bool {
 		s1, _, s2, ok := trace.Last()
 		if !ok {
 			return false
 		}
-		rS1 := s1.(*RaftState)
-		rS2 := s2.(*RaftState)
+		rS1, ok := getNodeStates(s1)
+		if !ok {
+			return false
+		}
+		rS2, ok := getNodeStates(s2)
+		if !ok {
+			return false
+		}
 		var leader uint64 = 0
-		for node, s := range rS1.NodeStates {
+		for node, s := range rS1 {
 			if s.RaftState == raft.StateLeader {
 				leader = node
 				break
@@ -50,8 +69,8 @@ func LeaderApplied() types.MonitorCondition {
 		if leader == 0 {
 			return false
 		}
-		first := rS1.NodeStates[leader].Applied
-		second := rS2.NodeStates[leader].Applied
+		first := rS1[leader].Applied
+		second := rS2[leader].Applied
 		return second > first
 	}
 }
