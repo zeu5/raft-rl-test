@@ -149,9 +149,10 @@ func (r *AbsRaftEnvironment) updateState() {
 	}
 	for id, node := range r.nodes {
 		newState.NodeStates[id] = node.Status()
-		queue, ok := r.messageQueues[id]
-		if ok && len(queue) > 1 {
-			newState.Messages[id] = queue[0]
+	}
+	for id, q := range r.messageQueues {
+		if len(q) > 0 {
+			newState.Messages[id] = q[0]
 		}
 	}
 	r.curState = newState
