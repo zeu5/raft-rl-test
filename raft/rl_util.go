@@ -25,8 +25,15 @@ func RaftAnalyzer(traces []*types.Trace) types.DataSet {
 	for _, trace := range traces {
 		for i := 0; i < trace.Len(); i++ {
 			state, _, _, _ := trace.Get(i)
-			raftState := state.(*RaftState)
-			stateKeyBytes, _ := json.Marshal(raftState.NodeStates)
+			raftState, ok := state.(*RaftState)
+			var stateKeyBytes []byte
+			if ok {
+				stateKeyBytes, _ = json.Marshal(raftState.NodeStates)
+
+			} else {
+				absRaftState := state.(*AbsRaftState)
+				stateKeyBytes, _ = json.Marshal(absRaftState.NodeStates)
+			}
 			stateKey := string(stateKeyBytes)
 			if _, ok := dataSet.statesMap[stateKey]; !ok {
 				dataSet.statesMap[stateKey] = true
