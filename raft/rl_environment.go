@@ -93,7 +93,7 @@ func NewRaftEnvironment(config RaftEnvironmentConfig) *RaftEnvironment {
 		Type: pb.MsgProp,
 		From: uint64(0),
 		Entries: []pb.Entry{
-			{Data: []byte("testing")},
+			{Data: []byte("1")},
 		},
 	}
 	r.messages[proposal.String()] = proposal
@@ -139,7 +139,7 @@ func (r *RaftEnvironment) Reset() rl.State {
 		Type: pb.MsgProp,
 		From: uint64(0),
 		Entries: []pb.Entry{
-			{Data: []byte("testing")},
+			{Data: []byte("1")},
 		},
 	}
 	r.messages[proposal.String()] = proposal

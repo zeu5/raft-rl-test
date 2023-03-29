@@ -3,6 +3,7 @@ package fuzzing
 import (
 	"io"
 	"log"
+	"strconv"
 
 	"go.etcd.io/raft/v3"
 	pb "go.etcd.io/raft/v3/raftpb"
@@ -87,6 +88,14 @@ func (r *RaftEnvironment) Step(ctx *FuzzContext, m pb.Message) []pb.Message {
 		}
 		if haveLeader {
 			m.To = leader
+			request, _ := strconv.Atoi(string(m.Entries[0].Data))
+			ctx.AddEvent(&Event{
+				Name: "ClientRequest",
+				Params: map[string]interface{}{
+					"request": request,
+					"leader":  leader,
+				},
+			})
 			r.nodes[leader].Step(m)
 		} else {
 			result = append(result, m)

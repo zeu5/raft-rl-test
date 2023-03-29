@@ -2,6 +2,7 @@ package fuzzing
 
 import (
 	"math/rand"
+	"strconv"
 	"time"
 
 	pb "go.etcd.io/raft/v3/raftpb"
@@ -141,6 +142,17 @@ func (f *Fuzzer) recordSend(message pb.Message) {
 			"commit":   message.Commit,
 			"vote":     message.Vote,
 			"reject":   message.Reject,
+		},
+	})
+}
+
+func (f *Fuzzer) recordProp(msg pb.Message) {
+	requestID := msg.Entries[0].Data
+	req, _ := strconv.Atoi(string(requestID))
+	f.curEventTrace.Append(&Event{
+		Name: "ClientRequest",
+		Params: map[string]interface{}{
+			"request": req,
 		},
 	})
 }
