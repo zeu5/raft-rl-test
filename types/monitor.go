@@ -50,6 +50,7 @@ func (m *Monitor) Check(t *Trace) (*Trace, bool) {
 			if cond(prefix) {
 				// transitioned = true
 				curState = m.states[next]
+				break
 			}
 		}
 		// if !transitioned {

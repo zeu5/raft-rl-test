@@ -45,26 +45,11 @@ func (g *GuidedPolicy) UpdateIteration(iteration int, trace *types.Trace) {
 			var nextVal float64
 			if i == prefix.Len()-1 {
 				// last step, give 1 reward and 0 for next state
-				nextVal = (1-g.alpha)*curVal + g.alpha*(1+g.gamma*max)
+				nextVal = (1-g.alpha)*curVal + g.alpha*(5+g.gamma*max)
 			} else {
 				// otherwise, update with zero reward + V(nextState)
 				nextVal = (1-g.alpha)*curVal + g.alpha*(0+g.gamma*max)
 			}
-			g.qTable.Set(stateHash, actionKey, nextVal)
-		}
-	} else {
-		for i := trace.Len() - 1; i > 0; i-- {
-			state, action, nextState, _ := trace.Get(i)
-			stateHash := state.Hash()
-			nextStateHash := nextState.Hash()
-			actionKey := action.Hash()
-
-			curVal := g.qTable.Get(stateHash, actionKey, 0)
-			max := 0.0
-			if g.qTable.Exists(nextStateHash) {
-				_, max = g.qTable.Max(nextStateHash, 0)
-			}
-			nextVal := (1-g.alpha)*curVal + g.alpha*(0+g.gamma*max)
 			g.qTable.Set(stateHash, actionKey, nextVal)
 		}
 	}
@@ -83,8 +68,11 @@ func (g *GuidedPolicy) NextAction(step int, state types.State, actions []types.A
 		actionKeys[i] = aKey
 		actionsMap[aKey] = a
 	}
-
-	maxActionKey, _ := g.qTable.MaxAmong(state.Hash(), actionKeys, 0)
+	permutedActionKeys := make([]string, len(actionKeys))
+	for i, val := range g.rand.Perm(len(actionKeys)) {
+		permutedActionKeys[i] = actionKeys[val]
+	}
+	maxActionKey, _ := g.qTable.MaxAmong(state.Hash(), permutedActionKeys, 0)
 	if maxActionKey == "" {
 		return nil, false
 	}
