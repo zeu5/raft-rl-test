@@ -14,6 +14,10 @@ import (
 	pb "go.etcd.io/raft/v3/raftpb"
 )
 
+type RaftStateType interface {
+	GetNodeStates() map[uint64]raft.Status
+}
+
 type RaftState struct {
 	NodeStates   map[uint64]raft.Status
 	Messages     map[string]pb.Message
@@ -21,6 +25,11 @@ type RaftState struct {
 }
 
 var _ types.State = &RaftState{}
+var _ RaftStateType = &RaftState{}
+
+func (r *RaftState) GetNodeStates() map[uint64]raft.Status {
+	return r.NodeStates
+}
 
 func (r *RaftState) Hash() string {
 	data, _ := json.Marshal(r)

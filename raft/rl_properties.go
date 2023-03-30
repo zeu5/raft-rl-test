@@ -34,15 +34,11 @@ func HasLeader() types.MonitorCondition {
 }
 
 func getNodeStates(state types.State) (map[uint64]raft.Status, bool) {
-	raftState, ok := state.(*RaftState)
+	raftState, ok := state.(RaftStateType)
 	if !ok {
-		absRaftState, ok := state.(*AbsRaftState)
-		if !ok {
-			return nil, false
-		}
-		return absRaftState.NodeStates, true
+		return nil, false
 	}
-	return raftState.NodeStates, true
+	return raftState.GetNodeStates(), true
 }
 
 func LeaderApplied() types.MonitorCondition {
