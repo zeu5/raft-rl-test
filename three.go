@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/spf13/cobra"
+	"github.com/zeu5/raft-rl-test/policies"
 	"github.com/zeu5/raft-rl-test/raft"
 	"github.com/zeu5/raft-rl-test/types"
 )
@@ -24,6 +25,18 @@ func Three(episodes, horizon int, saveFile string) {
 		Episodes:    episodes,
 		Horizon:     horizon,
 		Policy:      types.NewRandomPolicy(),
+		Environment: raft.NewRaftEnvironment(raftConfig),
+	}))
+	c.AddExperiment(types.NewExperiment("BonusRL", &types.AgentConfig{
+		Episodes:    episodes,
+		Horizon:     horizon,
+		Policy:      policies.NewBonusPolicyGreedy(0.3, 0.99, false),
+		Environment: raft.NewRaftEnvironment(raftConfig),
+	}))
+	c.AddExperiment(types.NewExperiment("BonusMaxRL", &types.AgentConfig{
+		Episodes:    episodes,
+		Horizon:     horizon,
+		Policy:      policies.NewBonusPolicyGreedy(0.3, 0.99, true),
 		Environment: raft.NewRaftEnvironment(raftConfig),
 	}))
 

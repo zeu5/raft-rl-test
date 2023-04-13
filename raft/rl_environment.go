@@ -179,7 +179,7 @@ func (r *RaftEnvironment) Step(action types.Action) types.State {
 		}
 		// Take random number of ticks and update node states
 		for _, node := range r.nodes {
-			ticks := 6
+			ticks := 2
 			for i := 0; i < ticks; i++ {
 				node.Tick()
 			}
