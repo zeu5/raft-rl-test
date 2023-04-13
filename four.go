@@ -19,7 +19,7 @@ func Four(episodes, horizon int, saveFile string) {
 		Episodes:    episodes,
 		Horizon:     horizon,
 		Policy:      types.NewSoftMaxNegPolicy(0.3, 0.7),
-		Environment: raft.NewAbsRaftEnvironment(raftConfig),
+		Environment: raft.NewLinkRaftEnvironment(raftConfig),
 	}))
 
 	c.AddExperiment(types.NewExperiment("RL", &types.AgentConfig{
@@ -33,7 +33,7 @@ func Four(episodes, horizon int, saveFile string) {
 		Episodes:    episodes,
 		Horizon:     horizon,
 		Policy:      types.NewRandomPolicy(),
-		Environment: raft.NewAbsRaftEnvironment(raftConfig),
+		Environment: raft.NewLinkRaftEnvironment(raftConfig),
 	}))
 
 	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{

@@ -19,6 +19,11 @@ type AbsRaftState struct {
 }
 
 var _ types.State = &AbsRaftState{}
+var _ RaftStateType = &AbsRaftState{}
+
+func (r *AbsRaftState) GetNodeStates() map[uint64]raft.Status {
+	return r.NodeStates
+}
 
 func (r *AbsRaftState) Hash() string {
 	data, _ := json.Marshal(r)
