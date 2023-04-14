@@ -4,7 +4,7 @@ import "github.com/zeu5/raft-rl-test/types"
 
 type BonusPolicyGreedy struct {
 	qTable   *QTable
-	alpha    float64
+	horizon  int
 	discount float64
 	visits   *QTable
 	max      bool
@@ -12,10 +12,10 @@ type BonusPolicyGreedy struct {
 
 var _ types.Policy = &BonusPolicyGreedy{}
 
-func NewBonusPolicyGreedy(alpha float64, discount float64, max bool) *BonusPolicyGreedy {
+func NewBonusPolicyGreedy(horizon int, discount float64, max bool) *BonusPolicyGreedy {
 	return &BonusPolicyGreedy{
 		qTable:   NewQTable(),
-		alpha:    alpha,
+		horizon:  horizon,
 		discount: discount,
 		visits:   NewQTable(),
 		max:      max,
@@ -34,7 +34,7 @@ func (b *BonusPolicyGreedy) NextAction(step int, state types.State, actions []ty
 	if maxAction == "" {
 		return nil, false
 	}
-	return actionsMap[maxAction], false
+	return actionsMap[maxAction], true
 }
 
 func (b *BonusPolicyGreedy) Update(step int, state types.State, action types.Action, nextState types.State) {
@@ -45,19 +45,27 @@ func (b *BonusPolicyGreedy) Update(step int, state types.State, action types.Act
 	b.visits.Set(stateHash, actionHash, t)
 
 	_, nextStateVal := b.qTable.Max(nextStateHash, 1)
+	if nextStateVal > float64(b.horizon) {
+		nextStateVal = float64(b.horizon)
+	}
 	curVal := b.qTable.Get(stateHash, actionHash, 1)
 
 	var newVal float64
+	alpha := b.alpha(step)
 	if b.max {
-		newVal = (1-b.alpha)*curVal + b.alpha*max(1/t, b.discount*nextStateVal)
+		newVal = (1-alpha)*curVal + alpha*max(1/t, b.discount*nextStateVal)
 	} else {
-		newVal = (1-b.alpha)*curVal + b.alpha*(1/t+(b.discount*nextStateVal))
+		newVal = (1-alpha)*curVal + alpha*(1/t+(b.discount*nextStateVal))
 	}
 	b.qTable.Set(stateHash, actionHash, newVal)
 }
 
 func (b *BonusPolicyGreedy) UpdateIteration(iteration int, trace *types.Trace) {
 
+}
+
+func (b *BonusPolicyGreedy) alpha(step int) float64 {
+	return float64((b.horizon + 1) / (b.horizon + step))
 }
 
 func max(a, b float64) float64 {

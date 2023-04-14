@@ -30,13 +30,13 @@ func Three(episodes, horizon int, saveFile string) {
 	c.AddExperiment(types.NewExperiment("BonusRL", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
-		Policy:      policies.NewBonusPolicyGreedy(0.3, 0.99, false),
+		Policy:      policies.NewBonusPolicyGreedy(horizon, 0.99, false),
 		Environment: raft.NewRaftEnvironment(raftConfig),
 	}))
 	c.AddExperiment(types.NewExperiment("BonusMaxRL", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
-		Policy:      policies.NewBonusPolicyGreedy(0.3, 0.99, true),
+		Policy:      policies.NewBonusPolicyGreedy(horizon, 0.99, true),
 		Environment: raft.NewRaftEnvironment(raftConfig),
 	}))
 
