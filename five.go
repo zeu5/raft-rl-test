@@ -17,7 +17,7 @@ func Five(episodes, horizon int, savefile string) {
 
 	leaderElectedProperty := raft.LeaderElected()
 	// leaderCommittedProperty := raft.LeaderCommittedRequest()
-	c := types.NewComparison(raft.RaftAnalyzer, raft.RaftPlotComparator(saveFile))
+	c := types.NewComparison(raft.RaftAnalyzer, raft.RaftPlotComparator(saveFile, raft.DefaultFilter()))
 	c.AddExperiment(types.NewExperimentWithProperties(
 		"RLManyPolicies",
 		&types.AgentConfig{

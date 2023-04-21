@@ -14,7 +14,7 @@ func Four(episodes, horizon int, saveFile string) {
 		Timeouts:      true,
 	}
 
-	c := types.NewComparison(raft.RaftAnalyzer, raft.RaftPlotComparator(saveFile))
+	c := types.NewComparison(raft.RaftAnalyzer, raft.RaftPlotComparator(saveFile, raft.DefaultFilter()))
 	c.AddExperiment(types.NewExperiment("AbstractRL", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,

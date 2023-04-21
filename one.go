@@ -13,7 +13,7 @@ func One(episodes, horizon int, saveFile string) {
 		HeartbeatTick: 1,
 		Timeouts:      true,
 	}
-	c := types.NewComparison(raft.RaftAnalyzer, raft.RaftPlotComparator(saveFile))
+	c := types.NewComparison(raft.RaftAnalyzer, raft.RaftPlotComparator(saveFile, raft.DefaultFilter()))
 	c.AddExperiment(types.NewExperiment("RL", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,

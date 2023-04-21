@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"math/rand"
+	"strconv"
 	"time"
 
 	"github.com/zeu5/raft-rl-test/types"
@@ -83,6 +84,7 @@ type RaftEnvironmentConfig struct {
 	ElectionTick  int
 	HeartbeatTick int
 	Timeouts      bool
+	Requests      int
 }
 
 type RaftEnvironment struct {
@@ -102,14 +104,16 @@ func NewRaftEnvironment(config RaftEnvironmentConfig) *RaftEnvironment {
 		messages: make(map[string]pb.Message),
 		rand:     rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
-	proposal := pb.Message{
-		Type: pb.MsgProp,
-		From: uint64(0),
-		Entries: []pb.Entry{
-			{Data: []byte("testing")},
-		},
+	for i := 0; i < r.config.Requests+1; i++ {
+		proposal := pb.Message{
+			Type: pb.MsgProp,
+			From: uint64(0),
+			Entries: []pb.Entry{
+				{Data: []byte(strconv.Itoa(i + 1))},
+			},
+		}
+		r.messages[proposal.String()] = proposal
 	}
-	r.messages[proposal.String()] = proposal
 	r.makeNodes()
 	return r
 }
@@ -148,14 +152,16 @@ func (r *RaftEnvironment) makeNodes() {
 
 func (r *RaftEnvironment) Reset() types.State {
 	r.messages = make(map[string]pb.Message)
-	proposal := pb.Message{
-		Type: pb.MsgProp,
-		From: uint64(0),
-		Entries: []pb.Entry{
-			{Data: []byte("testing")},
-		},
+	for i := 0; i < r.config.Requests+1; i++ {
+		proposal := pb.Message{
+			Type: pb.MsgProp,
+			From: uint64(0),
+			Entries: []pb.Entry{
+				{Data: []byte(strconv.Itoa(i + 1))},
+			},
+		}
+		r.messages[proposal.String()] = proposal
 	}
-	r.messages[proposal.String()] = proposal
 	r.makeNodes()
 	return r.curState
 }

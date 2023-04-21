@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"image/png"
+	"math"
 	"os"
 
 	"github.com/zeu5/raft-rl-test/types"
@@ -52,16 +53,57 @@ func RaftComparator(names []string, datasets []types.DataSet) {
 	}
 }
 
-func RaftPlotComparator(figPath string) types.Comparator {
+type PlotFilter func([]float64) []float64
+
+func ChainFilters(filters ...PlotFilter) PlotFilter {
+	return func(f []float64) []float64 {
+		result := f
+		for _, f := range filters {
+			result = f(result)
+		}
+		return result
+	}
+}
+
+func DefaultFilter() PlotFilter {
+	return func(f []float64) []float64 {
+		return f
+	}
+}
+
+func Log() PlotFilter {
+	return func(f []float64) []float64 {
+		res := make([]float64, len(f))
+		for i, v := range f {
+			res[i] = math.Log(v)
+		}
+		return res
+	}
+}
+
+func MinCutOff(min float64) PlotFilter {
+	return func(f []float64) []float64 {
+		res := make([]float64, 0)
+		for _, v := range f {
+			if v < min {
+				continue
+			}
+			res = append(res, v)
+		}
+		return res
+	}
+}
+
+func RaftPlotComparator(figPath string, plotFilter PlotFilter) types.Comparator {
 	return func(names []string, datasets []types.DataSet) {
 		p := plot.New()
 		p.Title.Text = "Comparison"
 		p.X.Label.Text = "Iteration"
 		p.Y.Label.Text = "States covered"
 
-		img := vgimg.New(8*vg.Inch, 4*vg.Inch)
+		img := vgimg.New(16*vg.Inch, 8*vg.Inch)
 		c := draw.New(img)
-		left, right := SplitHorizontal(c, c.Size().X/2)
+		left, right := splitHorizontal(c, c.Size().X/2)
 
 		for i := 0; i < len(names); i++ {
 			raftDataSet := datasets[i].(*RaftDataSet)
@@ -80,6 +122,7 @@ func RaftPlotComparator(figPath string) types.Comparator {
 			p.Add(line)
 			p.Legend.Add(names[i], line)
 		}
+
 		p.Draw(left)
 
 		p = plot.New()
@@ -87,16 +130,33 @@ func RaftPlotComparator(figPath string) types.Comparator {
 		p.X.Label.Text = "No of visits"
 		p.Y.Label.Text = "Count"
 
+		if len(names) == 0 {
+			return
+		}
+		first := datasets[0].(*RaftDataSet)
+		common := first.statesMap
+		all := first.statesMap
+
 		for i := 0; i < len(names); i++ {
 			raftDataSet := datasets[i].(*RaftDataSet)
-			numPoints := len(raftDataSet.statesMap)
-			points := make(plotter.Values, numPoints)
+			points := make([]float64, len(raftDataSet.statesMap))
 			j := 0
-			for _, v := range raftDataSet.statesMap {
+			for state, v := range raftDataSet.statesMap {
+				if _, ok := all[state]; !ok {
+					all[state] = 0
+				}
 				points[j] = float64(v)
 				j++
 			}
-			hist, err := plotter.NewHist(points, numPoints)
+			newCommon := make(map[string]int)
+			for state := range common {
+				if _, ok := raftDataSet.statesMap[state]; ok {
+					newCommon[state] = 0
+				}
+			}
+			common = newCommon
+			points = plotFilter(points)
+			hist, err := plotter.NewHist(plotter.Values(points), len(points)/10)
 			if err != nil {
 				continue
 			}
@@ -104,7 +164,17 @@ func RaftPlotComparator(figPath string) types.Comparator {
 			p.Add(hist)
 			p.Legend.Add(names[i], hist)
 		}
+		p.Legend.Top = true
 		p.Draw(right)
+
+		diff := make(map[string]int)
+		for state := range all {
+			if _, ok := common[state]; !ok {
+				diff[state] = 0
+			}
+		}
+
+		fmt.Printf("Number of common states: %d\nNumber of diff states: %d\n", len(common), len(diff))
 
 		f, err := os.Create(figPath)
 		if err != nil {
@@ -117,6 +187,6 @@ func RaftPlotComparator(figPath string) types.Comparator {
 
 var _ types.Comparator = RaftComparator
 
-func SplitHorizontal(c draw.Canvas, x vg.Length) (left, right draw.Canvas) {
+func splitHorizontal(c draw.Canvas, x vg.Length) (left, right draw.Canvas) {
 	return draw.Crop(c, 0, c.Min.X-c.Max.X+x, 0, 0), draw.Crop(c, x, 0, 0, 0)
 }

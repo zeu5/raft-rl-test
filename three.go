@@ -14,25 +14,19 @@ func Three(episodes, horizon int, saveFile string) {
 		HeartbeatTick: 1,
 		Timeouts:      true,
 	}
-	c := types.NewComparison(raft.RaftAnalyzer, raft.RaftPlotComparator(saveFile))
+	c := types.NewComparison(raft.RaftAnalyzer, raft.RaftPlotComparator(saveFile, raft.ChainFilters(raft.MinCutOff(100), raft.Log())))
 	c.AddExperiment(types.NewExperiment("RL", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
 		Policy:      types.NewSoftMaxNegPolicy(0.3, 0.7),
 		Environment: raft.NewRaftEnvironment(raftConfig),
 	}))
-	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      types.NewRandomPolicy(),
-		Environment: raft.NewRaftEnvironment(raftConfig),
-	}))
-	c.AddExperiment(types.NewExperiment("BonusRL", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      policies.NewBonusPolicyGreedy(horizon, 0.99, false),
-		Environment: raft.NewRaftEnvironment(raftConfig),
-	}))
+	// c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
+	// 	Episodes:    episodes,
+	// 	Horizon:     horizon,
+	// 	Policy:      types.NewRandomPolicy(),
+	// 	Environment: raft.NewRaftEnvironment(raftConfig),
+	// }))
 	c.AddExperiment(types.NewExperiment("BonusMaxRL", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
