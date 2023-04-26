@@ -4,3 +4,5 @@ raft-rl-test
 
 *.png
 *.json
+
+results

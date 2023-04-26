@@ -63,8 +63,9 @@ type Promise struct {
 }
 
 type Tracker struct {
-	Acks     map[uint64]Ack
-	Promises map[uint64]Promise
+	Acks        map[uint64]Ack
+	Promises    map[uint64]Promise
+	PhaseChange map[uint64]Ack
 }
 
 func NewTracker() *Tracker {
@@ -109,6 +110,18 @@ func (t *Tracker) TrackPromise(p Promise) {
 	t.Promises[p.Peer] = p
 }
 
+func (t *Tracker) TrackPhaseChange(a Ack) {
+	cur, ok := t.PhaseChange[a.Peer]
+	if !ok {
+		t.PhaseChange[a.Peer] = a
+		return
+	}
+	if a.Phase < cur.Phase {
+		return
+	}
+	t.PhaseChange[a.Peer] = a
+}
+
 func (t *Tracker) ValidAcks(phase int) int {
 	count := 0
 	for _, a := range t.Acks {
@@ -129,9 +142,20 @@ func (t *Tracker) ValidPromises(phase int, logHash string) int {
 	return count
 }
 
+func (t *Tracker) ValidPhaseChanges(phase int) int {
+	count := 0
+	for _, a := range t.PhaseChange {
+		if a.Phase == phase {
+			count += 1
+		}
+	}
+	return count
+}
+
 func (t *Tracker) Reset(phase int) {
 	newAcks := make(map[uint64]Ack)
 	newPromises := make(map[uint64]Promise)
+	newPhaseChange := make(map[uint64]Ack)
 
 	for _, a := range t.Acks {
 		if a.Phase >= phase {
@@ -143,6 +167,14 @@ func (t *Tracker) Reset(phase int) {
 			newPromises[p.Peer] = p
 		}
 	}
+	for _, a := range t.PhaseChange {
+		if a.Phase > phase {
+			newPhaseChange[a.Peer] = a
+		} else if a.Phase == phase {
+			newAcks[a.Peer] = a
+		}
+	}
 	t.Acks = newAcks
 	t.Promises = newPromises
+	t.PhaseChange = newPhaseChange
 }

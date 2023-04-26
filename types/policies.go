@@ -12,6 +12,7 @@ type Policy interface {
 	UpdateIteration(int, *Trace)
 	NextAction(int, State, []Action) (Action, bool)
 	Update(int, State, Action, State)
+	Reset()
 }
 
 type SoftMaxNegPolicy struct {
@@ -29,6 +30,10 @@ func NewSoftMaxNegPolicy(alpha, gamma float64) *SoftMaxNegPolicy {
 }
 
 var _ Policy = &SoftMaxNegPolicy{}
+
+func (s *SoftMaxNegPolicy) Reset() {
+	s.QTable = make(map[string]map[string]float64)
+}
 
 func (s *SoftMaxNegPolicy) UpdateIteration(_ int, _ *Trace) {
 
@@ -97,10 +102,16 @@ type RandomPolicy struct {
 	rand *rand.Rand
 }
 
+var _ Policy = &RandomPolicy{}
+
 func NewRandomPolicy() *RandomPolicy {
 	return &RandomPolicy{
 		rand: rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
+}
+
+func (r *RandomPolicy) Reset() {
+
 }
 
 func (r *RandomPolicy) UpdateIteration(_ int, _ *Trace) {

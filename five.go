@@ -13,11 +13,12 @@ func Five(episodes, horizon int, savefile string) {
 		ElectionTick:  10,
 		HeartbeatTick: 1,
 		Timeouts:      true,
+		TicksPerStep:  2,
 	}
 
 	leaderElectedProperty := raft.LeaderElected()
 	// leaderCommittedProperty := raft.LeaderCommittedRequest()
-	c := types.NewComparison(raft.RaftAnalyzer, raft.RaftPlotComparator(saveFile, raft.DefaultFilter()))
+	c := types.NewComparison(raft.RaftAnalyzer(savefile), raft.RaftPlotComparator(saveFile, raft.DefaultFilter()))
 	c.AddExperiment(types.NewExperimentWithProperties(
 		"RLManyPolicies",
 		&types.AgentConfig{

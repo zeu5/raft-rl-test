@@ -77,7 +77,7 @@ func MergeGridDatasets(dataSets []types.DataSet) types.DataSet {
 	return newDataset
 }
 
-func GridAnalyzer(traces []*types.Trace) types.DataSet {
+func GridAnalyzer(_ string, traces []*types.Trace) types.DataSet {
 	dataSet := &GridDataSet{
 		Visits: make(map[int]map[int]int),
 		Height: 0,

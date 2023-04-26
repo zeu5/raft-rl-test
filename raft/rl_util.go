@@ -1,13 +1,17 @@
 package raft
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"image/png"
 	"math"
 	"os"
+	"path"
 
 	"github.com/zeu5/raft-rl-test/types"
+	"go.etcd.io/raft/v3"
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
 	"gonum.org/v1/plot/plotutil"
@@ -17,39 +21,53 @@ import (
 )
 
 type RaftDataSet struct {
-	statesMap    map[string]int
+	savePath     string
+	visitGraph   *types.VisitGraph
 	uniqueStates []int
 }
 
-func RaftAnalyzer(traces []*types.Trace) types.DataSet {
-	dataSet := &RaftDataSet{
-		statesMap:    make(map[string]int),
-		uniqueStates: make([]int, 0),
-	}
-	uniqueStates := 0
-	for _, trace := range traces {
-		for i := 0; i < trace.Len(); i++ {
-			state, _, _, _ := trace.Get(i)
-			raftState, _ := state.(RaftStateType)
-			stateKeyBytes, _ := json.Marshal(raftState.GetNodeStates())
-			stateKey := string(stateKeyBytes)
-			if _, ok := dataSet.statesMap[stateKey]; !ok {
-				dataSet.statesMap[stateKey] = 0
-				uniqueStates++
-			}
-			dataSet.statesMap[stateKey] += 1
-		}
-		dataSet.uniqueStates = append(dataSet.uniqueStates, uniqueStates)
-	}
-	return dataSet
+type RaftGraphState struct {
+	NodeStates map[uint64]raft.Status
 }
 
-var _ types.Analyzer = RaftAnalyzer
+func (r *RaftGraphState) Hash() string {
+	bs, _ := json.Marshal(r.NodeStates)
+	hash := sha256.Sum256(bs)
+	return hex.EncodeToString(hash[:])
+}
+
+func RaftAnalyzer(savePath string) types.Analyzer {
+	if _, err := os.Stat(savePath); err != nil {
+		os.Mkdir(savePath, os.ModePerm)
+	}
+	return func(name string, traces []*types.Trace) types.DataSet {
+		dataSet := &RaftDataSet{
+			savePath:     path.Join(savePath, "visit_graph_"+name+".json"),
+			visitGraph:   types.NewVisitGraph(),
+			uniqueStates: make([]int, 0),
+		}
+		uniqueStates := 0
+		for _, trace := range traces {
+			for i := 0; i < trace.Len(); i++ {
+				state, action, nextState, _ := trace.Get(i)
+				rState, _ := state.(RaftStateType)
+				rNextState, _ := nextState.(RaftStateType)
+				rAction, _ := action.(*RaftAction)
+				if dataSet.visitGraph.Update(&RaftGraphState{NodeStates: rState.GetNodeStates()}, rAction.Hash(), &RaftGraphState{NodeStates: rNextState.GetNodeStates()}) {
+					uniqueStates++
+				}
+			}
+			dataSet.uniqueStates = append(dataSet.uniqueStates, uniqueStates)
+		}
+		dataSet.visitGraph.Record(path.Join(savePath, "visit_graph_"+name+".json"))
+		return dataSet
+	}
+}
 
 func RaftComparator(names []string, datasets []types.DataSet) {
 	for i := 0; i < len(names); i++ {
 		raftDataSet := datasets[i].(*RaftDataSet)
-		fmt.Printf("Coverage for experiment: %s, states: %d\n", names[i], len(raftDataSet.statesMap))
+		fmt.Printf("Coverage for experiment: %s, states: %d\n", names[i], len(raftDataSet.visitGraph.Nodes))
 	}
 }
 
@@ -95,6 +113,9 @@ func MinCutOff(min float64) PlotFilter {
 }
 
 func RaftPlotComparator(figPath string, plotFilter PlotFilter) types.Comparator {
+	if _, err := os.Stat(figPath); err != nil {
+		os.Mkdir(figPath, os.ModePerm)
+	}
 	return func(names []string, datasets []types.DataSet) {
 		p := plot.New()
 		p.Title.Text = "Comparison"
@@ -133,28 +154,15 @@ func RaftPlotComparator(figPath string, plotFilter PlotFilter) types.Comparator 
 		if len(names) == 0 {
 			return
 		}
-		first := datasets[0].(*RaftDataSet)
-		common := first.statesMap
-		all := first.statesMap
 
 		for i := 0; i < len(names); i++ {
 			raftDataSet := datasets[i].(*RaftDataSet)
-			points := make([]float64, len(raftDataSet.statesMap))
+			points := make([]float64, len(raftDataSet.visitGraph.Nodes))
 			j := 0
-			for state, v := range raftDataSet.statesMap {
-				if _, ok := all[state]; !ok {
-					all[state] = 0
-				}
+			for _, v := range raftDataSet.visitGraph.GetVisits() {
 				points[j] = float64(v)
 				j++
 			}
-			newCommon := make(map[string]int)
-			for state := range common {
-				if _, ok := raftDataSet.statesMap[state]; ok {
-					newCommon[state] = 0
-				}
-			}
-			common = newCommon
 			points = plotFilter(points)
 			hist, err := plotter.NewHist(plotter.Values(points), len(points)/10)
 			if err != nil {
@@ -167,16 +175,7 @@ func RaftPlotComparator(figPath string, plotFilter PlotFilter) types.Comparator 
 		p.Legend.Top = true
 		p.Draw(right)
 
-		diff := make(map[string]int)
-		for state := range all {
-			if _, ok := common[state]; !ok {
-				diff[state] = 0
-			}
-		}
-
-		fmt.Printf("Number of common states: %d\nNumber of diff states: %d\n", len(common), len(diff))
-
-		f, err := os.Create(figPath)
+		f, err := os.Create(path.Join(figPath, "coverage.png"))
 		if err != nil {
 			return
 		}

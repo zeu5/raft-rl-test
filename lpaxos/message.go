@@ -14,7 +14,9 @@ var (
 	ProposeMessage MessageType = "Propose"
 	PromiseMessage MessageType = "Promise"
 	// Used only for forwarding commands to leader
-	CommandMessage MessageType = "Command"
+	CommandMessage     MessageType = "Command"
+	HeartbeatMessage   MessageType = "Heartbeat"
+	PhaseChangeMessage MessageType = "PhaseChange"
 )
 
 type Message struct {

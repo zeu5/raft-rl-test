@@ -54,9 +54,15 @@ func (e *Experiment) Run() {
 	}
 }
 
+func (e *Experiment) Reset() {
+	e.Result = make([]*Trace, 0)
+	e.config.Environment.Reset()
+	e.config.Policy.Reset()
+}
+
 type DataSet interface{}
 
-type Analyzer func([]*Trace) DataSet
+type Analyzer func(string, []*Trace) DataSet
 
 type Comparator func([]string, []DataSet)
 
@@ -83,7 +89,7 @@ func (c *Comparison) Run() {
 	names := make([]string, len(c.Experiments))
 	for i, e := range c.Experiments {
 		e.Run()
-		datasets[i] = c.analyzer(e.Result)
+		datasets[i] = c.analyzer(e.name, e.Result)
 		names[i] = e.name
 	}
 	c.comparator(names, datasets)

@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"strconv"
 
 	"github.com/zeu5/raft-rl-test/types"
 )
@@ -18,11 +19,16 @@ var _ types.State = &LPaxosState{}
 
 type LPaxosAction struct {
 	Type    string
-	Message Message
-	Node    uint64
+	Message Message `json:",omitempty"`
+	Node    uint64  `json:",omitempty"`
 }
 
 var _ types.Action = &LPaxosAction{}
+
+func (l *LPaxosAction) String() string {
+	bs, _ := json.Marshal(l)
+	return string(bs)
+}
 
 func (l *LPaxosAction) Hash() string {
 	bs, _ := json.Marshal(l)
@@ -62,9 +68,21 @@ func (l *LPaxosState) Hash() string {
 	return hex.EncodeToString(hash[:])
 }
 
+func (l *LPaxosState) NodeStateHash() string {
+	bs, _ := json.Marshal(l.NodeStates)
+	hash := sha256.Sum256(bs)
+	return hex.EncodeToString(hash[:])
+}
+
+type LPaxosEnvConfig struct {
+	Replicas int
+	Timeouts bool
+	Timeout  int
+	Requests int
+}
+
 type LPaxosEnv struct {
-	replicas int
-	timeouts bool
+	config   LPaxosEnvConfig
 	nodes    map[uint64]*LPaxosNode
 	messages map[string]Message
 	curState *LPaxosState
@@ -72,35 +90,36 @@ type LPaxosEnv struct {
 
 var _ types.Environment = &LPaxosEnv{}
 
-func NewLPaxosEnv(replicas int, timeouts bool) *LPaxosEnv {
+func NewLPaxosEnv(c LPaxosEnvConfig) *LPaxosEnv {
 	e := &LPaxosEnv{
-		replicas: replicas,
-		timeouts: timeouts,
+		config:   c,
 		nodes:    make(map[uint64]*LPaxosNode),
 		messages: make(map[string]Message),
 	}
-	cmd := Message{
-		Type: CommandMessage,
-		Log:  []Entry{{Data: []byte("1")}},
+	for i := 0; i < c.Requests+1; i++ {
+		cmd := Message{
+			Type: CommandMessage,
+			Log:  []Entry{{Data: []byte(strconv.Itoa(i + 1))}},
+		}
+		e.messages[cmd.Hash()] = cmd
 	}
-	e.messages[cmd.Hash()] = cmd
 	e.makeNodes()
 	return e
 }
 
 func (e *LPaxosEnv) makeNodes() {
-	peers := make([]Peer, e.replicas)
-	for i := 0; i < e.replicas; i++ {
+	peers := make([]Peer, e.config.Replicas)
+	for i := 0; i < e.config.Replicas; i++ {
 		peers[i] = Peer{ID: uint64(i + 1)}
 	}
-	for i := 0; i < e.replicas; i++ {
+	for i := 0; i < e.config.Replicas; i++ {
 		id := uint64(i + 1)
-		e.nodes[id] = NewLPaxosNode(LPaxosConfig{ID: id, Peers: peers})
+		e.nodes[id] = NewLPaxosNode(LPaxosConfig{ID: id, Peers: peers, Timeout: e.config.Timeout})
 	}
 	initState := &LPaxosState{
 		NodeStates:   make(map[uint64]LNodeState),
 		Messages:     e.messages,
-		WithTimeouts: e.timeouts,
+		WithTimeouts: e.config.Timeouts,
 	}
 	for id, n := range e.nodes {
 		initState.NodeStates[id] = n.Status()
@@ -144,9 +163,15 @@ func (e *LPaxosEnv) Step(a types.Action) types.State {
 			e.nodes[message.To].Step(message)
 			delete(e.messages, message.Hash())
 		}
+		for _, node := range e.nodes {
+			ticks := 2
+			for i := 0; i < ticks; i++ {
+				node.Tick()
+			}
+		}
 		newState := &LPaxosState{
 			NodeStates:   make(map[uint64]LNodeState),
-			WithTimeouts: e.timeouts,
+			WithTimeouts: e.config.Timeouts,
 		}
 		for id, node := range e.nodes {
 			rd := node.Ready()
@@ -167,7 +192,7 @@ func (e *LPaxosEnv) Step(a types.Action) types.State {
 		newState := &LPaxosState{
 			NodeStates:   e.curState.NodeStates,
 			Messages:     newMessages,
-			WithTimeouts: e.timeouts,
+			WithTimeouts: e.config.Timeouts,
 		}
 		e.curState = newState
 		return newState

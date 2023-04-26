@@ -22,6 +22,11 @@ func NewBonusPolicyGreedy(horizon int, discount float64, max bool) *BonusPolicyG
 	}
 }
 
+func (b *BonusPolicyGreedy) Reset() {
+	b.qTable = NewQTable()
+	b.visits = NewQTable()
+}
+
 func (b *BonusPolicyGreedy) NextAction(step int, state types.State, actions []types.Action) (types.Action, bool) {
 	actionsMap := make(map[string]types.Action)
 	availableActions := make([]string, len(actions))

@@ -132,6 +132,13 @@ func NewPropertyGuidedPolicy(properties []*types.Monitor, alpha, gamma, epsilon 
 	return policy
 }
 
+func (p *PropertyGuidedPolicy) Reset() {
+	p.expQTable = NewQTable()
+	properties := len(p.propQTables)
+	p.propQTables = make([]*QTable, properties)
+	p.propEpisodes = make([]int, properties)
+}
+
 // Run at the end of each episode, use the trace to update policies and choose next property
 func (p *PropertyGuidedPolicy) UpdateIteration(iteration int, trace *types.Trace) {
 	// check and update policies for all properties

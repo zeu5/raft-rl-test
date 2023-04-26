@@ -29,6 +29,10 @@ func NewGuidedPolicy(monitor *types.Monitor, alpha, gamma, epsilon float64) *Gui
 	}
 }
 
+func (g *GuidedPolicy) Reset() {
+	g.qTable = NewQTable()
+}
+
 func (g *GuidedPolicy) UpdateIteration(iteration int, trace *types.Trace) {
 	prefix, ok := g.property.Check(trace)
 	if ok {

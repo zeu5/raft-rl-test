@@ -38,6 +38,7 @@ type LPaxosNode struct {
 	Peers   []Peer
 	State   LNodeState
 	Tracker *Tracker
+	ticks   int
 
 	pendingMessages []Message
 	// Only used by leader
@@ -47,8 +48,9 @@ type LPaxosNode struct {
 }
 
 type LPaxosConfig struct {
-	ID    uint64
-	Peers []Peer
+	ID      uint64
+	Peers   []Peer
+	Timeout int
 }
 
 func NewLPaxosNode(config LPaxosConfig) *LPaxosNode {
@@ -74,6 +76,31 @@ func (l *LPaxosNode) Status() LNodeState {
 	return l.State
 }
 
+func (l *LPaxosNode) Tick() {
+	l.ticks += 1
+	if l.State.Leader == l.ID {
+		// If leader send heartbeat every (timeout/5) ticks
+		if l.ticks >= (l.Config.Timeout / 5) {
+			l.broadcast(Message{
+				Type:  HeartbeatMessage,
+				Phase: l.State.Phase,
+			})
+			l.ticks = 0
+		}
+		return
+	}
+	l.ticks += 1
+	if l.ticks > l.Config.Timeout {
+		l.broadcast(Message{
+			Type:    PhaseChangeMessage,
+			Phase:   l.State.Phase + 1,
+			Last:    l.State.Last,
+			Log:     l.State.Log.Entries(),
+			LogHash: l.State.Log.Hash(),
+		})
+	}
+}
+
 func (l *LPaxosNode) Step(m Message) {
 	if m.Phase < l.State.Phase || !validMessage(m) {
 		// Old message or invalid, ignore
@@ -84,6 +111,34 @@ func (l *LPaxosNode) Step(m Message) {
 		l.updateToPhase(m.Phase)
 	}
 	switch m.Type {
+	case HeartbeatMessage:
+		if l.State.Leader != l.ID && m.From == l.State.Leader {
+			// reset ticks when received heartbeat from the leader
+			l.ticks = 0
+		}
+	case PhaseChangeMessage:
+		l.Tracker.TrackPhaseChange(Ack{
+			Peer:    m.From,
+			Last:    m.Last,
+			Phase:   m.Phase,
+			Log:     m.Log,
+			LogHash: m.LogHash,
+		})
+		n := len(l.Peers)
+		if l.Tracker.ValidPhaseChanges(m.Phase) > n/2 {
+			if l.getLeader(m.Phase) == l.ID {
+				l.updateToPhase(m.Phase)
+				l.becomeLeader()
+			} else {
+				l.broadcast(Message{
+					Type:    PhaseChangeMessage,
+					Phase:   m.Phase,
+					Last:    l.State.Last,
+					Log:     l.State.Log.Entries(),
+					LogHash: l.State.Log.Hash(),
+				})
+			}
+		}
 	case CommandMessage:
 		l.pendingCommands = append(l.pendingCommands, m.Log...)
 		if l.State.Leader != l.ID {
@@ -102,6 +157,7 @@ func (l *LPaxosNode) Step(m Message) {
 		l.send(Message{
 			To:      l.State.Leader,
 			Type:    AckMessage,
+			Last:    l.State.Last,
 			Phase:   l.State.Phase,
 			Log:     l.State.Log.Entries(),
 			LogHash: l.State.Log.Hash(),
@@ -257,4 +313,6 @@ func (l *LPaxosNode) promise() {
 	})
 }
 
-func (l *LPaxosNode) decide() {}
+func (l *LPaxosNode) decide() {
+	// Todo: need to figure out decide
+}

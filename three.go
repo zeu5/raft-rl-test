@@ -13,8 +13,9 @@ func Three(episodes, horizon int, saveFile string) {
 		ElectionTick:  10,
 		HeartbeatTick: 1,
 		Timeouts:      true,
+		TicksPerStep:  2,
 	}
-	c := types.NewComparison(raft.RaftAnalyzer, raft.RaftPlotComparator(saveFile, raft.ChainFilters(raft.MinCutOff(100), raft.Log())))
+	c := types.NewComparison(raft.RaftAnalyzer(saveFile), raft.RaftPlotComparator(saveFile, raft.ChainFilters(raft.MinCutOff(100), raft.Log())))
 	c.AddExperiment(types.NewExperiment("RL", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
@@ -45,3 +46,10 @@ func ThreeCommand() *cobra.Command {
 		},
 	}
 }
+
+// Play with level of abstraction in state space
+// 1. Less/more information effect
+// 2. Effect of timeouts
+// 3. Better toy example
+// 4. Visualization of the paxos example to see the state space
+// 5. Try a synchronous example

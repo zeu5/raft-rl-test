@@ -85,6 +85,7 @@ type RaftEnvironmentConfig struct {
 	HeartbeatTick int
 	Timeouts      bool
 	Requests      int
+	TicksPerStep  int
 }
 
 type RaftEnvironment struct {
@@ -194,7 +195,7 @@ func (r *RaftEnvironment) Step(action types.Action) types.State {
 		}
 		// Take random number of ticks and update node states
 		for _, node := range r.nodes {
-			ticks := 2
+			ticks := r.config.TicksPerStep
 			for i := 0; i < ticks; i++ {
 				node.Tick()
 			}

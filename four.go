@@ -12,9 +12,10 @@ func Four(episodes, horizon int, saveFile string) {
 		ElectionTick:  10,
 		HeartbeatTick: 1,
 		Timeouts:      true,
+		TicksPerStep:  2,
 	}
 
-	c := types.NewComparison(raft.RaftAnalyzer, raft.RaftPlotComparator(saveFile, raft.DefaultFilter()))
+	c := types.NewComparison(raft.RaftAnalyzer(saveFile), raft.RaftPlotComparator(saveFile, raft.DefaultFilter()))
 	c.AddExperiment(types.NewExperiment("AbstractRL", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
