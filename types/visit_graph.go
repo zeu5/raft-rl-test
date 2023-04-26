@@ -26,6 +26,7 @@ func (v *VisitGraph) Update(from NodeState, action string, to NodeState) bool {
 	}
 	if _, ok := v.Nodes[toKey]; !ok {
 		v.Nodes[toKey] = NewNode(toKey, to)
+		new = true
 	}
 	v.Nodes[fromKey].Visits += 1
 	v.Nodes[fromKey].AddNext(action, toKey)
