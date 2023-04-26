@@ -4,15 +4,18 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"math/rand"
+	"sort"
 	"strconv"
 	"time"
 
 	"github.com/zeu5/raft-rl-test/types"
 	raft "go.etcd.io/raft/v3"
 	pb "go.etcd.io/raft/v3/raftpb"
+	"go.etcd.io/raft/v3/tracker"
 )
 
 type RaftStateType interface {
@@ -25,19 +28,66 @@ type RaftState struct {
 	WithTimeouts bool
 }
 
-var _ types.State = &RaftState{}
-var _ RaftStateType = &RaftState{}
+var _ types.State = RaftState{}
+var _ RaftStateType = RaftState{}
 
-func (r *RaftState) GetNodeStates() map[uint64]raft.Status {
-	return r.NodeStates
+func (r RaftState) GetNodeStates() map[uint64]raft.Status {
+	return copyNodeStates(r.NodeStates)
 }
 
-func (r *RaftState) Hash() string {
+func (r RaftState) MarshalJSON() ([]byte, error) {
+	marshalStatus := func(s raft.Status) string {
+		j := fmt.Sprintf(`{"id":"%x","term":%d,"vote":"%x","commit":%d,"lead":"%x","raftState":%q,"applied":%d,"progress":{`,
+			s.ID, s.Term, s.Vote, s.Commit, s.Lead, s.RaftState, s.Applied)
+
+		if len(s.Progress) == 0 {
+			j += "},"
+		} else {
+			keys := make([]int, 0)
+			for k := range s.Progress {
+				keys = append(keys, int(k))
+			}
+			sort.Ints(keys)
+			for _, k := range keys {
+				v := s.Progress[uint64(k)]
+				subj := fmt.Sprintf(`"%d":{"match":%d,"next":%d,"state":%q},`, k, v.Match, v.Next, v.State)
+				j += subj
+			}
+			// remove the trailing ","
+			j = j[:len(j)-1] + "},"
+		}
+
+		j += fmt.Sprintf(`"leadtransferee":"%x"}`, s.LeadTransferee)
+		return j
+	}
+
+	res := `{"NodeStates":{`
+	keys := make([]int, 0)
+	for k := range r.NodeStates {
+		keys = append(keys, int(k))
+	}
+	sort.Ints(keys)
+	for _, k := range keys {
+		subS := fmt.Sprintf(`"%x":%s,`, k, marshalStatus(r.NodeStates[uint64(k)]))
+		res += subS
+	}
+	res = res[:len(res)-1] + `},"Messages":`
+	if len(r.Messages) == 0 {
+		res += "{}}"
+	} else {
+		bs, _ := json.Marshal(r.Messages)
+		res += string(bs) + "}"
+	}
+	return []byte(res), nil
+}
+
+func (r RaftState) Hash() string {
 	data, _ := json.Marshal(r)
-	return string(data)
+	hash := sha256.Sum256(data)
+	return hex.EncodeToString(hash[:])
 }
 
-func (r *RaftState) Actions() []types.Action {
+func (r RaftState) Actions() []types.Action {
 	additional := make([]types.Action, 0)
 	if r.WithTimeouts {
 		processes := map[uint64]bool{}
@@ -93,7 +143,7 @@ type RaftEnvironment struct {
 	nodes    map[uint64]*raft.RawNode
 	storages map[uint64]*raft.MemoryStorage
 	messages map[string]pb.Message
-	curState *RaftState
+	curState RaftState
 	rand     *rand.Rand
 }
 
@@ -113,7 +163,7 @@ func NewRaftEnvironment(config RaftEnvironmentConfig) *RaftEnvironment {
 				{Data: []byte(strconv.Itoa(i + 1))},
 			},
 		}
-		r.messages[proposal.String()] = proposal
+		r.messages[msgKey(proposal)] = proposal
 	}
 	r.makeNodes()
 	return r
@@ -140,9 +190,9 @@ func (r *RaftEnvironment) makeNodes() {
 		})
 		r.nodes[nodeID].Bootstrap(peers)
 	}
-	initState := &RaftState{
+	initState := RaftState{
 		NodeStates:   make(map[uint64]raft.Status),
-		Messages:     r.messages,
+		Messages:     copyMessages(r.messages),
 		WithTimeouts: r.config.Timeouts,
 	}
 	for id, node := range r.nodes {
@@ -161,7 +211,7 @@ func (r *RaftEnvironment) Reset() types.State {
 				{Data: []byte(strconv.Itoa(i + 1))},
 			},
 		}
-		r.messages[proposal.String()] = proposal
+		r.messages[msgKey(proposal)] = proposal
 	}
 	r.makeNodes()
 	return r.curState
@@ -186,12 +236,12 @@ func (r *RaftEnvironment) Step(action types.Action) types.State {
 				message := raftAction.Message
 				message.To = leader
 				r.nodes[leader].Step((message))
-				delete(r.messages, message.String())
+				delete(r.messages, msgKey(message))
 			}
 		} else {
 			node := r.nodes[raftAction.Message.To]
 			node.Step(raftAction.Message)
-			delete(r.messages, raftAction.Message.String())
+			delete(r.messages, msgKey(raftAction.Message))
 		}
 		// Take random number of ticks and update node states
 		for _, node := range r.nodes {
@@ -200,7 +250,7 @@ func (r *RaftEnvironment) Step(action types.Action) types.State {
 				node.Tick()
 			}
 		}
-		newState := &RaftState{
+		newState := RaftState{
 			NodeStates:   make(map[uint64]raft.Status),
 			WithTimeouts: r.config.Timeouts,
 		}
@@ -212,13 +262,13 @@ func (r *RaftEnvironment) Step(action types.Action) types.State {
 				}
 				r.storages[id].Append(ready.Entries)
 				for _, message := range ready.Messages {
-					r.messages[message.String()] = message
+					r.messages[msgKey(message)] = message
 				}
 				node.Advance(ready)
 			}
 			newState.NodeStates[id] = node.Status()
 		}
-		newState.Messages = r.messages
+		newState.Messages = copyMessages(r.messages)
 		r.curState = newState
 		return newState
 	case "TimeoutProcess":
@@ -228,13 +278,93 @@ func (r *RaftEnvironment) Step(action types.Action) types.State {
 				newMessages[key] = message
 			}
 		}
-		newState := &RaftState{
-			NodeStates:   r.curState.NodeStates,
-			Messages:     newMessages,
+		newState := RaftState{
+			NodeStates:   make(map[uint64]raft.Status),
+			Messages:     copyMessages(newMessages),
 			WithTimeouts: r.config.Timeouts,
+		}
+
+		for id, node := range r.nodes {
+			newState.NodeStates[id] = node.Status()
 		}
 		r.curState = newState
 		return newState
 	}
 	return nil
+}
+
+func copyNodeStates(nodeStates map[uint64]raft.Status) map[uint64]raft.Status {
+	c := make(map[uint64]raft.Status)
+	for k, s := range nodeStates {
+		newStatus := raft.Status{
+			BasicStatus: raft.BasicStatus{
+				ID: s.ID,
+				HardState: pb.HardState{
+					Term:   s.Term,
+					Vote:   s.Vote,
+					Commit: s.Commit,
+				},
+				SoftState: raft.SoftState{
+					Lead:      s.Lead,
+					RaftState: s.RaftState,
+				},
+				Applied:        s.Applied,
+				LeadTransferee: s.LeadTransferee,
+			},
+			Config:   s.Config.Clone(),
+			Progress: make(map[uint64]tracker.Progress),
+		}
+		for k, p := range s.Progress {
+			newStatus.Progress[k] = tracker.Progress{
+				Match:            p.Match,
+				Next:             p.Next,
+				State:            p.State,
+				PendingSnapshot:  p.PendingSnapshot,
+				RecentActive:     p.RecentActive,
+				MsgAppFlowPaused: p.MsgAppFlowPaused,
+				IsLearner:        p.IsLearner,
+				Inflights:        p.Inflights.Clone(),
+			}
+		}
+		c[k] = newStatus
+	}
+	return c
+}
+
+func copyMessages(messages map[string]pb.Message) map[string]pb.Message {
+	c := make(map[string]pb.Message)
+	for k, m := range messages {
+		newMessage := pb.Message{
+			Type:       m.Type,
+			To:         m.To,
+			From:       m.From,
+			Term:       m.Term,
+			LogTerm:    m.LogTerm,
+			Index:      m.Index,
+			Entries:    make([]pb.Entry, len(m.Entries)),
+			Commit:     m.Commit,
+			Vote:       m.Vote,
+			Snapshot:   m.Snapshot,
+			Reject:     m.Reject,
+			RejectHint: m.RejectHint,
+			Context:    m.Context,
+			Responses:  m.Responses,
+		}
+		for i, entry := range m.Entries {
+			newMessage.Entries[i] = pb.Entry{
+				Term:  entry.Term,
+				Index: entry.Index,
+				Type:  entry.Type,
+				Data:  entry.Data,
+			}
+		}
+		c[k] = newMessage
+	}
+	return c
+}
+
+func msgKey(message pb.Message) string {
+	bs, _ := json.Marshal(message)
+	hash := sha256.Sum256(bs)
+	return hex.EncodeToString(hash[:])
 }

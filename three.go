@@ -22,12 +22,12 @@ func Three(episodes, horizon int, saveFile string) {
 		Policy:      types.NewSoftMaxNegPolicy(0.3, 0.7),
 		Environment: raft.NewRaftEnvironment(raftConfig),
 	}))
-	// c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
-	// 	Episodes:    episodes,
-	// 	Horizon:     horizon,
-	// 	Policy:      types.NewRandomPolicy(),
-	// 	Environment: raft.NewRaftEnvironment(raftConfig),
-	// }))
+	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
+		Episodes:    episodes,
+		Horizon:     horizon,
+		Policy:      types.NewRandomPolicy(),
+		Environment: raft.NewRaftEnvironment(raftConfig),
+	}))
 	c.AddExperiment(types.NewExperiment("BonusMaxRL", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,

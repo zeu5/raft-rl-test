@@ -21,11 +21,11 @@ func (v *VisitGraph) Update(from NodeState, action string, to NodeState) bool {
 	toKey := to.Hash()
 	new := false
 	if _, ok := v.Nodes[fromKey]; !ok {
-		v.Nodes[fromKey] = NewNode(from)
+		v.Nodes[fromKey] = NewNode(fromKey, from)
 		new = true
 	}
 	if _, ok := v.Nodes[toKey]; !ok {
-		v.Nodes[toKey] = NewNode(to)
+		v.Nodes[toKey] = NewNode(toKey, to)
 	}
 	v.Nodes[fromKey].Visits += 1
 	v.Nodes[fromKey].AddNext(action, toKey)
@@ -69,9 +69,9 @@ type Node struct {
 	Prev map[string]map[string]bool
 }
 
-func NewNode(s NodeState) *Node {
+func NewNode(k string, s NodeState) *Node {
 	return &Node{
-		Key:    s.Hash(),
+		Key:    k,
 		State:  s,
 		Visits: 0,
 		Next:   make(map[string]map[string]bool),

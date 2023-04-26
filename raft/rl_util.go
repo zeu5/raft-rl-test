@@ -9,6 +9,7 @@ import (
 	"math"
 	"os"
 	"path"
+	"sort"
 
 	"github.com/zeu5/raft-rl-test/types"
 	"go.etcd.io/raft/v3"
@@ -30,8 +31,53 @@ type RaftGraphState struct {
 	NodeStates map[uint64]raft.Status
 }
 
+func (r *RaftGraphState) MarshalJSON() ([]byte, error) {
+	marshalStatus := func(s raft.Status) string {
+		j := fmt.Sprintf(`{"id":"%x","term":%d,"vote":"%x","commit":%d,"lead":"%x","raftState":%q,"applied":%d,"progress":{`,
+			s.ID, s.Term, s.Vote, s.Commit, s.Lead, s.RaftState, s.Applied)
+
+		if len(s.Progress) == 0 {
+			j += "},"
+		} else {
+			keys := make([]int, 0)
+			for k := range s.Progress {
+				keys = append(keys, int(k))
+			}
+			sort.Ints(keys)
+			for _, k := range keys {
+				v := s.Progress[uint64(k)]
+				subj := fmt.Sprintf(`"%x":{"match":%d,"next":%d,"state":%q},`, k, v.Match, v.Next, v.State)
+				j += subj
+			}
+			// remove the trailing ","
+			j = j[:len(j)-1] + "},"
+		}
+
+		j += fmt.Sprintf(`"leadtransferee":"%x"}`, s.LeadTransferee)
+		return j
+	}
+
+	res := `{"NodeStates":{`
+	keys := make([]int, 0)
+	for k := range r.NodeStates {
+		keys = append(keys, int(k))
+	}
+	sort.Ints(keys)
+	for _, k := range keys {
+		subS := fmt.Sprintf(`"%d":%s,`, k, marshalStatus(r.NodeStates[uint64(k)]))
+		res += subS
+	}
+	res = res[:len(res)-1] + "}}"
+	return []byte(res), nil
+}
+
+func (r *RaftGraphState) String() string {
+	bs, _ := json.Marshal(r)
+	return string(bs)
+}
+
 func (r *RaftGraphState) Hash() string {
-	bs, _ := json.Marshal(r.NodeStates)
+	bs, _ := json.Marshal(r)
 	hash := sha256.Sum256(bs)
 	return hex.EncodeToString(hash[:])
 }
