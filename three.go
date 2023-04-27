@@ -14,6 +14,7 @@ func Three(episodes, horizon int, saveFile string) {
 		HeartbeatTick: 1,
 		Timeouts:      true,
 		TicksPerStep:  2,
+		Requests:      1,
 	}
 	c := types.NewComparison(raft.RaftAnalyzer(saveFile), raft.RaftPlotComparator(saveFile, raft.ChainFilters(raft.MinCutOff(100), raft.Log())))
 	c.AddExperiment(types.NewExperiment("RL", &types.AgentConfig{

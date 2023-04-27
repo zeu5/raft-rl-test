@@ -29,6 +29,22 @@ type Message struct {
 	LogHash string
 }
 
+func (m Message) Copy() Message {
+	newM := Message{
+		Type:    m.Type,
+		Phase:   m.Phase,
+		From:    m.From,
+		To:      m.To,
+		Last:    m.Last,
+		Log:     make([]Entry, len(m.Log)),
+		LogHash: m.LogHash,
+	}
+	for i, e := range m.Log {
+		newM.Log[i] = e.Copy()
+	}
+	return newM
+}
+
 func (m Message) Hash() string {
 	bs, _ := json.Marshal(m)
 	hash := sha256.Sum256(bs)
@@ -36,10 +52,11 @@ func (m Message) Hash() string {
 }
 
 func validMessage(m Message) bool {
-	if m.Log == nil || len(m.Log) == 0 {
-		return true
-	}
-	bs, _ := json.Marshal(m.Log)
-	hash := sha256.Sum256(bs)
-	return m.LogHash == hex.EncodeToString(hash[:])
+	return true
+	// if m.Log == nil || len(m.Log) == 0 {
+	// 	return true
+	// }
+	// bs, _ := json.Marshal(m.Log)
+	// hash := sha256.Sum256(bs)
+	// return m.LogHash == hex.EncodeToString(hash[:])
 }

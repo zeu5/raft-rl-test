@@ -5,7 +5,7 @@ from flask import jsonify, render_template
 from analyze_graph import analyze
 
 app = Flask(__name__)
-graph_path = os.environ["GRAPH_PATH"] if "GRAPH_PATH" in os.environ else "../../traces/"
+graph_path = os.environ["GRAPH_PATH"] if "GRAPH_PATH" in os.environ else "results"
 
 @app.route("/")
 def index():

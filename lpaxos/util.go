@@ -1,6 +1,7 @@
 package lpaxos
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -8,6 +9,12 @@ import (
 
 type Entry struct {
 	Data []byte
+}
+
+func (e Entry) Copy() Entry {
+	return Entry{
+		Data: bytes.Clone(e.Data),
+	}
 }
 
 func LogHash(entries []Entry) string {
@@ -27,16 +34,33 @@ func NewLog() *Log {
 
 }
 
+func (l *Log) Copy() *Log {
+	newL := &Log{
+		entries: make([]Entry, len(l.entries)),
+	}
+	for i, e := range l.entries {
+		newL.entries[i] = e.Copy()
+	}
+	return newL
+}
+
 func (l *Log) Add(e Entry) {
 	l.entries = append(l.entries, e)
 }
 
 func (l *Log) Replace(new []Entry) {
-	l.entries = new
+	l.entries = make([]Entry, len(new))
+	for i, e := range new {
+		l.entries[i] = e.Copy()
+	}
 }
 
 func (l *Log) Entries() []Entry {
-	return l.entries
+	entries := make([]Entry, len(l.entries))
+	for i, e := range l.entries {
+		entries[i] = e.Copy()
+	}
+	return entries
 }
 
 func (l *Log) MarshalJSON() ([]byte, error) {

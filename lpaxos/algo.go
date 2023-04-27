@@ -32,6 +32,16 @@ type LNodeState struct {
 	Log    *Log
 }
 
+func (l LNodeState) Copy() LNodeState {
+	return LNodeState{
+		Last:   l.Last,
+		Phase:  l.Phase,
+		Leader: l.Leader,
+		Step:   l.Step,
+		Log:    l.Log.Copy(),
+	}
+}
+
 type LPaxosNode struct {
 	ID      uint64
 	Config  LPaxosConfig
@@ -73,7 +83,7 @@ func NewLPaxosNode(config LPaxosConfig) *LPaxosNode {
 }
 
 func (l *LPaxosNode) Status() LNodeState {
-	return l.State
+	return l.State.Copy()
 }
 
 func (l *LPaxosNode) Tick() {
@@ -89,7 +99,6 @@ func (l *LPaxosNode) Tick() {
 		}
 		return
 	}
-	l.ticks += 1
 	if l.ticks > l.Config.Timeout {
 		l.broadcast(Message{
 			Type:    PhaseChangeMessage,
@@ -146,7 +155,9 @@ func (l *LPaxosNode) Step(m Message) {
 		}
 		// If we are waiting for commands to propose then
 		// this call will send the propose messages
-		l.propose()
+		if l.State.Step >= StepPropose {
+			l.propose()
+		}
 		return
 	case PrepareMessage:
 		if l.State.Leader == l.ID {
@@ -205,7 +216,10 @@ type Ready struct {
 }
 
 func (l *LPaxosNode) Ready() Ready {
-	messages := l.pendingMessages
+	messages := make([]Message, len(l.pendingMessages))
+	for i, m := range l.pendingMessages {
+		messages[i] = m.Copy()
+	}
 	l.pendingMessages = make([]Message, 0)
 	return Ready{
 		Messages: messages,
@@ -242,29 +256,33 @@ func (l *LPaxosNode) becomeLeader() {
 }
 
 func (l *LPaxosNode) getLeader(phase int) uint64 {
-	leader := phase % len(l.Peers)
+	leader := (phase + 1) % len(l.Peers)
 	return uint64(leader)
 }
 
 func (l *LPaxosNode) forwardCommands() {
+	pendingCommands := make([]Entry, len(l.pendingCommands))
+	for i, e := range l.pendingCommands {
+		pendingCommands[i] = e.Copy()
+	}
 	l.send(Message{
 		To:   l.State.Leader,
 		Type: CommandMessage,
-		Log:  l.pendingCommands,
+		Log:  pendingCommands,
 	})
 	l.pendingCommands = make([]Entry, 0)
 }
 
 func (l *LPaxosNode) send(m Message) {
 	m.From = l.ID
-	l.pendingMessages = append(l.pendingMessages, m)
+	l.pendingMessages = append(l.pendingMessages, m.Copy())
 }
 
 func (l *LPaxosNode) broadcast(m Message) {
 	m.From = l.ID
 	for _, p := range l.Peers {
 		m.To = p.ID
-		l.pendingMessages = append(l.pendingMessages, m)
+		l.pendingMessages = append(l.pendingMessages, m.Copy())
 	}
 }
 
@@ -273,21 +291,28 @@ func (l *LPaxosNode) propose() {
 		return
 	}
 	l.State.Step = StepPropose
-	var latestLog []Entry
+	var latestLogNode uint64 = 0
 	latestAck := -1
-	for _, a := range l.Tracker.Acks {
+	for node, a := range l.Tracker.Acks {
 		if a.Last > latestAck {
 			latestAck = a.Last
-			latestLog = a.Log
+			latestLogNode = node
 		}
 	}
 	if latestAck == -1 {
-		// Something is wrong
-		return
+		// First phase. Pick one at random
+		for node := range l.Tracker.Acks {
+			latestLogNode = node
+			break
+		}
 	}
-	newLog := latestLog
+	lAck := l.Tracker.Acks[latestLogNode]
+	newLog := make([]Entry, len(lAck.Log))
+	for i, e := range lAck.Log {
+		newLog[i] = e.Copy()
+	}
 	if len(l.pendingCommands) != 0 {
-		newLog = append(newLog, l.pendingCommands[0])
+		newLog = append(newLog, l.pendingCommands[0].Copy())
 		l.pendingCommands = l.pendingCommands[1:]
 	}
 	newLogHash := LogHash(newLog)

@@ -30,6 +30,6 @@ function viz_graph(graph) {
         .attr("r", d => radius(d.Visits))
         .attr("fill", "white")
         .call(circle => circle.append("title")
-            .text(d => ["Visits: " + d.Visits, "State:", d.State].join("\n")));
+            .text(d => ["Visits: " + d.Visits, "State:", JSON.stringify(d.State)].join("\n")));
 
 }

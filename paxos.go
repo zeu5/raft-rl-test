@@ -15,6 +15,12 @@ func Paxos(episodes, horizon int, saveFile string) {
 		Timeouts: true,
 	}
 	c := types.NewComparison(lpaxos.LPaxosAnalyzer(saveFile), lpaxos.LPaxosComparator(saveFile))
+	c.AddExperiment(types.NewExperiment("DeliverAll", &types.AgentConfig{
+		Episodes:    episodes,
+		Horizon:     horizon,
+		Policy:      lpaxos.NewOnlyDeliverPolicy(),
+		Environment: lpaxos.NewLPaxosEnv(lPaxosConfig),
+	}))
 	c.AddExperiment(types.NewExperiment("RL", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,

@@ -4,7 +4,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"os"
 	"path"
+	"sort"
 
 	"github.com/zeu5/raft-rl-test/types"
 	"gonum.org/v1/plot"
@@ -19,16 +22,31 @@ type LPaxosDataSet struct {
 	UniqueStates []int
 }
 
-func (d *LPaxosDataSet) Save() {
-	d.VisitGraph.Record(d.savePath)
-}
-
 type LPaxosGraphState struct {
 	NodeStates map[uint64]LNodeState
 }
 
+func (l *LPaxosGraphState) MarshalJSON() ([]byte, error) {
+	keys := make([]int, 0)
+	for k := range l.NodeStates {
+		keys = append(keys, int(k))
+	}
+	sort.Ints(keys)
+	res := `{"NodeStates":{`
+	if len(keys) == 0 {
+		res += ","
+	} else {
+		for _, k := range keys {
+			sub, _ := json.Marshal(l.NodeStates[uint64(k)])
+			res += fmt.Sprintf(`"%d":%s,`, k, string(sub))
+		}
+	}
+	res = res[:len(res)-1] + `}}`
+	return []byte(res), nil
+}
+
 func (l *LPaxosGraphState) Hash() string {
-	bs, _ := json.Marshal(l.NodeStates)
+	bs, _ := json.Marshal(l)
 	hash := sha256.Sum256(bs)
 	return hex.EncodeToString(hash[:])
 }
@@ -38,10 +56,13 @@ func NewLPaxosGraphState(s types.State) *LPaxosGraphState {
 	if !ok {
 		return &LPaxosGraphState{NodeStates: make(map[uint64]LNodeState)}
 	}
-	return &LPaxosGraphState{NodeStates: lPaxosState.NodeStates}
+	return &LPaxosGraphState{NodeStates: copyNodeStates(lPaxosState.NodeStates)}
 }
 
 func LPaxosAnalyzer(savePath string) types.Analyzer {
+	if _, err := os.Stat(savePath); err != nil {
+		os.Mkdir(savePath, os.ModePerm)
+	}
 	return func(name string, traces []*types.Trace) types.DataSet {
 		dataset := &LPaxosDataSet{
 			savePath:     path.Join(savePath, name+".json"),
@@ -59,12 +80,16 @@ func LPaxosAnalyzer(savePath string) types.Analyzer {
 			}
 			dataset.UniqueStates = append(dataset.UniqueStates, uniqueStates)
 		}
-		dataset.Save()
+
+		dataset.VisitGraph.Record(path.Join(savePath, "visit_graph_"+name+".json"))
 		return dataset
 	}
 }
 
 func LPaxosComparator(figPath string) types.Comparator {
+	if _, err := os.Stat(figPath); err != nil {
+		os.Mkdir(figPath, os.ModePerm)
+	}
 	return func(names []string, ds []types.DataSet) {
 		p := plot.New()
 		p.Title.Text = "Comparison"
@@ -88,6 +113,6 @@ func LPaxosComparator(figPath string) types.Comparator {
 			p.Add(line)
 			p.Legend.Add(names[i], line)
 		}
-		p.Save(8*vg.Inch, 8*vg.Inch, figPath)
+		p.Save(8*vg.Inch, 8*vg.Inch, path.Join(figPath, "coverage.png"))
 	}
 }

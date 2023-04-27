@@ -7,6 +7,11 @@ def analyze(graph):
         node = graph["Nodes"][n]
         if "Prev" not in node or len(node["Prev"].keys()) == 0:
             start_states.add(n)
+        prev = set([p for _, v in node["Prev"].items() for p in v ])
+        if n in prev:
+            prev.remove(n)
+        if len(prev) == 0:
+            start_states.add(n)
             
     nodes = graph["Nodes"]
     q = list(start_states)
@@ -18,7 +23,9 @@ def analyze(graph):
         if "Depth" in nodes[cur]:
             continue
         
-        if "Prev" in nodes[cur] and len(nodes[cur]["Prev"].keys()) != 0:
+        if cur in start_states:
+            nodes[cur]["Depth"] = 0
+        else:
             for _, v in nodes[cur]["Prev"].items():
                 for s in v:
                     if "Depth" in nodes[s]:
@@ -26,9 +33,6 @@ def analyze(graph):
             if len(depths) != 0:
                 min_depth = min(list(depths))
                 nodes[cur]["Depth"] = min_depth
-            
-        else:
-            nodes[cur]["Depth"] = 0
     
         if "Next" in nodes[cur]:
             for a, v in nodes[cur]["Next"].items():

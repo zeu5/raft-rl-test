@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"sort"
 	"strconv"
 
 	"github.com/zeu5/raft-rl-test/types"
@@ -36,6 +38,27 @@ func (l *LPaxosAction) Hash() string {
 	return hex.EncodeToString(hash[:])
 }
 
+func (l *LPaxosState) MarshalJSON() ([]byte, error) {
+	keys := make([]int, 0)
+	for k := range l.NodeStates {
+		keys = append(keys, int(k))
+	}
+	sort.Ints(keys)
+	res := `{"NodeStates":{`
+	for _, k := range keys {
+		sub, _ := json.Marshal(l.NodeStates[uint64(k)])
+		res += fmt.Sprintf(`"%d":%s,`, k, string(sub))
+	}
+	res = res[:len(res)-1] + `}, "Messages":`
+	if len(l.Messages) == 0 {
+		res += "{}}"
+	} else {
+		bs, _ := json.Marshal(l.Messages)
+		res += string(bs) + "}"
+	}
+	return []byte(res), nil
+}
+
 func (l *LPaxosState) Actions() []types.Action {
 	result := make([]types.Action, len(l.Messages))
 	i := 0
@@ -44,6 +67,7 @@ func (l *LPaxosState) Actions() []types.Action {
 			Type:    "Deliver",
 			Message: m,
 		}
+		i++
 	}
 	if l.WithTimeouts {
 		nodes := make(map[uint64]bool)
@@ -118,7 +142,7 @@ func (e *LPaxosEnv) makeNodes() {
 	}
 	initState := &LPaxosState{
 		NodeStates:   make(map[uint64]LNodeState),
-		Messages:     e.messages,
+		Messages:     copyMessages(e.messages),
 		WithTimeouts: e.config.Timeouts,
 	}
 	for id, n := range e.nodes {
@@ -129,11 +153,13 @@ func (e *LPaxosEnv) makeNodes() {
 
 func (e *LPaxosEnv) Reset() types.State {
 	e.messages = make(map[string]Message)
-	cmd := Message{
-		Type: CommandMessage,
-		Log:  []Entry{{Data: []byte("1")}},
+	for i := 0; i < e.config.Requests+1; i++ {
+		cmd := Message{
+			Type: CommandMessage,
+			Log:  []Entry{{Data: []byte(strconv.Itoa(i + 1))}},
+		}
+		e.messages[cmd.Hash()] = cmd
 	}
-	e.messages[cmd.Hash()] = cmd
 	e.makeNodes()
 	return e.curState
 }
@@ -164,7 +190,7 @@ func (e *LPaxosEnv) Step(a types.Action) types.State {
 			delete(e.messages, message.Hash())
 		}
 		for _, node := range e.nodes {
-			ticks := 2
+			ticks := 1
 			for i := 0; i < ticks; i++ {
 				node.Tick()
 			}
@@ -180,7 +206,8 @@ func (e *LPaxosEnv) Step(a types.Action) types.State {
 			}
 			newState.NodeStates[id] = node.Status()
 		}
-		newState.Messages = e.messages
+		newState.Messages = copyMessages(e.messages)
+		e.curState = newState
 		return newState
 	case "Drop":
 		newMessages := make(map[string]Message)
@@ -190,12 +217,28 @@ func (e *LPaxosEnv) Step(a types.Action) types.State {
 			}
 		}
 		newState := &LPaxosState{
-			NodeStates:   e.curState.NodeStates,
-			Messages:     newMessages,
+			NodeStates:   copyNodeStates(e.curState.NodeStates),
+			Messages:     copyMessages(newMessages),
 			WithTimeouts: e.config.Timeouts,
 		}
 		e.curState = newState
 		return newState
 	}
 	return nil
+}
+
+func copyNodeStates(ns map[uint64]LNodeState) map[uint64]LNodeState {
+	res := make(map[uint64]LNodeState)
+	for k, s := range ns {
+		res[k] = s.Copy()
+	}
+	return ns
+}
+
+func copyMessages(messages map[string]Message) map[string]Message {
+	res := make(map[string]Message)
+	for k, m := range messages {
+		res[k] = m.Copy()
+	}
+	return res
 }
