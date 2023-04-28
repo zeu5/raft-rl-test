@@ -18,7 +18,7 @@ func Paxos(episodes, horizon int, saveFile string) {
 	c.AddExperiment(types.NewExperiment("DeliverAll", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
-		Policy:      lpaxos.NewOnlyDeliverPolicy(),
+		Policy:      lpaxos.NewOnlyDeliverPolicy(true),
 		Environment: lpaxos.NewLPaxosEnv(lPaxosConfig),
 	}))
 	c.AddExperiment(types.NewExperiment("RL", &types.AgentConfig{

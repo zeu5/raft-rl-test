@@ -1,4 +1,4 @@
-package lpaxos
+package raft
 
 import (
 	"math/rand"
@@ -11,8 +11,6 @@ type OnlyDeliverPolicy struct {
 	rand  *rand.Rand
 	First bool
 }
-
-var _ types.Policy = &OnlyDeliverPolicy{}
 
 func NewOnlyDeliverPolicy(first bool) *OnlyDeliverPolicy {
 	return &OnlyDeliverPolicy{
@@ -32,11 +30,11 @@ func (r *OnlyDeliverPolicy) UpdateIteration(_ int, _ *types.Trace) {
 func (r *OnlyDeliverPolicy) NextAction(step int, state types.State, actions []types.Action) (types.Action, bool) {
 	deliverActions := make([]types.Action, 0)
 	for _, a := range actions {
-		lPaxosAction, ok := a.(*LPaxosAction)
+		raftAction, ok := a.(*RaftAction)
 		if !ok {
 			continue
 		}
-		if lPaxosAction.Type == "Deliver" {
+		if raftAction.Type == "DeliverMessage" {
 			deliverActions = append(deliverActions, a)
 		}
 	}

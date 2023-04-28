@@ -17,6 +17,12 @@ func Three(episodes, horizon int, saveFile string) {
 		Requests:      1,
 	}
 	c := types.NewComparison(raft.RaftAnalyzer(saveFile), raft.RaftPlotComparator(saveFile, raft.ChainFilters(raft.MinCutOff(100), raft.Log())))
+	c.AddExperiment(types.NewExperiment("DeliverAll", &types.AgentConfig{
+		Episodes:    episodes,
+		Horizon:     horizon,
+		Policy:      raft.NewOnlyDeliverPolicy(true),
+		Environment: raft.NewRaftEnvironment(raftConfig),
+	}))
 	c.AddExperiment(types.NewExperiment("RL", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,

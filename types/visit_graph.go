@@ -57,6 +57,10 @@ func (v *VisitGraph) Record(filePath string) {
 	writer.Flush()
 }
 
+func (v *VisitGraph) Clear() {
+	v.Nodes = make(map[string]*Node)
+}
+
 type NodeState interface {
 	Hash() string
 }

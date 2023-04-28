@@ -82,6 +82,7 @@ func LPaxosAnalyzer(savePath string) types.Analyzer {
 		}
 
 		dataset.VisitGraph.Record(path.Join(savePath, "visit_graph_"+name+".json"))
+		dataset.VisitGraph.Clear()
 		return dataset
 	}
 }
