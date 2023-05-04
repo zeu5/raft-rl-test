@@ -16,16 +16,18 @@ type Policy interface {
 }
 
 type SoftMaxNegPolicy struct {
-	QTable map[string]map[string]float64
-	alpha  float64
-	gamma  float64
+	QTable      map[string]map[string]float64
+	alpha       float64
+	gamma       float64
+	temperature float64
 }
 
-func NewSoftMaxNegPolicy(alpha, gamma float64) *SoftMaxNegPolicy {
+func NewSoftMaxNegPolicy(alpha, gamma, temperature float64) *SoftMaxNegPolicy {
 	return &SoftMaxNegPolicy{
-		QTable: make(map[string]map[string]float64),
-		alpha:  alpha,
-		gamma:  gamma,
+		QTable:      make(map[string]map[string]float64),
+		alpha:       alpha,
+		gamma:       gamma,
+		temperature: temperature,
 	}
 }
 
@@ -58,7 +60,7 @@ func (s *SoftMaxNegPolicy) NextAction(step int, state State, actions []Action) (
 	vals := make([]float64, len(actions))
 
 	for i, action := range actions {
-		val := s.QTable[stateHash][action.Hash()]
+		val := s.QTable[stateHash][action.Hash()] * (1 / s.temperature)
 		exp := math.Exp(val)
 		vals[i] = exp
 		sum += exp

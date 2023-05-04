@@ -168,9 +168,10 @@ func RaftPlotComparator(figPath string, plotFilter PlotFilter) types.Comparator 
 		p.X.Label.Text = "Iteration"
 		p.Y.Label.Text = "States covered"
 
-		img := vgimg.New(16*vg.Inch, 8*vg.Inch)
+		img := vgimg.New(8*vg.Inch, 8*vg.Inch)
 		c := draw.New(img)
-		left, right := splitHorizontal(c, c.Size().X/2)
+		// cSize = := c.Size()
+		// left, right := draw.Crop(c, 0, c.Min.X-c.Max.X+cSize.X/2, 0, 0), draw.Crop(c, cSize.X/2, 0, 0, 0)
 
 		for i := 0; i < len(names); i++ {
 			raftDataSet := datasets[i].(*RaftDataSet)
@@ -190,36 +191,36 @@ func RaftPlotComparator(figPath string, plotFilter PlotFilter) types.Comparator 
 			p.Legend.Add(names[i], line)
 		}
 
-		p.Draw(left)
+		p.Draw(c)
 
-		p = plot.New()
-		p.Title.Text = "Comparison"
-		p.X.Label.Text = "No of visits"
-		p.Y.Label.Text = "Count"
+		// p = plot.New()
+		// p.Title.Text = "Comparison"
+		// p.X.Label.Text = "No of visits"
+		// p.Y.Label.Text = "Count"
 
-		if len(names) == 0 {
-			return
-		}
+		// if len(names) == 0 {
+		// 	return
+		// }
 
-		for i := 0; i < len(names); i++ {
-			raftDataSet := datasets[i].(*RaftDataSet)
-			points := make([]float64, len(raftDataSet.visitGraph.Nodes))
-			j := 0
-			for _, v := range raftDataSet.visitGraph.GetVisits() {
-				points[j] = float64(v)
-				j++
-			}
-			points = plotFilter(points)
-			hist, err := plotter.NewHist(plotter.Values(points), len(points)/10)
-			if err != nil {
-				continue
-			}
-			hist.Color = plotutil.Color(i)
-			p.Add(hist)
-			p.Legend.Add(names[i], hist)
-		}
-		p.Legend.Top = true
-		p.Draw(right)
+		// for i := 0; i < len(names); i++ {
+		// 	raftDataSet := datasets[i].(*RaftDataSet)
+		// 	points := make([]float64, len(raftDataSet.visitGraph.Nodes))
+		// 	j := 0
+		// 	for _, v := range raftDataSet.visitGraph.GetVisits() {
+		// 		points[j] = float64(v)
+		// 		j++
+		// 	}
+		// 	points = plotFilter(points)
+		// 	hist, err := plotter.NewHist(plotter.Values(points), len(points)/10)
+		// 	if err != nil {
+		// 		continue
+		// 	}
+		// 	hist.Color = plotutil.Color(i)
+		// 	p.Add(hist)
+		// 	p.Legend.Add(names[i], hist)
+		// }
+		// p.Legend.Top = true
+		// p.Draw(right)
 
 		f, err := os.Create(path.Join(figPath, "coverage.png"))
 		if err != nil {
@@ -231,7 +232,3 @@ func RaftPlotComparator(figPath string, plotFilter PlotFilter) types.Comparator 
 }
 
 var _ types.Comparator = RaftComparator
-
-func splitHorizontal(c draw.Canvas, x vg.Length) (left, right draw.Canvas) {
-	return draw.Crop(c, 0, c.Min.X-c.Max.X+x, 0, 0), draw.Crop(c, x, 0, 0, 0)
-}

@@ -1,177 +1,60 @@
 package raft
 
 import (
-	"encoding/json"
-	"io"
-	"log"
-	"math/rand"
-	"time"
-
 	"github.com/zeu5/raft-rl-test/types"
 	raft "go.etcd.io/raft/v3"
 	pb "go.etcd.io/raft/v3/raftpb"
 )
 
-type AbsRaftState struct {
-	NodeStates   map[uint64]raft.Status
-	Messages     map[uint64]pb.Message
-	WithTimeouts bool
-}
-
-var _ types.State = &AbsRaftState{}
-var _ RaftStateType = &AbsRaftState{}
-
-func (r *AbsRaftState) GetNodeStates() map[uint64]raft.Status {
-	return r.NodeStates
-}
-
-func (r *AbsRaftState) Hash() string {
-	data, _ := json.Marshal(r)
-	return string(data)
-}
-
-func (r *AbsRaftState) Actions() []types.Action {
-	additional := make([]types.Action, 0)
-	if r.WithTimeouts {
-		processes := map[uint64]bool{}
-		for q := range r.Messages {
-			if q != 0 {
-				processes[q] = true
-			}
-		}
-		for p := range processes {
-			additional = append(additional, &AbsRaftAction{
-				Type:    "TimeoutProcess",
-				Replica: p,
-			})
-		}
-	}
-	result := make([]types.Action, len(r.Messages))
-	i := 0
-	for q := range r.Messages {
-		result[i] = &AbsRaftAction{
-			Type:    "DeliverMessage",
-			Replica: q,
-		}
-		i++
-	}
-	return append(result, additional...)
-}
-
-type AbsRaftAction struct {
-	Type    string
-	Replica uint64
-}
-
-func (r *AbsRaftAction) Hash() string {
-	b, _ := json.Marshal(r)
-	return string(b)
-}
-
-var _ types.Action = &AbsRaftAction{}
-
 type AbsRaftEnvironment struct {
-	config        RaftEnvironmentConfig
-	nodes         map[uint64]*raft.RawNode
-	storages      map[uint64]*raft.MemoryStorage
-	messageQueues map[uint64][]pb.Message
-	curState      *AbsRaftState
-	rand          *rand.Rand
+	*RaftEnvironment
+	abstracter StateAbstracter
 }
 
-func NewAbsRaftEnvironment(config RaftEnvironmentConfig) *AbsRaftEnvironment {
+func NewAbsRaftEnvironment(config RaftEnvironmentConfig, abstracter StateAbstracter) *AbsRaftEnvironment {
 	r := &AbsRaftEnvironment{
-		config:        config,
-		nodes:         make(map[uint64]*raft.RawNode),
-		storages:      make(map[uint64]*raft.MemoryStorage),
-		messageQueues: make(map[uint64][]pb.Message),
-		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
+		RaftEnvironment: NewRaftEnvironment(config),
+		abstracter:      abstracter,
 	}
-	proposal := pb.Message{
-		Type: pb.MsgProp,
-		From: uint64(0),
-		Entries: []pb.Entry{
-			{Data: []byte("testing")},
-		},
-	}
-	r.messageQueues[0] = make([]pb.Message, 1)
-	r.messageQueues[0][0] = proposal
-	r.makeNodes()
 	return r
 }
 
-func (r *AbsRaftEnvironment) makeNodes() {
-	peers := make([]raft.Peer, r.config.Replicas)
-	for i := 0; i < r.config.Replicas; i++ {
-		peers[i] = raft.Peer{ID: uint64(i + 1)}
-	}
-	for i := 0; i < r.config.Replicas; i++ {
-		storage := raft.NewMemoryStorage()
-		nodeID := uint64(i + 1)
-		r.storages[nodeID] = storage
-		r.nodes[nodeID], _ = raft.NewRawNode(&raft.Config{
-			ID:                        nodeID,
-			ElectionTick:              r.config.ElectionTick,
-			HeartbeatTick:             r.config.HeartbeatTick,
-			Storage:                   storage,
-			MaxSizePerMsg:             1024 * 1024,
-			MaxInflightMsgs:           256,
-			MaxUncommittedEntriesSize: 1 << 30,
-			Logger:                    &raft.DefaultLogger{Logger: log.New(io.Discard, "", 0)},
-		})
-		r.nodes[nodeID].Bootstrap(peers)
-	}
-	r.updateState()
-}
+type StateAbstracter func(raft.Status) raft.Status
 
-func (r *AbsRaftEnvironment) Reset() types.State {
-	r.messageQueues = make(map[uint64][]pb.Message)
-	proposal := pb.Message{
-		Type: pb.MsgProp,
-		From: uint64(0),
-		Entries: []pb.Entry{
-			{Data: []byte("testing")},
-		},
-	}
-	r.messageQueues[0] = make([]pb.Message, 1)
-	r.messageQueues[0][0] = proposal
-	r.makeNodes()
-	return r.curState
-}
-
-func (r *AbsRaftEnvironment) popQueue(node uint64) {
-	queue, ok := r.messageQueues[node]
-	if ok && len(queue) > 1 {
-		r.messageQueues[node] = queue[1:]
+func DefaultAbstractor() StateAbstracter {
+	return func(s raft.Status) raft.Status {
+		return s
 	}
 }
 
-func (r *AbsRaftEnvironment) updateState() {
-	newState := &AbsRaftState{
-		NodeStates:   make(map[uint64]raft.Status),
-		Messages:     make(map[uint64]pb.Message),
-		WithTimeouts: r.config.Timeouts,
+func IgnoreTerm() StateAbstracter {
+	return func(s raft.Status) raft.Status {
+		s.Term = 0
+		return s
 	}
-	for id, node := range r.nodes {
-		newState.NodeStates[id] = node.Status()
-	}
-	for id, q := range r.messageQueues {
-		if len(q) > 0 {
-			newState.Messages[id] = q[0]
+}
+
+func IgnoreTermUnlessLeader() StateAbstracter {
+	return func(s raft.Status) raft.Status {
+		if s.RaftState != raft.StateLeader {
+			s.Term = 0
 		}
+		return s
 	}
-	r.curState = newState
+}
+
+func IgnoreVote() StateAbstracter {
+	return func(s raft.Status) raft.Status {
+		s.Vote = 0
+		return s
+	}
 }
 
 func (r *AbsRaftEnvironment) Step(action types.Action) types.State {
-	raftAction := action.(*AbsRaftAction)
+	raftAction := action.(*RaftAction)
 	switch raftAction.Type {
 	case "DeliverMessage":
-		queue, ok := r.messageQueues[raftAction.Replica]
-		if !ok || len(queue) == 0 {
-			return r.curState
-		}
-		message := queue[0]
+		message := raftAction.Message
 		if message.Type == pb.MsgProp {
 			// TODO: handle proposal separately
 			haveLeader := false
@@ -186,19 +69,23 @@ func (r *AbsRaftEnvironment) Step(action types.Action) types.State {
 			if haveLeader {
 				message.To = leader
 				r.nodes[leader].Step((message))
-				r.popQueue(raftAction.Replica)
+				delete(r.messages, msgKey(message))
 			}
 		} else {
 			node := r.nodes[message.To]
 			node.Step(message)
-			r.popQueue(raftAction.Replica)
+			delete(r.messages, msgKey(message))
 		}
 		// Take random number of ticks and update node states
 		for _, node := range r.nodes {
-			ticks := 6
+			ticks := r.config.TicksPerStep
 			for i := 0; i < ticks; i++ {
 				node.Tick()
 			}
+		}
+		newState := RaftState{
+			NodeStates:   make(map[uint64]raft.Status),
+			WithTimeouts: r.config.Timeouts,
 		}
 		for id, node := range r.nodes {
 			if node.HasReady() {
@@ -208,21 +95,33 @@ func (r *AbsRaftEnvironment) Step(action types.Action) types.State {
 				}
 				r.storages[id].Append(ready.Entries)
 				for _, message := range ready.Messages {
-					_, ok := r.messageQueues[message.To]
-					if !ok {
-						r.messageQueues[message.To] = make([]pb.Message, 0)
-					}
-					r.messageQueues[message.To] = append(r.messageQueues[message.To], message)
+					r.messages[msgKey(message)] = message
 				}
 				node.Advance(ready)
 			}
+			newState.NodeStates[id] = r.abstracter(node.Status())
 		}
-		r.updateState()
-		return r.curState
+		newState.Messages = copyMessages(r.messages)
+		r.curState = newState
+		return newState
 	case "TimeoutProcess":
-		r.popQueue(raftAction.Replica)
-		r.updateState()
-		return r.curState
+		newMessages := make(map[string]pb.Message)
+		for key, message := range r.messages {
+			if message.To != raftAction.Replica {
+				newMessages[key] = message
+			}
+		}
+		newState := RaftState{
+			NodeStates:   make(map[uint64]raft.Status),
+			Messages:     copyMessages(newMessages),
+			WithTimeouts: r.config.Timeouts,
+		}
+
+		for id, node := range r.nodes {
+			newState.NodeStates[id] = r.abstracter(node.Status())
+		}
+		r.curState = newState
+		return newState
 	}
 	return nil
 }

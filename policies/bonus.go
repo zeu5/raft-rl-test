@@ -1,24 +1,31 @@
 package policies
 
-import "github.com/zeu5/raft-rl-test/types"
+import (
+	"time"
+
+	"github.com/zeu5/raft-rl-test/types"
+	"golang.org/x/exp/rand"
+)
 
 type BonusPolicyGreedy struct {
 	qTable   *QTable
 	horizon  int
 	discount float64
 	visits   *QTable
-	max      bool
+	epsilon  float64
+	rand     rand.Rand
 }
 
 var _ types.Policy = &BonusPolicyGreedy{}
 
-func NewBonusPolicyGreedy(horizon int, discount float64, max bool) *BonusPolicyGreedy {
+func NewBonusPolicyGreedy(horizon int, discount float64, epsilon float64) *BonusPolicyGreedy {
 	return &BonusPolicyGreedy{
 		qTable:   NewQTable(),
 		horizon:  horizon,
 		discount: discount,
 		visits:   NewQTable(),
-		max:      max,
+		epsilon:  epsilon,
+		rand:     *rand.New(rand.NewSource(uint64(time.Now().UnixNano()))),
 	}
 }
 
@@ -28,6 +35,12 @@ func (b *BonusPolicyGreedy) Reset() {
 }
 
 func (b *BonusPolicyGreedy) NextAction(step int, state types.State, actions []types.Action) (types.Action, bool) {
+
+	if b.rand.Float64() < b.epsilon {
+		i := b.rand.Intn(len(actions))
+		return actions[i], true
+	}
+
 	actionsMap := make(map[string]types.Action)
 	availableActions := make([]string, len(actions))
 	for i, a := range actions {
@@ -55,13 +68,8 @@ func (b *BonusPolicyGreedy) Update(step int, state types.State, action types.Act
 	}
 	curVal := b.qTable.Get(stateHash, actionHash, 1)
 
-	var newVal float64
 	alpha := b.alpha(step)
-	if b.max {
-		newVal = (1-alpha)*curVal + alpha*max(1/t, b.discount*nextStateVal)
-	} else {
-		newVal = (1-alpha)*curVal + alpha*(1/t+(b.discount*nextStateVal))
-	}
+	newVal := (1-alpha)*curVal + alpha*max(1/t, b.discount*nextStateVal)
 	b.qTable.Set(stateHash, actionHash, newVal)
 }
 

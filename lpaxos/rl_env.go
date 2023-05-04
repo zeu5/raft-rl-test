@@ -72,6 +72,9 @@ func (l *LPaxosState) Actions() []types.Action {
 	if l.WithTimeouts {
 		nodes := make(map[uint64]bool)
 		for _, m := range l.Messages {
+			if m.To == 0 {
+				continue
+			}
 			if _, ok := nodes[m.To]; !ok {
 				nodes[m.To] = true
 			}
@@ -88,12 +91,6 @@ func (l *LPaxosState) Actions() []types.Action {
 
 func (l *LPaxosState) Hash() string {
 	bs, _ := json.Marshal(l)
-	hash := sha256.Sum256(bs)
-	return hex.EncodeToString(hash[:])
-}
-
-func (l *LPaxosState) NodeStateHash() string {
-	bs, _ := json.Marshal(l.NodeStates)
 	hash := sha256.Sum256(bs)
 	return hex.EncodeToString(hash[:])
 }
@@ -120,7 +117,7 @@ func NewLPaxosEnv(c LPaxosEnvConfig) *LPaxosEnv {
 		nodes:    make(map[uint64]*LPaxosNode),
 		messages: make(map[string]Message),
 	}
-	for i := 0; i < c.Requests+1; i++ {
+	for i := 0; i < c.Requests; i++ {
 		cmd := Message{
 			Type: CommandMessage,
 			Log:  []Entry{{Data: []byte(strconv.Itoa(i + 1))}},
@@ -153,7 +150,7 @@ func (e *LPaxosEnv) makeNodes() {
 
 func (e *LPaxosEnv) Reset() types.State {
 	e.messages = make(map[string]Message)
-	for i := 0; i < e.config.Requests+1; i++ {
+	for i := 0; i < e.config.Requests; i++ {
 		cmd := Message{
 			Type: CommandMessage,
 			Log:  []Entry{{Data: []byte(strconv.Itoa(i + 1))}},

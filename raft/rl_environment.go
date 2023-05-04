@@ -155,7 +155,7 @@ func NewRaftEnvironment(config RaftEnvironmentConfig) *RaftEnvironment {
 		messages: make(map[string]pb.Message),
 		rand:     rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
-	for i := 0; i < r.config.Requests+1; i++ {
+	for i := 0; i < r.config.Requests; i++ {
 		proposal := pb.Message{
 			Type: pb.MsgProp,
 			From: uint64(0),
@@ -203,7 +203,7 @@ func (r *RaftEnvironment) makeNodes() {
 
 func (r *RaftEnvironment) Reset() types.State {
 	r.messages = make(map[string]pb.Message)
-	for i := 0; i < r.config.Requests+1; i++ {
+	for i := 0; i < r.config.Requests; i++ {
 		proposal := pb.Message{
 			Type: pb.MsgProp,
 			From: uint64(0),
@@ -279,13 +279,9 @@ func (r *RaftEnvironment) Step(action types.Action) types.State {
 			}
 		}
 		newState := RaftState{
-			NodeStates:   make(map[uint64]raft.Status),
+			NodeStates:   copyNodeStates(r.curState.NodeStates),
 			Messages:     copyMessages(newMessages),
 			WithTimeouts: r.config.Timeouts,
-		}
-
-		for id, node := range r.nodes {
-			newState.NodeStates[id] = node.Status()
 		}
 		r.curState = newState
 		return newState
