@@ -31,7 +31,10 @@ func (b *BonusPolicySoftMax) NextAction(step int, state types.State, actions []t
 	vals := make([]float64, len(actions))
 
 	for i, action := range actions {
-		val := b.qTable.Get(stateHash, action.Hash(), 1) * (1 / b.temperature)
+		vals[i] = b.qTable.Get(stateHash, action.Hash(), 1) * (1 / b.temperature)
+	}
+	// TODO: Normalize
+	for i, val := range vals {
 		exp := math.Exp(val)
 		vals[i] = exp
 		sum += exp
