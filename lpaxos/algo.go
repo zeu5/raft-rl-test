@@ -25,11 +25,12 @@ func (s Step) String() string {
 }
 
 type LNodeState struct {
-	Last   int
-	Phase  int
-	Leader uint64
-	Step   Step
-	Log    *Log
+	Last    int
+	Phase   int
+	Leader  uint64
+	Step    Step
+	Log     *Log
+	Decided int
 }
 
 func (l LNodeState) Copy() LNodeState {
@@ -69,10 +70,11 @@ func NewLPaxosNode(config LPaxosConfig) *LPaxosNode {
 		Config: config,
 		Peers:  config.Peers,
 		State: LNodeState{
-			Last:  -1,
-			Phase: -1,
-			Log:   NewLog(),
-			Step:  StepPrepare,
+			Last:    -1,
+			Phase:   -1,
+			Log:     NewLog(),
+			Step:    StepPrepare,
+			Decided: 0,
 		},
 		Tracker:         NewTracker(),
 		pendingMessages: make([]Message, 0),
@@ -312,8 +314,8 @@ func (l *LPaxosNode) propose() {
 		newLog[i] = e.Copy()
 	}
 	if len(l.pendingCommands) != 0 {
-		newLog = append(newLog, l.pendingCommands[0].Copy())
-		l.pendingCommands = l.pendingCommands[1:]
+		newLog = append(newLog, l.pendingCommands...)
+		l.pendingCommands = make([]Entry, 0)
 	}
 	newLogHash := LogHash(newLog)
 	if newLogHash == l.State.Log.Hash() {
@@ -339,5 +341,5 @@ func (l *LPaxosNode) promise() {
 }
 
 func (l *LPaxosNode) decide() {
-	// Todo: need to figure out decide
+	l.State.Decided = l.State.Log.Size()
 }

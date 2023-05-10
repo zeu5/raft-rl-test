@@ -11,23 +11,23 @@ type MonitorState struct {
 	transitions map[string]MonitorCondition
 }
 
-type MonitorCondition func(trace *Trace) bool
+type MonitorCondition func(State, Action, State) bool
 
 func (m MonitorCondition) Not() MonitorCondition {
-	return func(trace *Trace) bool {
-		return !m(trace)
+	return func(s State, a Action, ns State) bool {
+		return !m(s, a, ns)
 	}
 }
 
 func (m MonitorCondition) Or(other MonitorCondition) MonitorCondition {
-	return func(trace *Trace) bool {
-		return m(trace) || other(trace)
+	return func(s State, a Action, ns State) bool {
+		return m(s, a, ns) || other(s, a, ns)
 	}
 }
 
 func (m MonitorCondition) And(other MonitorCondition) MonitorCondition {
-	return func(trace *Trace) bool {
-		return m(trace) && other(trace)
+	return func(s State, a Action, ns State) bool {
+		return m(s, a, ns) && other(s, a, ns)
 	}
 }
 
@@ -43,11 +43,11 @@ func (m *Monitor) Check(t *Trace) (*Trace, bool) {
 		// Or there are no steps in the trace and the initial state is successful
 		return satisfyingPrefix, curState.Success
 	}
-	for i := 1; i <= t.Len(); i++ {
-		prefix, _ := t.GetPrefix(i)
+	for i := 0; i < t.Len(); i++ {
+		s, a, ns, _ := t.Get(i)
 		// transitioned := false
 		for next, cond := range curState.transitions {
-			if cond(prefix) {
+			if cond(s, a, ns) {
 				// transitioned = true
 				curState = m.states[next]
 				break
@@ -58,7 +58,7 @@ func (m *Monitor) Check(t *Trace) (*Trace, bool) {
 		// 	return nil, false
 		// }
 		if curState.Success {
-			return prefix, true
+			return t.GetPrefix(i)
 		}
 	}
 	return nil, false

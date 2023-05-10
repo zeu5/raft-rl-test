@@ -10,12 +10,8 @@ func PosReached(i, j int) *types.Monitor {
 }
 
 func InPosition(i, j int) types.MonitorCondition {
-	return func(trace *types.Trace) bool {
-		last, _, _, ok := trace.Last()
-		if !ok {
-			return false
-		}
-		position, ok := last.(*Position)
+	return func(s types.State, _ types.Action, _ types.State) bool {
+		position, ok := s.(*Position)
 		if !ok {
 			return false
 		}

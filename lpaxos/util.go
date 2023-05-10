@@ -11,6 +11,10 @@ type Entry struct {
 	Data []byte
 }
 
+func (e Entry) Eq(other Entry) bool {
+	return bytes.Compare(e.Data, other.Data) != 0
+}
+
 func (e Entry) Copy() Entry {
 	return Entry{
 		Data: bytes.Clone(e.Data),
@@ -31,7 +35,10 @@ func NewLog() *Log {
 	return &Log{
 		entries: make([]Entry, 0),
 	}
+}
 
+func (l *Log) Size() int {
+	return len(l.entries)
 }
 
 func (l *Log) Copy() *Log {

@@ -14,12 +14,8 @@ func LeaderElected() *types.Monitor {
 }
 
 func HasLeader() types.MonitorCondition {
-	return func(trace *types.Trace) bool {
-		last, _, _, ok := trace.Last()
-		if !ok {
-			return false
-		}
-		nodeStates, ok := getNodeStates(last)
+	return func(s types.State, _ types.Action, _ types.State) bool {
+		nodeStates, ok := getNodeStates(s)
 		if !ok {
 			return false
 		}
@@ -42,16 +38,12 @@ func getNodeStates(state types.State) (map[uint64]raft.Status, bool) {
 }
 
 func LeaderApplied() types.MonitorCondition {
-	return func(trace *types.Trace) bool {
-		s1, _, s2, ok := trace.Last()
+	return func(s types.State, _ types.Action, ns types.State) bool {
+		rS1, ok := getNodeStates(s)
 		if !ok {
 			return false
 		}
-		rS1, ok := getNodeStates(s1)
-		if !ok {
-			return false
-		}
-		rS2, ok := getNodeStates(s2)
+		rS2, ok := getNodeStates(ns)
 		if !ok {
 			return false
 		}

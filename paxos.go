@@ -14,31 +14,47 @@ func Paxos(episodes, horizon int, saveFile string) {
 		Timeout:  12,
 		Timeouts: timeouts,
 	}
+	property := lpaxos.InconsistentLogs()
 	c := types.NewComparison(lpaxos.LPaxosAnalyzer(saveFile), lpaxos.LPaxosComparator(saveFile))
-	c.AddExperiment(types.NewExperiment("RL", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      types.NewSoftMaxNegPolicy(0.3, 0.7, 1),
-		Environment: getLPaxosEnv(lPaxosConfig, abstracter),
-	}))
-	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      types.NewRandomPolicy(),
-		Environment: getLPaxosEnv(lPaxosConfig, abstracter),
-	}))
-	c.AddExperiment(types.NewExperiment("BonusMaxRL", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      policies.NewBonusPolicyGreedy(horizon, 0.99, 0.2),
-		Environment: getLPaxosEnv(lPaxosConfig, abstracter),
-	}))
-	c.AddExperiment(types.NewExperiment("BonusSoftMaxRL", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      policies.NewBonusPolicySoftMax(horizon, 0.99, 0.01),
-		Environment: getLPaxosEnv(lPaxosConfig, abstracter),
-	}))
+	c.AddExperiment(types.NewExperimentWithProperties(
+		"RL",
+		&types.AgentConfig{
+			Episodes:    episodes,
+			Horizon:     horizon,
+			Policy:      types.NewSoftMaxNegPolicy(0.3, 0.7, 1),
+			Environment: getLPaxosEnv(lPaxosConfig, abstracter),
+		},
+		[]*types.Monitor{property},
+	))
+	c.AddExperiment(types.NewExperimentWithProperties(
+		"Random",
+		&types.AgentConfig{
+			Episodes:    episodes,
+			Horizon:     horizon,
+			Policy:      types.NewRandomPolicy(),
+			Environment: getLPaxosEnv(lPaxosConfig, abstracter),
+		},
+		[]*types.Monitor{property},
+	))
+	c.AddExperiment(types.NewExperimentWithProperties(
+		"BonusMaxRL",
+		&types.AgentConfig{
+			Episodes:    episodes,
+			Horizon:     horizon,
+			Policy:      policies.NewBonusPolicyGreedy(horizon, 0.99, 0.2),
+			Environment: getLPaxosEnv(lPaxosConfig, abstracter),
+		},
+		[]*types.Monitor{property},
+	))
+	c.AddExperiment(types.NewExperimentWithProperties(
+		"BonusSoftMaxRL",
+		&types.AgentConfig{
+			Episodes:    episodes,
+			Horizon:     horizon,
+			Policy:      policies.NewBonusPolicySoftMax(horizon, 0.99, 0.01),
+			Environment: getLPaxosEnv(lPaxosConfig, abstracter),
+		},
+		[]*types.Monitor{property}))
 
 	c.Run()
 }
