@@ -22,8 +22,8 @@ var (
 type Message struct {
 	Type    MessageType `json:"type"`
 	Phase   int
-	From    uint64
-	To      uint64
+	F       uint64
+	T       uint64
 	Last    int
 	Log     []Entry
 	LogHash string
@@ -33,8 +33,8 @@ func (m Message) Copy() Message {
 	newM := Message{
 		Type:    m.Type,
 		Phase:   m.Phase,
-		From:    m.From,
-		To:      m.To,
+		F:       m.F,
+		T:       m.T,
 		Last:    m.Last,
 		Log:     make([]Entry, len(m.Log)),
 		LogHash: m.LogHash,
@@ -43,6 +43,14 @@ func (m Message) Copy() Message {
 		newM.Log[i] = e.Copy()
 	}
 	return newM
+}
+
+func (m Message) From() uint64 {
+	return m.F
+}
+
+func (m Message) To() uint64 {
+	return m.T
 }
 
 func (m Message) Hash() string {

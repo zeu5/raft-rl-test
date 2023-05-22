@@ -32,13 +32,13 @@ func (e *LPaxosAbsEnv) Step(a types.Action) types.State {
 			}
 			if haveLeader {
 				message := lAction.Message
-				message.To = leader
+				message.T = leader
 				e.nodes[leader].Step(message)
 				delete(e.messages, message.Hash())
 			}
 		} else {
 			message := lAction.Message
-			e.nodes[message.To].Step(message)
+			e.nodes[message.T].Step(message)
 			delete(e.messages, message.Hash())
 		}
 		for _, node := range e.nodes {
@@ -64,7 +64,7 @@ func (e *LPaxosAbsEnv) Step(a types.Action) types.State {
 	case "Drop":
 		newMessages := make(map[string]Message)
 		for key, message := range e.messages {
-			if message.To != lAction.Node {
+			if message.T != lAction.Node {
 				newMessages[key] = message
 			}
 		}

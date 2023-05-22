@@ -123,13 +123,13 @@ func (l *LPaxosNode) Step(m Message) {
 	}
 	switch m.Type {
 	case HeartbeatMessage:
-		if l.State.Leader != l.ID && m.From == l.State.Leader {
+		if l.State.Leader != l.ID && m.F == l.State.Leader {
 			// reset ticks when received heartbeat from the leader
 			l.ticks = 0
 		}
 	case PhaseChangeMessage:
 		l.Tracker.TrackPhaseChange(Ack{
-			Peer:    m.From,
+			Peer:    m.F,
 			Last:    m.Last,
 			Phase:   m.Phase,
 			Log:     m.Log,
@@ -168,7 +168,7 @@ func (l *LPaxosNode) Step(m Message) {
 			l.State.Step = StepPropose
 		}
 		l.send(Message{
-			To:      l.State.Leader,
+			T:       l.State.Leader,
 			Type:    AckMessage,
 			Last:    l.State.Last,
 			Phase:   l.State.Phase,
@@ -180,7 +180,7 @@ func (l *LPaxosNode) Step(m Message) {
 			return
 		}
 		l.Tracker.TrackAck(Ack{
-			Peer:    m.From,
+			Peer:    m.F,
 			Phase:   m.Phase,
 			Last:    m.Last,
 			Log:     m.Log,
@@ -192,7 +192,7 @@ func (l *LPaxosNode) Step(m Message) {
 			l.propose()
 		}
 	case ProposeMessage:
-		if m.From != l.State.Leader {
+		if m.F != l.State.Leader {
 			return
 		}
 		l.State.Log.Replace(m.Log)
@@ -200,7 +200,7 @@ func (l *LPaxosNode) Step(m Message) {
 		l.promise()
 	case PromiseMessage:
 		l.Tracker.TrackPromise(Promise{
-			Peer:    m.From,
+			Peer:    m.T,
 			Phase:   m.Phase,
 			Log:     m.Log,
 			LogHash: m.LogHash,
@@ -268,7 +268,7 @@ func (l *LPaxosNode) forwardCommands() {
 		pendingCommands[i] = e.Copy()
 	}
 	l.send(Message{
-		To:   l.State.Leader,
+		T:    l.State.Leader,
 		Type: CommandMessage,
 		Log:  pendingCommands,
 	})
@@ -276,14 +276,14 @@ func (l *LPaxosNode) forwardCommands() {
 }
 
 func (l *LPaxosNode) send(m Message) {
-	m.From = l.ID
+	m.F = l.ID
 	l.pendingMessages = append(l.pendingMessages, m.Copy())
 }
 
 func (l *LPaxosNode) broadcast(m Message) {
-	m.From = l.ID
+	m.F = l.ID
 	for _, p := range l.Peers {
-		m.To = p.ID
+		m.T = p.ID
 		l.pendingMessages = append(l.pendingMessages, m.Copy())
 	}
 }

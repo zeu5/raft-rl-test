@@ -222,7 +222,6 @@ func (r *RaftEnvironment) Step(action types.Action) types.State {
 	switch raftAction.Type {
 	case "DeliverMessage":
 		if raftAction.Message.Type == pb.MsgProp {
-			// TODO: handle proposal separately
 			haveLeader := false
 			leader := uint64(0)
 			for id, node := range r.nodes {

@@ -176,7 +176,6 @@ func (r *LinkRaftEnvironment) Step(action types.Action) types.State {
 	switch linkAction.Action {
 	case "Deliver":
 		if message.Type == pb.MsgProp {
-			// TODO: handle proposal separately
 			haveLeader := false
 			leader := uint64(0)
 			for id, node := range r.nodes {

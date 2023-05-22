@@ -19,6 +19,7 @@ func main() {
 	rootCommand.PersistentFlags().StringVarP(&saveFile, "save", "s", "results", "Save the result data in the specified folder")
 	rootCommand.AddCommand(RaftCommand())
 	rootCommand.AddCommand(PaxosCommand())
+	rootCommand.AddCommand(PaxosPartCommand())
 
 	if err := rootCommand.Execute(); err != nil {
 		fmt.Println(err)

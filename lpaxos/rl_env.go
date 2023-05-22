@@ -59,6 +59,18 @@ func (l *LPaxosState) MarshalJSON() ([]byte, error) {
 	return []byte(res), nil
 }
 
+func (l *LPaxosState) GetReplicaState(id uint64) types.ReplicaState {
+	return l.NodeStates[id].Copy()
+}
+
+func (l *LPaxosState) PendingMessages() map[string]types.Message {
+	pm := make(map[string]types.Message)
+	for k, m := range l.Messages {
+		pm[k] = m.Copy()
+	}
+	return pm
+}
+
 func (l *LPaxosState) Actions() []types.Action {
 	result := make([]types.Action, len(l.Messages))
 	i := 0
@@ -72,11 +84,11 @@ func (l *LPaxosState) Actions() []types.Action {
 	if l.WithTimeouts {
 		nodes := make(map[uint64]bool)
 		for _, m := range l.Messages {
-			if m.To == 0 {
+			if m.T == 0 {
 				continue
 			}
-			if _, ok := nodes[m.To]; !ok {
-				nodes[m.To] = true
+			if _, ok := nodes[m.T]; !ok {
+				nodes[m.T] = true
 			}
 		}
 		for n := range nodes {
@@ -177,13 +189,13 @@ func (e *LPaxosEnv) Step(a types.Action) types.State {
 			}
 			if haveLeader {
 				message := lAction.Message
-				message.To = leader
+				message.T = leader
 				e.nodes[leader].Step(message)
 				delete(e.messages, message.Hash())
 			}
 		} else {
 			message := lAction.Message
-			e.nodes[message.To].Step(message)
+			e.nodes[message.T].Step(message)
 			delete(e.messages, message.Hash())
 		}
 		for _, node := range e.nodes {
@@ -209,7 +221,7 @@ func (e *LPaxosEnv) Step(a types.Action) types.State {
 	case "Drop":
 		newMessages := make(map[string]Message)
 		for key, message := range e.messages {
-			if message.To != lAction.Node {
+			if message.T != lAction.Node {
 				newMessages[key] = message
 			}
 		}
