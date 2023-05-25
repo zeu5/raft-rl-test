@@ -22,9 +22,10 @@ import (
 )
 
 type RaftDataSet struct {
-	savePath     string
-	visitGraph   *types.VisitGraph
-	uniqueStates []int
+	savePath           string
+	visitGraph         *types.VisitGraph
+	uniqueStates       []int
+	uniqueActualStates []int
 }
 
 type RaftGraphState struct {
@@ -88,22 +89,30 @@ func RaftAnalyzer(savePath string) types.Analyzer {
 	}
 	return func(name string, traces []*types.Trace) types.DataSet {
 		dataSet := &RaftDataSet{
-			savePath:     path.Join(savePath, "visit_graph_"+name+".json"),
-			visitGraph:   types.NewVisitGraph(),
-			uniqueStates: make([]int, 0),
+			savePath:           path.Join(savePath, "visit_graph_"+name+".json"),
+			visitGraph:         types.NewVisitGraph(),
+			uniqueStates:       make([]int, 0),
+			uniqueActualStates: make([]int, 0),
 		}
+		actualStatesMap := make(map[string]bool)
 		uniqueStates := 0
+		uniqueActualStates := 0
 		for _, trace := range traces {
 			for i := 0; i < trace.Len(); i++ {
 				state, action, nextState, _ := trace.Get(i)
 				rState, _ := state.(RaftStateType)
 				rNextState, _ := nextState.(RaftStateType)
 				rAction, _ := action.(*RaftAction)
+				if _, ok := actualStatesMap[state.Hash()]; !ok {
+					actualStatesMap[state.Hash()] = true
+					uniqueActualStates++
+				}
 				if dataSet.visitGraph.Update(&RaftGraphState{NodeStates: rState.GetNodeStates()}, rAction.Hash(), &RaftGraphState{NodeStates: rNextState.GetNodeStates()}) {
 					uniqueStates++
 				}
 			}
 			dataSet.uniqueStates = append(dataSet.uniqueStates, uniqueStates)
+			dataSet.uniqueActualStates = append(dataSet.uniqueActualStates, uniqueActualStates)
 		}
 		dataSet.visitGraph.Record(path.Join(savePath, "visit_graph_"+name+".json"))
 		return dataSet
@@ -168,10 +177,10 @@ func RaftPlotComparator(figPath string, plotFilter PlotFilter) types.Comparator 
 		p.X.Label.Text = "Iteration"
 		p.Y.Label.Text = "States covered"
 
-		img := vgimg.New(8*vg.Inch, 8*vg.Inch)
+		img := vgimg.New(16*vg.Inch, 8*vg.Inch)
 		c := draw.New(img)
-		// cSize = := c.Size()
-		// left, right := draw.Crop(c, 0, c.Min.X-c.Max.X+cSize.X/2, 0, 0), draw.Crop(c, cSize.X/2, 0, 0, 0)
+		cSize := c.Size()
+		left, right := draw.Crop(c, 0, c.Min.X-c.Max.X+cSize.X/2, 0, 0), draw.Crop(c, cSize.X/2, 0, 0, 0)
 
 		for i := 0; i < len(names); i++ {
 			raftDataSet := datasets[i].(*RaftDataSet)
@@ -191,12 +200,31 @@ func RaftPlotComparator(figPath string, plotFilter PlotFilter) types.Comparator 
 			p.Legend.Add(names[i], line)
 		}
 
-		p.Draw(c)
+		p.Draw(left)
 
-		// p = plot.New()
-		// p.Title.Text = "Comparison"
-		// p.X.Label.Text = "No of visits"
-		// p.Y.Label.Text = "Count"
+		p = plot.New()
+		p.Title.Text = "Comparison"
+		p.X.Label.Text = "Iteration"
+		p.Y.Label.Text = "Actual states covered"
+
+		for i := 0; i < len(names); i++ {
+			raftDataSet := datasets[i].(*RaftDataSet)
+			points := make(plotter.XYs, len(raftDataSet.uniqueActualStates))
+			for i, v := range raftDataSet.uniqueActualStates {
+				points[i] = plotter.XY{
+					X: float64(i),
+					Y: float64(v),
+				}
+			}
+			line, err := plotter.NewLine(points)
+			if err != nil {
+				continue
+			}
+			line.Color = plotutil.Color(i)
+			p.Add(line)
+			p.Legend.Add(names[i], line)
+		}
+		p.Draw(right)
 
 		// if len(names) == 0 {
 		// 	return

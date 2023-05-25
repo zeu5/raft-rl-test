@@ -28,6 +28,18 @@ type RaftState struct {
 	WithTimeouts bool
 }
 
+func (r RaftState) GetReplicaState(rep uint64) types.ReplicaState {
+	return r.NodeStates[rep]
+}
+
+func (r RaftState) PendingMessages() map[string]types.Message {
+	messages := make(map[string]types.Message)
+	for k, m := range r.Messages {
+		messages[k] = RaftMessageWrapper{m}
+	}
+	return messages
+}
+
 var _ types.State = RaftState{}
 var _ RaftStateType = RaftState{}
 

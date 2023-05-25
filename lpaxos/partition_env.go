@@ -50,6 +50,7 @@ func (l *LPaxosPartitionEnv) Tick() types.PartitionedSystemState {
 		newState.NodeStates[id] = node.Status()
 	}
 	newState.Messages = copyMessages(l.messages)
+	l.curState = newState
 	return newState
 }
 
@@ -88,5 +89,6 @@ func (l *LPaxosPartitionEnv) DeliverMessage(m types.Message) types.PartitionedSy
 		newState.NodeStates[id] = node.Status()
 	}
 	newState.Messages = copyMessages(l.messages)
+	l.curState = newState
 	return newState
 }

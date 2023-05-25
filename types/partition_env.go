@@ -39,6 +39,7 @@ type PartitionedSystemEnvironment interface {
 type Partition struct {
 	ReplicaColors map[uint64]Color
 	PartitionMap  map[uint64]int
+	ReplicaStates map[uint64]ReplicaState
 	Partition     [][]Color
 }
 
@@ -176,6 +177,7 @@ func (p *PartitionEnv) reset() {
 	curPartition := &Partition{
 		ReplicaColors: make(map[uint64]Color),
 		PartitionMap:  make(map[uint64]int),
+		ReplicaStates: make(map[uint64]ReplicaState),
 		Partition:     make([][]Color, 1),
 	}
 	for i := 0; i < p.NumReplicas; i++ {
@@ -183,6 +185,7 @@ func (p *PartitionEnv) reset() {
 		rs := s.GetReplicaState(id)
 		color := p.painter.Color(rs)
 		colors[i] = color
+		curPartition.ReplicaStates[id] = rs
 		curPartition.PartitionMap[id] = 0
 		curPartition.ReplicaColors[id] = color
 	}
@@ -209,6 +212,7 @@ func (p *PartitionEnv) Step(a Action) State {
 	nextState := &Partition{
 		ReplicaColors: make(map[uint64]Color),
 		PartitionMap:  make(map[uint64]int),
+		ReplicaStates: make(map[uint64]ReplicaState),
 		Partition:     make([][]Color, 0),
 	}
 	newPartition := make([][]uint64, len(p.curPartition.Partition))
@@ -284,6 +288,7 @@ func (p *PartitionEnv) Step(a Action) State {
 		rs := s.GetReplicaState(id)
 		color := p.painter.Color(rs)
 		nextState.ReplicaColors[id] = color
+		nextState.ReplicaStates[id] = rs
 	}
 	nextStatePartition := make([][]Color, len(newPartition))
 	for i, p := range newPartition {

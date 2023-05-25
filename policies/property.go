@@ -49,7 +49,7 @@ func (g *GuidedPolicy) UpdateIteration(iteration int, trace *types.Trace) {
 			var nextVal float64
 			if i == prefix.Len()-1 {
 				// last step, give 1 reward and 0 for next state
-				nextVal = (1-g.alpha)*curVal + g.alpha*(5+g.gamma*max)
+				nextVal = (1-g.alpha)*curVal + g.alpha*(1+g.gamma*max)
 			} else {
 				// otherwise, update with zero reward + V(nextState)
 				nextVal = (1-g.alpha)*curVal + g.alpha*(0+g.gamma*max)
