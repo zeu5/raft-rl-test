@@ -51,3 +51,9 @@ func (s *StrictPolicy) NextAction(step int, state types.State, actions []types.A
 	}
 	return s.Policy.NextAction(step, state, actions)
 }
+
+func Always() func(types.State) bool {
+	return func(s types.State) bool {
+		return true
+	}
+}

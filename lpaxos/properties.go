@@ -6,12 +6,12 @@ import "github.com/zeu5/raft-rl-test/types"
 // Benchmark between different environments for same algorithm
 // Basic property - check if a process moved to propose phase
 
-func InProposePhase() types.RewardFunc {
-	return func(s types.State) bool {
+func InPhase(step Step) types.RewardFunc {
+	return func(s types.State, _ types.State) bool {
 		pS, ok := s.(*types.Partition)
 		if ok {
 			for _, c := range pS.ReplicaColors {
-				if int(c) == int(StepPromise) {
+				if int(c) == int(step) {
 					return true
 				}
 			}
@@ -21,31 +21,7 @@ func InProposePhase() types.RewardFunc {
 				return false
 			}
 			for _, c := range lS.NodeStates {
-				if c.Step == StepPromise {
-					return true
-				}
-			}
-		}
-		return false
-	}
-}
-
-func InPreparePhase() types.RewardFunc {
-	return func(s types.State) bool {
-		pS, ok := s.(*types.Partition)
-		if ok {
-			for _, c := range pS.ReplicaColors {
-				if int(c) == int(StepPrepare) {
-					return true
-				}
-			}
-		} else {
-			lS, ok := s.(*LPaxosState)
-			if !ok {
-				return false
-			}
-			for _, c := range lS.NodeStates {
-				if c.Step == StepPrepare {
+				if c.Step == step {
 					return true
 				}
 			}
@@ -55,22 +31,29 @@ func InPreparePhase() types.RewardFunc {
 }
 
 func Commit() types.RewardFunc {
-	return func(s types.State) bool {
+	return func(s types.State, ns types.State) bool {
 		pS, ok := s.(*types.Partition)
+		npS, _ := s.(*types.Partition)
 		if ok {
-			for _, c := range pS.ReplicaStates {
+			for id, c := range pS.ReplicaStates {
 				log := c.(LNodeState).Log
-				if log.Size() > 0 {
+				// if log.Size() > 0 {
+				// 	return true
+				// }
+				nextLog := npS.ReplicaStates[id].(LNodeState).Log
+				if nextLog.Size() != log.Size() {
 					return true
 				}
 			}
 		} else {
 			lS, ok := s.(*LPaxosState)
+			nlS, _ := ns.(*LPaxosState)
 			if !ok {
 				return false
 			}
-			for _, c := range lS.NodeStates {
-				if c.Log.Size() > 0 {
+			for id, c := range lS.NodeStates {
+				nextLog := nlS.NodeStates[id].Log
+				if nextLog.Size() > c.Log.Size() {
 					return true
 				}
 			}

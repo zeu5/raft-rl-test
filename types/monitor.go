@@ -5,7 +5,7 @@ var (
 	FailState string = "fail"
 )
 
-type RewardFunc func(State) bool
+type RewardFunc func(State, State) bool
 
 type MonitorState struct {
 	Success     bool

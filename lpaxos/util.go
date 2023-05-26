@@ -12,7 +12,7 @@ type Entry struct {
 }
 
 func (e Entry) Eq(other Entry) bool {
-	return bytes.Compare(e.Data, other.Data) != 0
+	return bytes.Equal(e.Data, other.Data)
 }
 
 func (e Entry) Copy() Entry {

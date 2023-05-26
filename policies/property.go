@@ -8,24 +8,24 @@ import (
 )
 
 type GuidedPolicy struct {
-	qTable   *QTable
-	alpha    float64
-	gamma    float64
-	epsilon  float64
-	property *types.Monitor
-	rand     *rand.Rand
+	qTable  *QTable
+	alpha   float64
+	gamma   float64
+	epsilon float64
+	rewards []types.RewardFunc
+	rand    *rand.Rand
 }
 
 var _ types.Policy = &GuidedPolicy{}
 
-func NewGuidedPolicy(monitor *types.Monitor, alpha, gamma, epsilon float64) *GuidedPolicy {
+func NewGuidedPolicy(rewards []types.RewardFunc, alpha, gamma, epsilon float64) *GuidedPolicy {
 	return &GuidedPolicy{
-		qTable:   NewQTable(),
-		alpha:    alpha,
-		gamma:    gamma,
-		epsilon:  epsilon,
-		property: monitor,
-		rand:     rand.New(rand.NewSource(time.Now().UnixNano())),
+		qTable:  NewQTable(),
+		alpha:   alpha,
+		gamma:   gamma,
+		epsilon: epsilon,
+		rewards: rewards,
+		rand:    rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
@@ -34,29 +34,6 @@ func (g *GuidedPolicy) Reset() {
 }
 
 func (g *GuidedPolicy) UpdateIteration(iteration int, trace *types.Trace) {
-	prefix, ok := g.property.Check(trace)
-	if ok {
-		for i := prefix.Len() - 1; i > 0; i-- {
-			state, action, nextState, _ := prefix.Get(i)
-			// Update reward
-			stateHash := state.Hash()
-			nextStateHash := nextState.Hash()
-			actionKey := action.Hash()
-
-			curVal := g.qTable.Get(stateHash, actionKey, 0)
-			_, max := g.qTable.Max(nextStateHash, 0)
-
-			var nextVal float64
-			if i == prefix.Len()-1 {
-				// last step, give 1 reward and 0 for next state
-				nextVal = (1-g.alpha)*curVal + g.alpha*(1+g.gamma*max)
-			} else {
-				// otherwise, update with zero reward + V(nextState)
-				nextVal = (1-g.alpha)*curVal + g.alpha*(0+g.gamma*max)
-			}
-			g.qTable.Set(stateHash, actionKey, nextVal)
-		}
-	}
 }
 
 func (g *GuidedPolicy) NextAction(step int, state types.State, actions []types.Action) (types.Action, bool) {
@@ -84,5 +61,21 @@ func (g *GuidedPolicy) NextAction(step int, state types.State, actions []types.A
 }
 
 func (g *GuidedPolicy) Update(step int, state types.State, action types.Action, nextState types.State) {
+	reward := 0
+	for _, r := range g.rewards {
+		if r(state, nextState) {
+			reward = 1
+			break
+		}
+	}
+	stateHash := state.Hash()
+	nextStateHash := nextState.Hash()
+	actionKey := action.Hash()
 
+	curVal := g.qTable.Get(stateHash, actionKey, 0)
+	_, max := g.qTable.Max(nextStateHash, 0)
+
+	nextVal := (1-g.alpha)*curVal + g.alpha*(float64(reward)+g.gamma*max)
+
+	g.qTable.Set(stateHash, actionKey, nextVal)
 }

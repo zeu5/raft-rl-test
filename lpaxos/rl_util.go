@@ -52,6 +52,15 @@ func (l *LPaxosGraphState) Hash() string {
 }
 
 func NewLPaxosGraphState(s types.State) *LPaxosGraphState {
+	partition, ok := s.(*types.Partition)
+	if ok {
+		nodeStates := make(map[uint64]LNodeState)
+		for id, s := range partition.ReplicaStates {
+			nodeStates[id] = s.(LNodeState)
+		}
+		return &LPaxosGraphState{NodeStates: copyNodeStates(nodeStates)}
+	}
+
 	lPaxosState, ok := s.(*LPaxosState)
 	if !ok {
 		return &LPaxosGraphState{NodeStates: make(map[uint64]LNodeState)}
@@ -74,7 +83,7 @@ func LPaxosAnalyzer(savePath string) types.Analyzer {
 		for _, trace := range traces {
 			for i := 0; i < trace.Len(); i++ {
 				state, action, nextState, _ := trace.Get(i)
-				if visitGraph.Update(NewLPaxosGraphState(state), action.(*LPaxosAction).Hash(), NewLPaxosGraphState(nextState)) {
+				if visitGraph.Update(NewLPaxosGraphState(state), action.Hash(), NewLPaxosGraphState(nextState)) {
 					uniqueStates += 1
 				}
 			}
@@ -115,5 +124,43 @@ func LPaxosComparator(figPath string) types.Comparator {
 			p.Legend.Add(names[i], line)
 		}
 		p.Save(8*vg.Inch, 8*vg.Inch, path.Join(figPath, "coverage.png"))
+	}
+}
+
+type RewardStatesVisited struct {
+	visits map[string]int
+}
+
+func RewardStatesVisitedAnalyzer(names []string, rewardFuncs []types.RewardFunc) types.Analyzer {
+	return func(s string, traces []*types.Trace) types.DataSet {
+		d := RewardStatesVisited{
+			visits: make(map[string]int),
+		}
+		for _, n := range names {
+			d.visits[n] = 0
+		}
+		for _, t := range traces {
+			for i := 0; i < t.Len(); i++ {
+				s, _, ns, _ := t.Get(i)
+				for j := 0; j < len(names); j++ {
+					if rewardFuncs[j](s, ns) {
+						d.visits[names[j]]++
+					}
+				}
+			}
+		}
+		return d
+	}
+}
+
+func RewardStateComparator() types.Comparator {
+	return func(s []string, ds []types.DataSet) {
+		for i := 0; i < len(s); i++ {
+			fmt.Printf("For experiment: %s\n", s[i])
+			rewardvisits := ds[i].(RewardStatesVisited)
+			for r, v := range rewardvisits.visits {
+				fmt.Printf("Reward visits of state %s: %d\n", r, v)
+			}
+		}
 	}
 }

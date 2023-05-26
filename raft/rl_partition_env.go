@@ -158,3 +158,14 @@ func (p *RaftPartitionEnv) DeliverMessage(m types.Message) types.PartitionedSyst
 	p.curState = newState
 	return newState
 }
+
+func (p *RaftPartitionEnv) DropMessage(m types.Message) types.PartitionedSystemState {
+	newState := RaftState{
+		NodeStates:   copyNodeStates(p.curState.NodeStates),
+		Messages:     copyMessages(p.curState.Messages),
+		WithTimeouts: p.config.Timeouts,
+	}
+	delete(newState.Messages, m.Hash())
+	p.curState = newState
+	return newState
+}

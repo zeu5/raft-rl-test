@@ -16,12 +16,21 @@ func PaxosPart(episodes, horizon int, saveFile string) {
 	}
 	c := types.NewComparison(lpaxos.LPaxosAnalyzer(saveFile), lpaxos.LPaxosComparator(saveFile))
 	c.AddExperiment(types.NewExperiment(
-		"RL",
+		"Random-Part",
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
-			Policy:      types.NewSoftMaxNegPolicy(0.3, 0.7, 1),
-			Environment: getLPaxosPartEnv(lPaxosConfig),
+			Policy:      types.NewRandomPolicy(),
+			Environment: getLPaxosPartEnv(lPaxosConfig, true),
+		},
+	))
+	c.AddExperiment(types.NewExperiment(
+		"BonusMaxRL-Part",
+		&types.AgentConfig{
+			Episodes:    episodes,
+			Horizon:     horizon,
+			Policy:      policies.NewBonusPolicyGreedy(horizon, 0.99, 0.2),
+			Environment: getLPaxosPartEnv(lPaxosConfig, true),
 		},
 	))
 	c.AddExperiment(types.NewExperiment(
@@ -30,7 +39,7 @@ func PaxosPart(episodes, horizon int, saveFile string) {
 			Episodes:    episodes,
 			Horizon:     horizon,
 			Policy:      types.NewRandomPolicy(),
-			Environment: getLPaxosPartEnv(lPaxosConfig),
+			Environment: getLPaxosPartEnv(lPaxosConfig, false),
 		},
 	))
 	c.AddExperiment(types.NewExperiment(
@@ -39,30 +48,24 @@ func PaxosPart(episodes, horizon int, saveFile string) {
 			Episodes:    episodes,
 			Horizon:     horizon,
 			Policy:      policies.NewBonusPolicyGreedy(horizon, 0.99, 0.2),
-			Environment: getLPaxosPartEnv(lPaxosConfig),
-		},
-	))
-	c.AddExperiment(types.NewExperiment(
-		"BonusSoftMaxRL",
-		&types.AgentConfig{
-			Episodes:    episodes,
-			Horizon:     horizon,
-			Policy:      policies.NewBonusPolicySoftMax(horizon, 0.99, 0.01),
-			Environment: getLPaxosPartEnv(lPaxosConfig),
+			Environment: getLPaxosPartEnv(lPaxosConfig, false),
 		},
 	))
 
 	c.Run()
 }
 
-func getLPaxosPartEnv(config lpaxos.LPaxosEnvConfig) types.Environment {
-	return types.NewPartitionEnv(types.PartitionEnvConfig{
-		Painter:                &lpaxos.LNodeStatePainter{},
-		Env:                    lpaxos.NewLPaxosPartitionEnv(config),
-		NumReplicas:            config.Replicas,
-		TicketBetweenPartition: 5,
-		MaxMessagesPerTick:     3,
-	})
+func getLPaxosPartEnv(config lpaxos.LPaxosEnvConfig, part bool) types.Environment {
+	if part {
+		return types.NewPartitionEnv(types.PartitionEnvConfig{
+			Painter:                &lpaxos.LNodeStatePainter{},
+			Env:                    lpaxos.NewLPaxosPartitionEnv(config),
+			NumReplicas:            config.Replicas,
+			TicketBetweenPartition: 5,
+			MaxMessagesPerTick:     3,
+		})
+	}
+	return lpaxos.NewLPaxosEnv(config)
 }
 
 func PaxosPartCommand() *cobra.Command {

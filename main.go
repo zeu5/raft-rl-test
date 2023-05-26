@@ -20,6 +20,7 @@ func main() {
 	rootCommand.AddCommand(RaftCommand())
 	rootCommand.AddCommand(PaxosCommand())
 	rootCommand.AddCommand(PaxosPartCommand())
+	rootCommand.AddCommand(PaxosRewardCommand())
 
 	if err := rootCommand.Execute(); err != nil {
 		fmt.Println(err)

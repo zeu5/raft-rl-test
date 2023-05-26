@@ -34,6 +34,7 @@ type PartitionedSystemEnvironment interface {
 	Reset() PartitionedSystemState
 	Tick() PartitionedSystemState
 	DeliverMessage(Message) PartitionedSystemState
+	DropMessage(Message) PartitionedSystemState
 }
 
 type Partition struct {
@@ -122,9 +123,17 @@ func copyPartition(p *Partition) *Partition {
 	n := &Partition{
 		ReplicaColors: make(map[uint64]Color),
 		Partition:     make([][]Color, len(p.Partition)),
+		ReplicaStates: make(map[uint64]ReplicaState),
+		PartitionMap:  make(map[uint64]int),
 	}
 	for i, s := range p.ReplicaColors {
 		n.ReplicaColors[i] = Color(int(s))
+	}
+	for i, s := range p.ReplicaStates {
+		n.ReplicaStates[i] = s
+	}
+	for i, p := range p.PartitionMap {
+		n.PartitionMap[i] = p
 	}
 	for i, par := range p.Partition {
 		n.Partition[i] = make([]Color, len(par))
@@ -268,10 +277,12 @@ func (p *PartitionEnv) Step(a Action) State {
 			if len(allMessages) > 0 {
 				next := allMessages[0]
 				allMessages = allMessages[1:]
-				fromP := newPartitionMap[next.From()]
-				toP := newPartitionMap[next.To()]
-				if fromP == toP {
+				fromP, fromOk := newPartitionMap[next.From()]
+				toP, toOk := newPartitionMap[next.To()]
+				if !fromOk || !toOk || fromP == toP {
 					p.underlyingEnv.DeliverMessage(next)
+				} else {
+					p.underlyingEnv.DropMessage(next)
 				}
 			}
 		}
@@ -305,4 +316,15 @@ func (p *PartitionEnv) Step(a Action) State {
 	p.curPartition = copyPartition(nextState)
 
 	return nextState
+}
+
+func PickKeepSame() func(actions []Action) (Action, bool) {
+	return func(actions []Action) (Action, bool) {
+		for _, a := range actions {
+			if _, ok := a.(*KeepSamePartitionAction); ok {
+				return a, true
+			}
+		}
+		return nil, false
+	}
 }
