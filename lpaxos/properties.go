@@ -33,17 +33,17 @@ func InPhase(step Step) types.RewardFunc {
 func Commit() types.RewardFunc {
 	return func(s types.State, ns types.State) bool {
 		pS, ok := s.(*types.Partition)
-		npS, _ := s.(*types.Partition)
+		// npS, _ := s.(*types.Partition)
 		if ok {
-			for id, c := range pS.ReplicaStates {
+			for _, c := range pS.ReplicaStates {
 				log := c.(LNodeState).Log
-				// if log.Size() > 0 {
-				// 	return true
-				// }
-				nextLog := npS.ReplicaStates[id].(LNodeState).Log
-				if nextLog.Size() != log.Size() {
+				if log.Size() > 0 {
 					return true
 				}
+				// nextLog := npS.ReplicaStates[id].(LNodeState).Log
+				// if nextLog.Size() != log.Size() {
+				// 	return true
+				// }
 			}
 		} else {
 			lS, ok := s.(*LPaxosState)

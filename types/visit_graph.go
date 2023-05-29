@@ -6,6 +6,9 @@ import (
 	"os"
 )
 
+// VisitGraph is a graph of the state space that is visited
+// nodes indicate states with edges to different states
+// Each node also store the number of visits
 type VisitGraph struct {
 	Nodes map[string]*Node
 }
@@ -16,6 +19,8 @@ func NewVisitGraph() *VisitGraph {
 	}
 }
 
+// Update based on a transition (from, action, to)
+// States are indexed by a Hash() function
 func (v *VisitGraph) Update(from NodeState, action string, to NodeState) bool {
 	fromKey := from.Hash()
 	toKey := to.Hash()
@@ -42,6 +47,7 @@ func (v *VisitGraph) GetVisits() map[string]int {
 	return results
 }
 
+// Record the visit graph as a json into the path specified
 func (v *VisitGraph) Record(filePath string) {
 	bs, err := json.Marshal(v)
 	if err != nil {

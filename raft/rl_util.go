@@ -21,6 +21,10 @@ import (
 	"gonum.org/v1/plot/vg/vgimg"
 )
 
+// This file defines the analyzer and comparator for the raft experiments
+
+// The dataset contains a visit graph, unique states observed per iteration
+// and the path to save the visit graph at
 type RaftDataSet struct {
 	savePath           string
 	visitGraph         *types.VisitGraph
@@ -32,6 +36,7 @@ type RaftGraphState struct {
 	NodeStates map[uint64]raft.Status
 }
 
+// Deterministic hash for the visit graph
 func (r *RaftGraphState) MarshalJSON() ([]byte, error) {
 	marshalStatus := func(s raft.Status) string {
 		j := fmt.Sprintf(`{"id":"%x","term":%d,"vote":"%x","commit":%d,"lead":"%x","raftState":%q,"applied":%d,"progress":{`,
@@ -83,6 +88,8 @@ func (r *RaftGraphState) Hash() string {
 	return hex.EncodeToString(hash[:])
 }
 
+// Analyze the traces to count for unique states (main coverage analyzer)
+// Store the resulting visit graph in the specified path/visit_graph_<exp_name>.json
 func RaftAnalyzer(savePath string) types.Analyzer {
 	if _, err := os.Stat(savePath); err != nil {
 		os.Mkdir(savePath, os.ModePerm)
@@ -119,6 +126,7 @@ func RaftAnalyzer(savePath string) types.Analyzer {
 	}
 }
 
+// Print the coverage of the different experiments
 func RaftComparator(names []string, datasets []types.DataSet) {
 	for i := 0; i < len(names); i++ {
 		raftDataSet := datasets[i].(*RaftDataSet)
@@ -167,6 +175,7 @@ func MinCutOff(min float64) PlotFilter {
 	}
 }
 
+// Plot coverage of different experiments
 func RaftPlotComparator(figPath string, plotFilter PlotFilter) types.Comparator {
 	if _, err := os.Stat(figPath); err != nil {
 		os.Mkdir(figPath, os.ModePerm)

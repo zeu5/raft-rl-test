@@ -5,6 +5,8 @@ import (
 	"go.etcd.io/raft/v3"
 )
 
+// File contains different monitors specific to the raft protocol
+
 func LeaderElected() *types.Monitor {
 	monitor := types.NewMonitor()
 	builder := monitor.Build()

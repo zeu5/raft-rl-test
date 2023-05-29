@@ -1,5 +1,6 @@
 package types
 
+// Trace of an episode as triplets (state, action, nextState)
 type Trace struct {
 	states     []State
 	actions    []Action

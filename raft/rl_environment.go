@@ -18,20 +18,28 @@ import (
 	"go.etcd.io/raft/v3/tracker"
 )
 
+// Abstraction over different possible raft environment states
+// used to analyze coverage
 type RaftStateType interface {
 	GetNodeStates() map[uint64]raft.Status
 }
 
+// State of the Raft environment
 type RaftState struct {
-	NodeStates   map[uint64]raft.Status
-	Messages     map[string]pb.Message
+	// States of each node (obtained from the raft implementation)
+	NodeStates map[uint64]raft.Status
+	// The messages in transit
+	Messages map[string]pb.Message
+	// Boolean to indicate if the actions include dropping messages
 	WithTimeouts bool
 }
 
+// Implements the PartitionedSystemState
 func (r RaftState) GetReplicaState(rep uint64) types.ReplicaState {
 	return r.NodeStates[rep]
 }
 
+// Implements the PartitionedSystemState
 func (r RaftState) PendingMessages() map[string]types.Message {
 	messages := make(map[string]types.Message)
 	for k, m := range r.Messages {
@@ -47,7 +55,9 @@ func (r RaftState) GetNodeStates() map[uint64]raft.Status {
 	return copyNodeStates(r.NodeStates)
 }
 
+// Deterministic Hashing, sorting the keys of the replicas before hashing the status
 func (r RaftState) MarshalJSON() ([]byte, error) {
+	// This function is invoked if json.Marshal(RaftState) is called
 	marshalStatus := func(s raft.Status) string {
 		j := fmt.Sprintf(`{"id":"%x","term":%d,"vote":"%x","commit":%d,"lead":"%x","raftState":%q,"applied":%d,"progress":{`,
 			s.ID, s.Term, s.Vote, s.Commit, s.Lead, s.RaftState, s.Applied)
@@ -93,12 +103,14 @@ func (r RaftState) MarshalJSON() ([]byte, error) {
 	return []byte(res), nil
 }
 
+// Deterministic due to custom MarshalJSON
 func (r RaftState) Hash() string {
 	data, _ := json.Marshal(r)
 	hash := sha256.Sum256(data)
 	return hex.EncodeToString(hash[:])
 }
 
+// to deliver messages or drop all messages based on the receiving replica ids
 func (r RaftState) Actions() []types.Action {
 	additional := make([]types.Action, 0)
 	if r.WithTimeouts {
@@ -150,6 +162,7 @@ type RaftEnvironmentConfig struct {
 	TicksPerStep  int
 }
 
+// Implements "types.Environment"
 type RaftEnvironment struct {
 	config   RaftEnvironmentConfig
 	nodes    map[uint64]*raft.RawNode
@@ -181,6 +194,7 @@ func NewRaftEnvironment(config RaftEnvironmentConfig) *RaftEnvironment {
 	return r
 }
 
+// Creates the replicas and the initial state of the environment
 func (r *RaftEnvironment) makeNodes() {
 	peers := make([]raft.Peer, r.config.Replicas)
 	for i := 0; i < r.config.Replicas; i++ {
@@ -233,6 +247,9 @@ func (r *RaftEnvironment) Step(action types.Action) types.State {
 	raftAction := action.(*RaftAction)
 	switch raftAction.Type {
 	case "DeliverMessage":
+		// MsgProp - test harness messages are handled specially
+		// These messages need to be delivered to the leader
+		// If there is no leader then just don't do anything
 		if raftAction.Message.Type == pb.MsgProp {
 			haveLeader := false
 			leader := uint64(0)
@@ -261,6 +278,7 @@ func (r *RaftEnvironment) Step(action types.Action) types.State {
 				node.Tick()
 			}
 		}
+		// Update the state and return it
 		newState := RaftState{
 			NodeStates:   make(map[uint64]raft.Status),
 			WithTimeouts: r.config.Timeouts,
@@ -272,6 +290,7 @@ func (r *RaftEnvironment) Step(action types.Action) types.State {
 					r.storages[id].ApplySnapshot(ready.Snapshot)
 				}
 				r.storages[id].Append(ready.Entries)
+				// Checking for new messages
 				for _, message := range ready.Messages {
 					r.messages[msgKey(message)] = message
 				}

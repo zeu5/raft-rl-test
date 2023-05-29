@@ -7,13 +7,18 @@ type AgentConfig struct {
 	Environment Environment
 }
 
+// RL Agent configured with the corresponding
+// policy and environment
 type Agent struct {
-	config      *AgentConfig
+	config *AgentConfig
+	// collects the traces of the run
+	// Only populated if the Run function is invoked
 	traces      []*Trace
 	policy      Policy
 	environment Environment
 }
 
+// Instantiates a new Agent
 func NewAgent(config *AgentConfig) *Agent {
 	return &Agent{
 		config:      config,
@@ -23,12 +28,14 @@ func NewAgent(config *AgentConfig) *Agent {
 	}
 }
 
+// Run the agent for the specified number of episodes and horizon
 func (a *Agent) Run() {
 	for i := 0; i < a.config.Episodes; i++ {
 		a.traces[i] = a.runEpisode(i)
 	}
 }
 
+// run a single episode and return the resulting trace
 func (a *Agent) runEpisode(episode int) *Trace {
 	state := a.environment.Reset()
 	trace := NewTrace()

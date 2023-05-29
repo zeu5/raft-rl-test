@@ -11,52 +11,80 @@ import (
 	"github.com/zeu5/raft-rl-test/util"
 )
 
+// Color of each replica
 type Color int
 
+// Accepts a replica state and colors it
 type Painter interface {
 	Color(ReplicaState) Color
 }
 
+// Generic replica state
 type ReplicaState interface{}
 
+// A message that is sent between replicas
 type Message interface {
 	From() uint64
 	To() uint64
+	// Key to each message
 	Hash() string
 }
 
+// The global state of a partitioned system
+// To abstract away the details of a particular protocol
 type PartitionedSystemState interface {
+	// Get the state of a particular replica (indexed by an non-zero integer, starts with 1)
 	GetReplicaState(uint64) ReplicaState
+	// The messages that are currently in transit
 	PendingMessages() map[string]Message
 }
 
+// The environment encoding the distributed protocol that can be controlled in a
+// partition environment
 type PartitionedSystemEnvironment interface {
+	// Resets the underlying partitioned environment and returns the initial state
+	// Called at the end of each episode
 	Reset() PartitionedSystemState
+	// Progress the clocks of all replicas by 1
 	Tick() PartitionedSystemState
+	// Deliver the message and return the resulting state
 	DeliverMessage(Message) PartitionedSystemState
+	// Drop a message
 	DropMessage(Message) PartitionedSystemState
 }
 
+// A state of the partitioned environment
 type Partition struct {
+	// The colors corresponding to each replica
 	ReplicaColors map[uint64]Color
-	PartitionMap  map[uint64]int
+	// The partition that each replica belongs to
+	PartitionMap map[uint64]int
+	// The underlying state of each replica
 	ReplicaStates map[uint64]ReplicaState
-	Partition     [][]Color
+	// The actual partition of colors
+	// Only this is used to hash (therefore indexed by RL)
+	Partition [][]Color
 }
 
+// Action to transition to a corresponding partition
 type CreatePartitionAction struct {
 	Partition [][]Color
 }
 
+// Action to remain in the given partition
 type KeepSamePartitionAction struct{}
 
 func (k *KeepSamePartitionAction) Hash() string {
 	return "KeepSamePartition"
 }
 
+// Partition slice used to pass to the sort function
 type PartitionSlice [][]Color
 
 func (p PartitionSlice) Len() int { return len(p) }
+
+// Two partitions are compared first based on the size and
+// then lexicographically based on the colors
 func (p PartitionSlice) Less(i, j int) bool {
 	if len(p[i]) < len(p[j]) {
 		return true
@@ -74,6 +102,7 @@ func (p PartitionSlice) Swap(i, j int) {
 	p[i], p[j] = p[j], p[i]
 }
 
+// ColorSlice used to pass to the sort interface
 type ColorSlice []Color
 
 func (c ColorSlice) Len() int { return len(c) }
@@ -84,12 +113,15 @@ func (c ColorSlice) Swap(i, j int) {
 	c[i], c[j] = c[j], c[i]
 }
 
+// implementing the "Action" interface
 func (c *CreatePartitionAction) Hash() string {
 	bs, _ := json.Marshal(c.Partition)
 	hash := sha256.Sum256(bs)
 	return hex.EncodeToString(hash[:])
 }
 
+// Returns the different possible ways to partition from the current configuration
+// Additionally an action to not do anything
 func (p *Partition) Actions() []Action {
 	colorElems := make([]util.Elem, 0)
 	for _, c := range p.ReplicaColors {
@@ -144,6 +176,8 @@ func copyPartition(p *Partition) *Partition {
 	return n
 }
 
+// An environment that encodes ways to partition the replicas
+// Implements the "Environment" interface
 type PartitionEnv struct {
 	NumReplicas            int
 	underlyingEnv          PartitionedSystemEnvironment
@@ -318,6 +352,8 @@ func (p *PartitionEnv) Step(a Action) State {
 	return nextState
 }
 
+// Used for defining a strict policy
+// To always pick the "KeepSamePartitionAction"
 func PickKeepSame() func(actions []Action) (Action, bool) {
 	return func(actions []Action) (Action, bool) {
 		for _, a := range actions {

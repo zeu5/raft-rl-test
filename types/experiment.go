@@ -4,14 +4,19 @@ import (
 	"fmt"
 )
 
+// Experiment encapsulates the different parameters to configure an agent and analyze the traces
 type Experiment struct {
-	config          *AgentConfig
-	name            string
-	Result          []*Trace
-	Properties      []*Monitor
+	config *AgentConfig
+	name   string
+	// Result contains the traces of the experiment
+	Result []*Trace
+	// Properties to test on the trace
+	Properties []*Monitor
+	// Number of time each property was satisfied
 	PropertiesStats []int
 }
 
+// NewExperiment creates a new experiment instance
 func NewExperiment(name string, config *AgentConfig) *Experiment {
 	return &Experiment{
 		config:          config,
@@ -22,6 +27,7 @@ func NewExperiment(name string, config *AgentConfig) *Experiment {
 	}
 }
 
+// NewExperimentWithProperties creates a new experiment instance with the specified properties
 func NewExperimentWithProperties(name string, config *AgentConfig, properties []*Monitor) *Experiment {
 	e := NewExperiment(name, config)
 	e.Properties = properties
@@ -33,6 +39,8 @@ func (e *Experiment) hasProperties() bool {
 	return len(e.Properties) != 0
 }
 
+// Run the experiment for the specified number of episodes
+// Additionally, for each iteration, check if any of the properties have been satisfied
 func (e *Experiment) Run() {
 	agent := NewAgent(e.config)
 	for i := 0; i < e.config.Episodes; i++ {
@@ -56,24 +64,32 @@ func (e *Experiment) Run() {
 	}
 }
 
+// Reset cleans the information about the traces (to save memory)
 func (e *Experiment) Reset() {
 	e.Result = make([]*Trace, 0)
 	e.config.Environment.Reset()
 	e.config.Policy.Reset()
 }
 
+// Generic Dataset that contains information after processing the traces
 type DataSet interface{}
 
+// Analyzer compresses the information in the traces to a DataSet
 type Analyzer func(string, []*Trace) DataSet
 
+// Comparator differentiates between different datasets with associated names
 type Comparator func([]string, []DataSet)
 
+// Comparison contains the different experiments to compare
+// The traces obtained from the experiments are analyzed
+// The analyzed datasets are then compared
 type Comparison struct {
 	Experiments []*Experiment
 	analyzer    Analyzer
 	comparator  Comparator
 }
 
+// NewComparison creates a comparison instance
 func NewComparison(analyzer Analyzer, comparator Comparator) *Comparison {
 	return &Comparison{
 		Experiments: make([]*Experiment, 0),
@@ -82,10 +98,13 @@ func NewComparison(analyzer Analyzer, comparator Comparator) *Comparison {
 	}
 }
 
+// Add experiments to compare
 func (c *Comparison) AddExperiment(e *Experiment) {
 	c.Experiments = append(c.Experiments, e)
 }
 
+// Run each experiment sequentially
+// TODO: Could be parallelized
 func (c *Comparison) Run() {
 	datasets := make([]DataSet, len(c.Experiments))
 	names := make([]string, len(c.Experiments))

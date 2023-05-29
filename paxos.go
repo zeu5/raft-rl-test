@@ -8,14 +8,22 @@ import (
 )
 
 func Paxos(episodes, horizon int, saveFile string) {
+	// The configuration for the paxos environment
 	lPaxosConfig := lpaxos.LPaxosEnvConfig{
+		// Number of replicas to run
 		Replicas: 3,
+		// Number of initial requests to inject into the system
 		Requests: requests,
-		Timeout:  12,
+		// The timeout value in terms of number of ticks
+		Timeout: 12,
+		// Timeouts is a boolean flag to indicate if the environment has drop message actions or not
 		Timeouts: timeouts,
 	}
+
 	property := lpaxos.InconsistentLogs()
+	// Comparison runs different agents as specified below. Then analyzes the traces for each agent configuration and compares them
 	c := types.NewComparison(lpaxos.LPaxosAnalyzer(saveFile), lpaxos.LPaxosComparator(saveFile))
+	// Adding the different policy and experiments
 	c.AddExperiment(types.NewExperimentWithProperties(
 		"RL",
 		&types.AgentConfig{
@@ -56,6 +64,7 @@ func Paxos(episodes, horizon int, saveFile string) {
 		},
 		[]*types.Monitor{property}))
 
+	// Invoking the different experiments
 	c.Run()
 }
 
@@ -73,6 +82,8 @@ func getLPaxosEnv(config lpaxos.LPaxosEnvConfig, abs string) types.Environment {
 	return lpaxos.NewLPaxosAbsEnv(config, abstracter)
 }
 
+// PaxosCommand is the subcommand to run coverage benchmarks for the paxos example
+// Refer to "Paxos" function for the exact algorithms to add
 func PaxosCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use: "paxos",
