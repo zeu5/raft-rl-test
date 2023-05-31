@@ -9,6 +9,7 @@ import "github.com/zeu5/raft-rl-test/types"
 func InPhase(step Step) types.RewardFunc {
 	return func(s types.State, _ types.State) bool {
 		pS, ok := s.(*types.Partition)
+		// nS, _ := ns.(*types.Partition)
 		if ok {
 			for _, c := range pS.ReplicaColors {
 				if int(c) == int(step) {

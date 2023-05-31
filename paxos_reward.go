@@ -15,9 +15,9 @@ func PaxosReward(episodes, horizon int, saveFile string) {
 		Timeouts: timeouts,
 	}
 
-	commit := lpaxos.Commit()
+	inPrepare := lpaxos.InPhase(lpaxos.StepPropose)
 
-	c := types.NewComparison(lpaxos.RewardStatesVisitedAnalyzer([]string{"commit"}, []types.RewardFunc{commit}), lpaxos.RewardStateComparator())
+	c := types.NewComparison(lpaxos.RewardStatesVisitedAnalyzer([]string{"commit"}, []types.RewardFunc{inPrepare}, saveFile), lpaxos.RewardStateComparator())
 	c.AddExperiment(types.NewExperiment(
 		"Random-Part",
 		&types.AgentConfig{
@@ -32,7 +32,7 @@ func PaxosReward(episodes, horizon int, saveFile string) {
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
-			Policy:      policies.NewGuidedPolicy([]types.RewardFunc{commit}, 0.3, 0.7, 0.1),
+			Policy:      policies.NewGuidedPolicy([]types.RewardFunc{inPrepare}, 0.2, 0.95, 0.02),
 			Environment: getLPaxosPartEnv(lPaxosConfig, true),
 		},
 	))

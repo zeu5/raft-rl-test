@@ -33,9 +33,7 @@ func (q *QTable) Set(state, action string, val float64) {
 	if _, ok := q.table[state]; !ok {
 		q.table[state] = make(map[string]float64)
 	}
-	if _, ok := q.table[state][action]; !ok {
-		q.table[state][action] = val
-	}
+	q.table[state][action] = val
 }
 
 func (q *QTable) HasState(state string) bool {

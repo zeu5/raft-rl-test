@@ -45,6 +45,7 @@ func (g *GridEnvironment) Step(a types.Action) types.State {
 	movement := a.(*Movement)
 	newPos := &Position{I: g.CurPos.I, J: g.CurPos.J}
 	switch movement.Direction {
+	case "Nothing":
 	case "Up":
 		newPos.I = min(g.Height-1, g.CurPos.I+1)
 	case "Down":
@@ -71,11 +72,11 @@ func (p *Position) Hash() string {
 
 func (p *Position) Actions() []types.Action {
 	if p.I == 0 && p.J == 0 {
-		return []types.Action{MovementUp, MovementRight}
+		return []types.Action{NoMovement, MovementUp, MovementRight}
 	} else if p.I == 0 {
-		return []types.Action{MovementUp, MovementRight, MovementLeft}
+		return []types.Action{NoMovement, MovementUp, MovementRight, MovementLeft}
 	} else if p.J == 0 {
-		return []types.Action{MovementUp, MovementRight, MovementDown}
+		return []types.Action{NoMovement, MovementUp, MovementRight, MovementDown}
 	}
 	return AllMovements
 }
@@ -95,10 +96,12 @@ var (
 	MovementDown                 = &Movement{"Down"}
 	MovementLeft                 = &Movement{"Left"}
 	MovementRight                = &Movement{"Right"}
+	NoMovement                   = &Movement{"Nothing"}
 	AllMovements  []types.Action = []types.Action{
 		MovementUp,
 		MovementDown,
 		MovementLeft,
 		MovementRight,
+		NoMovement,
 	}
 )

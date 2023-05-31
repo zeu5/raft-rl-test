@@ -2,6 +2,7 @@ package grid
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 
 	"github.com/zeu5/raft-rl-test/types"
@@ -118,6 +119,26 @@ func GridPlotComparator(figPath string) types.Comparator {
 			// p.Title.Text = name
 			// p.Add(plotter.NewHeatMap(dataSet, palette.Heat(20, 0.1)))
 			// p.Save(4*vg.Inch, 4*vg.Inch, name+figPath)
+		}
+	}
+}
+
+func GridPositionComparator(iPos, jPos int) types.Comparator {
+	return func(s []string, ds []types.DataSet) {
+		for i := 0; i < len(s); i++ {
+			name := s[i]
+			dataSet := ds[i].(*GridDataSet)
+
+			visits := 0
+			_, ok := dataSet.Visits[iPos]
+			if ok {
+				jV, ok := dataSet.Visits[iPos][jPos]
+				if ok {
+					visits = jV
+				}
+			}
+
+			fmt.Printf("Experiment %s visited %d times\n", name, visits)
 		}
 	}
 }

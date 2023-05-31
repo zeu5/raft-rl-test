@@ -128,20 +128,26 @@ func LPaxosComparator(figPath string) types.Comparator {
 }
 
 type RewardStatesVisited struct {
-	visits map[string]int
+	visits     map[string]int
+	visitGraph *types.VisitGraph
 }
 
-func RewardStatesVisitedAnalyzer(names []string, rewardFuncs []types.RewardFunc) types.Analyzer {
+func RewardStatesVisitedAnalyzer(names []string, rewardFuncs []types.RewardFunc, savePath string) types.Analyzer {
+	if _, err := os.Stat(savePath); err != nil {
+		os.Mkdir(savePath, os.ModePerm)
+	}
 	return func(s string, traces []*types.Trace) types.DataSet {
 		d := RewardStatesVisited{
-			visits: make(map[string]int),
+			visits:     make(map[string]int),
+			visitGraph: types.NewVisitGraph(),
 		}
 		for _, n := range names {
 			d.visits[n] = 0
 		}
 		for _, t := range traces {
 			for i := 0; i < t.Len(); i++ {
-				s, _, ns, _ := t.Get(i)
+				s, a, ns, _ := t.Get(i)
+				d.visitGraph.Update(NewLPaxosGraphState(s), a.Hash(), NewLPaxosGraphState(ns))
 				for j := 0; j < len(names); j++ {
 					if rewardFuncs[j](s, ns) {
 						d.visits[names[j]]++
@@ -149,6 +155,8 @@ func RewardStatesVisitedAnalyzer(names []string, rewardFuncs []types.RewardFunc)
 				}
 			}
 		}
+		d.visitGraph.Record(path.Join(savePath, "visit_graph_"+s+".json"))
+		d.visitGraph.Clear()
 		return d
 	}
 }
