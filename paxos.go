@@ -20,11 +20,11 @@ func Paxos(episodes, horizon int, saveFile string) {
 		Timeouts: timeouts,
 	}
 
-	property := lpaxos.InconsistentLogs()
+	// property := lpaxos.InconsistentLogs()
 	// Comparison runs different agents as specified below. Then analyzes the traces for each agent configuration and compares them
 	c := types.NewComparison(lpaxos.LPaxosAnalyzer(saveFile), lpaxos.LPaxosComparator(saveFile))
 	// Adding the different policy and experiments
-	c.AddExperiment(types.NewExperimentWithProperties(
+	c.AddExperiment(types.NewExperiment(
 		"RL",
 		&types.AgentConfig{
 			Episodes:    episodes,
@@ -32,9 +32,8 @@ func Paxos(episodes, horizon int, saveFile string) {
 			Policy:      types.NewSoftMaxNegPolicy(0.3, 0.7, 1),
 			Environment: getLPaxosEnv(lPaxosConfig, abstracter),
 		},
-		[]*types.Monitor{property},
 	))
-	c.AddExperiment(types.NewExperimentWithProperties(
+	c.AddExperiment(types.NewExperiment(
 		"Random",
 		&types.AgentConfig{
 			Episodes:    episodes,
@@ -42,27 +41,25 @@ func Paxos(episodes, horizon int, saveFile string) {
 			Policy:      types.NewRandomPolicy(),
 			Environment: getLPaxosEnv(lPaxosConfig, abstracter),
 		},
-		[]*types.Monitor{property},
 	))
-	c.AddExperiment(types.NewExperimentWithProperties(
+	c.AddExperiment(types.NewExperiment(
 		"BonusMaxRL",
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
-			Policy:      policies.NewBonusPolicyGreedy(horizon, 0.99, 0.2),
+			Policy:      policies.NewBonusPolicyGreedy(horizon, 0.99, 0.02),
 			Environment: getLPaxosEnv(lPaxosConfig, abstracter),
 		},
-		[]*types.Monitor{property},
 	))
-	c.AddExperiment(types.NewExperimentWithProperties(
+	c.AddExperiment(types.NewExperiment(
 		"BonusSoftMaxRL",
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
-			Policy:      policies.NewBonusPolicySoftMax(horizon, 0.99, 0.01),
+			Policy:      policies.NewBonusPolicySoftMax(horizon, 0.99, 0.02),
 			Environment: getLPaxosEnv(lPaxosConfig, abstracter),
 		},
-		[]*types.Monitor{property}))
+	))
 
 	// Invoking the different experiments
 	c.Run()

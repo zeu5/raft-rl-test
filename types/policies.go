@@ -98,10 +98,10 @@ func (s *SoftMaxNegPolicy) Update(step int, state State, action Action, nextStat
 	nextStateHash := nextState.Hash()
 	actionKey := action.Hash()
 	if _, ok := s.QTable[stateHash]; !ok {
-		return
+		s.QTable[stateHash] = make(map[string]float64)
 	}
 	if _, ok := s.QTable[stateHash][actionKey]; !ok {
-		return
+		s.QTable[stateHash][actionKey] = 0
 	}
 	curVal := s.QTable[stateHash][actionKey]
 	max := float64(0)
