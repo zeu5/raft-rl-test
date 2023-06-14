@@ -12,19 +12,19 @@ type GuidedPolicy struct {
 	alpha   float64
 	gamma   float64
 	epsilon float64
-	rewards []types.RewardFunc
+	reward  types.RewardFunc
 	rand    *rand.Rand
 }
 
 var _ types.Policy = &GuidedPolicy{}
 
-func NewGuidedPolicy(rewards []types.RewardFunc, alpha, gamma, epsilon float64) *GuidedPolicy {
+func NewGuidedPolicy(reward types.RewardFunc, alpha, gamma, epsilon float64) *GuidedPolicy {
 	return &GuidedPolicy{
 		qTable:  NewQTable(),
 		alpha:   alpha,
 		gamma:   gamma,
 		epsilon: epsilon,
-		rewards: rewards,
+		reward:  reward,
 		rand:    rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
@@ -62,11 +62,8 @@ func (g *GuidedPolicy) NextAction(step int, state types.State, actions []types.A
 
 func (g *GuidedPolicy) Update(step int, state types.State, action types.Action, nextState types.State) {
 	reward := 0
-	for _, r := range g.rewards {
-		if r(state, nextState) {
-			reward = 1
-			break
-		}
+	if g.reward(state, nextState) {
+		reward = 1
 	}
 	stateHash := state.Hash()
 	nextStateHash := nextState.Hash()
