@@ -10,36 +10,41 @@ import (
 )
 
 type GridDataSet struct {
-	Visits map[int]map[int]int
+	Visits map[int]map[int]map[int]int
 	Height int
 	Width  int
 }
 
-var _ plotter.GridXYZ = &GridDataSet{}
+type KGrid struct {
+	K int
+	*GridDataSet
+}
 
-func (g *GridDataSet) Dims() (int, int) {
+var _ plotter.GridXYZ = &KGrid{}
+
+func (g *KGrid) Dims() (int, int) {
 	return g.Width, g.Height
 }
 
-func (g *GridDataSet) Z(j, i int) float64 {
-	return float64(g.Visits[i][j])
+func (g *KGrid) Z(j, i int) float64 {
+	return float64(g.Visits[g.K][i][j])
 }
 
-func (g *GridDataSet) X(j int) float64 {
+func (g *KGrid) X(j int) float64 {
 	return float64(j / 10)
 }
 
-func (g *GridDataSet) Y(i int) float64 {
+func (g *KGrid) Y(i int) float64 {
 	return float64(i / 10)
 }
 
-func (g *GridDataSet) Min() float64 {
+func (g *KGrid) Min() float64 {
 	return 0.0
 }
 
-func (g *GridDataSet) Max() float64 {
+func (g *KGrid) Max() float64 {
 	max := 0
-	for _, vals := range g.Visits {
+	for _, vals := range g.Visits[g.K] {
 		for _, count := range vals {
 			if count > max {
 				max = count
@@ -49,38 +54,9 @@ func (g *GridDataSet) Max() float64 {
 	return float64(max)
 }
 
-func MergeGridDatasets(dataSets []types.DataSet) types.DataSet {
-	newDataset := &GridDataSet{
-		Visits: make(map[int]map[int]int),
-		Height: 0,
-		Width:  0,
-	}
-	for _, d := range dataSets {
-		dGrid := d.(*GridDataSet)
-		if dGrid.Height > newDataset.Height {
-			newDataset.Height = dGrid.Height
-		}
-		if dGrid.Width > newDataset.Width {
-			newDataset.Width = dGrid.Width
-		}
-		for i, vals := range dGrid.Visits {
-			if _, ok := newDataset.Visits[i]; !ok {
-				newDataset.Visits[i] = make(map[int]int)
-			}
-			for j, visits := range vals {
-				if _, ok := newDataset.Visits[i][j]; !ok {
-					newDataset.Visits[i][j] = 0
-				}
-				newDataset.Visits[i][j] += visits
-			}
-		}
-	}
-	return newDataset
-}
-
 func GridAnalyzer(_ string, traces []*types.Trace) types.DataSet {
 	dataSet := &GridDataSet{
-		Visits: make(map[int]map[int]int),
+		Visits: make(map[int]map[int]map[int]int),
 		Height: 0,
 		Width:  0,
 	}
@@ -88,11 +64,14 @@ func GridAnalyzer(_ string, traces []*types.Trace) types.DataSet {
 		for i := 0; i < trace.Len(); i++ {
 			state, _, _, _ := trace.Get(i)
 			gridPostition := state.(*Position)
-			if _, ok := dataSet.Visits[gridPostition.I]; !ok {
-				dataSet.Visits[gridPostition.I] = make(map[int]int)
+			if _, ok := dataSet.Visits[gridPostition.K]; !ok {
+				dataSet.Visits[gridPostition.K] = make(map[int]map[int]int)
 			}
-			if _, ok := dataSet.Visits[gridPostition.I][gridPostition.J]; !ok {
-				dataSet.Visits[gridPostition.I][gridPostition.J] = 0
+			if _, ok := dataSet.Visits[gridPostition.K][gridPostition.I]; !ok {
+				dataSet.Visits[gridPostition.K][gridPostition.I] = make(map[int]int)
+			}
+			if _, ok := dataSet.Visits[gridPostition.K][gridPostition.I][gridPostition.J]; !ok {
+				dataSet.Visits[gridPostition.K][gridPostition.I][gridPostition.J] = 0
 			}
 			if gridPostition.I+1 > dataSet.Height {
 				dataSet.Height = gridPostition.I + 1
@@ -100,7 +79,7 @@ func GridAnalyzer(_ string, traces []*types.Trace) types.DataSet {
 			if gridPostition.J+1 > dataSet.Width {
 				dataSet.Width = gridPostition.J + 1
 			}
-			dataSet.Visits[gridPostition.I][gridPostition.J] += 1
+			dataSet.Visits[gridPostition.K][gridPostition.I][gridPostition.J] += 1
 		}
 	}
 	return dataSet
@@ -123,7 +102,7 @@ func GridPlotComparator(figPath string) types.Comparator {
 	}
 }
 
-func GridPositionComparator(iPos, jPos int) types.Comparator {
+func GridPositionComparator(iPos, jPos, kPos int) types.Comparator {
 	return func(s []string, ds []types.DataSet) {
 		for i := 0; i < len(s); i++ {
 			name := s[i]
@@ -132,7 +111,7 @@ func GridPositionComparator(iPos, jPos int) types.Comparator {
 			visits := 0
 			_, ok := dataSet.Visits[iPos]
 			if ok {
-				jV, ok := dataSet.Visits[iPos][jPos]
+				jV, ok := dataSet.Visits[kPos][iPos][jPos]
 				if ok {
 					visits = jV
 				}

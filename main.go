@@ -24,7 +24,9 @@ func main() {
 	rootCommand.AddCommand(PaxosCommand())
 	rootCommand.AddCommand(PaxosPartCommand())
 	rootCommand.AddCommand(PaxosRewardCommand())
+	rootCommand.AddCommand(PaxosRewardMachineCommand())
 	rootCommand.AddCommand(GridRewardCommand())
+	rootCommand.AddCommand(GridRewardMachineCommand())
 
 	if err := rootCommand.Execute(); err != nil {
 		fmt.Println(err)

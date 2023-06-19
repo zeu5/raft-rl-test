@@ -9,9 +9,9 @@ import (
 
 func GridReward(episodes, horizon int, saveFile string) {
 
-	inPosition := grid.InPosition(3, 4)
+	inPosition := grid.InPosition(3, 4, 0)
 
-	c := types.NewComparison(grid.GridAnalyzer, grid.GridPositionComparator(3, 4))
+	c := types.NewComparison(grid.GridAnalyzer, grid.GridPositionComparator(3, 4, 0))
 
 	c.AddExperiment(types.NewExperiment(
 		"Random-Part",
@@ -19,7 +19,7 @@ func GridReward(episodes, horizon int, saveFile string) {
 			Episodes:    episodes,
 			Horizon:     horizon,
 			Policy:      types.NewRandomPolicy(),
-			Environment: grid.NewGridEnvironment(5, 5),
+			Environment: grid.NewGridEnvironment(5, 5, 1),
 		},
 	))
 	c.AddExperiment(types.NewExperiment(
@@ -28,7 +28,7 @@ func GridReward(episodes, horizon int, saveFile string) {
 			Episodes:    episodes,
 			Horizon:     horizon,
 			Policy:      policies.NewGuidedPolicy(inPosition, 0.3, 0.95, 0.1),
-			Environment: grid.NewGridEnvironment(5, 5),
+			Environment: grid.NewGridEnvironment(5, 5, 1),
 		},
 	))
 
