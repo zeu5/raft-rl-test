@@ -25,16 +25,23 @@ type GridEnvironment struct {
 	Width  int
 	Grids  int
 	CurPos *Position
+	Doors  []Door
+}
+
+type Door struct {
+	From Position
+	To   Position
 }
 
 var _ types.Environment = &GridEnvironment{}
 
-func NewGridEnvironment(height, width, grids int) *GridEnvironment {
+func NewGridEnvironment(height, width, grids int, doors ...Door) *GridEnvironment {
 	return &GridEnvironment{
 		Height: height,
 		Width:  width,
 		Grids:  grids,
 		CurPos: &Position{0, 0, 0},
+		Doors:  doors,
 	}
 }
 
@@ -46,6 +53,18 @@ func (g *GridEnvironment) Reset() types.State {
 func (g *GridEnvironment) Step(a types.Action) types.State {
 	movement := a.(*Movement)
 	newPos := &Position{I: g.CurPos.I, J: g.CurPos.J, K: g.CurPos.K}
+	if movement.Direction == "Next" {
+		for _, d := range g.Doors {
+			if d.From.Eq(*g.CurPos) {
+				newPos.I = d.To.I
+				newPos.J = d.To.J
+				newPos.K = d.To.K
+				g.CurPos = newPos
+				return newPos
+			}
+		}
+	}
+
 	switch movement.Direction {
 	case "Nothing":
 	case "Up":
@@ -57,7 +76,7 @@ func (g *GridEnvironment) Step(a types.Action) types.State {
 	case "Right":
 		newPos.J = min(g.Width-1, g.CurPos.J+1)
 	case "Next":
-		if g.CurPos.I == g.Height-1 && g.CurPos.J == g.Width-1 {
+		if g.CurPos.I == min(10, g.Height-1) && g.CurPos.J == min(10, g.Width-1) {
 			if g.CurPos.K < g.Grids-1 {
 				newPos.I = 0
 				newPos.J = 0
@@ -79,6 +98,10 @@ var _ types.State = &Position{}
 
 func (p *Position) Hash() string {
 	return fmt.Sprintf("(%d, %d, %d)", p.I, p.J, p.K)
+}
+
+func (p *Position) Eq(other Position) bool {
+	return p.I == other.I && p.J == other.J && p.K == other.K
 }
 
 func (p *Position) Actions() []types.Action {

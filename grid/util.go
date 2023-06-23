@@ -10,9 +10,10 @@ import (
 )
 
 type GridDataSet struct {
-	Visits map[int]map[int]map[int]int
-	Height int
-	Width  int
+	Visits    map[int]map[int]map[int]int
+	RLActions map[string]map[string]int
+	Height    int
+	Width     int
 }
 
 type KGrid struct {
@@ -56,13 +57,23 @@ func (g *KGrid) Max() float64 {
 
 func GridAnalyzer(_ string, traces []*types.Trace) types.DataSet {
 	dataSet := &GridDataSet{
-		Visits: make(map[int]map[int]map[int]int),
-		Height: 0,
-		Width:  0,
+		Visits:    make(map[int]map[int]map[int]int),
+		RLActions: make(map[string]map[string]int),
+		Height:    0,
+		Width:     0,
 	}
 	for _, trace := range traces {
 		for i := 0; i < trace.Len(); i++ {
-			state, _, _, _ := trace.Get(i)
+			state, action, _, _ := trace.Get(i)
+			stateHash := state.Hash()
+			actionHash := action.Hash()
+			if _, ok := dataSet.RLActions[stateHash]; !ok {
+				dataSet.RLActions[stateHash] = make(map[string]int)
+			}
+			if _, ok := dataSet.RLActions[stateHash][actionHash]; !ok {
+				dataSet.RLActions[stateHash][actionHash] = 0
+			}
+			dataSet.RLActions[stateHash][actionHash] += 1
 			gridPostition := state.(*Position)
 			if _, ok := dataSet.Visits[gridPostition.K]; !ok {
 				dataSet.Visits[gridPostition.K] = make(map[int]map[int]int)
@@ -118,6 +129,40 @@ func GridPositionComparator(iPos, jPos, kPos int) types.Comparator {
 			}
 
 			fmt.Printf("Experiment %s visited %d times\n", name, visits)
+		}
+	}
+}
+
+func GridDepthComparator() types.Comparator {
+	return func(s []string, ds []types.DataSet) {
+		for i := 0; i < len(s); i++ {
+			name := s[i]
+			dataSet := ds[i].(*GridDataSet)
+
+			gridVisits := make(map[int]int)
+
+			for k, kvs := range dataSet.Visits {
+				gridVisits[k] = 0
+				for _, ivs := range kvs {
+					gridVisits[k] += len(ivs)
+				}
+			}
+			fmt.Printf("Experiment %s:\n", name)
+			for k, visits := range gridVisits {
+				fmt.Printf("Grid %d: covered %d positions\n", k, visits)
+			}
+
+			topsa := ""
+			topsavisits := -1
+			for state, svisits := range dataSet.RLActions {
+				for action, visits := range svisits {
+					if visits > topsavisits {
+						topsa = state + "_" + action
+						topsavisits = visits
+					}
+				}
+			}
+			fmt.Printf("Top visited state action pair: %s, visits: %d\n", topsa, topsavisits)
 		}
 	}
 }

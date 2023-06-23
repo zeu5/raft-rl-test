@@ -36,7 +36,7 @@ func NextGrid(height, width int) types.RewardFunc {
 		if !ok {
 			return false
 		}
-		return pos1.I == height-1 && pos1.J == width-1 && pos1.K != pos2.K
+		return pos1.I == height-1 && pos1.J == width-1 && pos1.K+1 == pos2.K
 	}
 }
 
@@ -48,5 +48,16 @@ func ToGrid(k int) types.RewardFunc {
 			return false
 		}
 		return pos1.K != pos2.K && pos2.K == k
+	}
+}
+
+func TakesDoor(door Door) types.RewardFunc {
+	return func(s1, s2 types.State) bool {
+		pos1, ok := s1.(*Position)
+		pos2, _ := s2.(*Position)
+		if !ok {
+			return false
+		}
+		return pos1.Eq(door.From) && pos2.Eq(door.To)
 	}
 }

@@ -1,8 +1,6 @@
 package main
 
 import (
-	"strconv"
-
 	"github.com/spf13/cobra"
 	"github.com/zeu5/raft-rl-test/grid"
 	"github.com/zeu5/raft-rl-test/policies"
@@ -11,15 +9,21 @@ import (
 
 func GridRewardMachine(episodes, horizon int, height, width, grids int) {
 
-	allRewards := []types.RewardFunc{}
-	rm := policies.NewRewardMachine()
-	for i := 1; i < grids; i++ {
-		pred := grid.ToGrid(i)
-		rm.On(pred, "Grid"+strconv.Itoa(i))
-		allRewards = append(allRewards, pred)
+	// rm := policies.NewRewardMachine()
+	// for i := 1; i < grids-1; i++ {
+	// 	pred := grid.ToGrid(i)
+	// 	rm.On(pred, "Grid"+strconv.Itoa(i))
+	// }
+	// rm.On(grid.ToGrid(grids-1), policies.FinalState)
+
+	doors := []grid.Door{
+		{From: grid.Position{I: height / 2, J: width / 2, K: 0}, To: grid.Position{I: 0, J: 0, K: grids - 1}},
 	}
 
-	c := types.NewComparison(policies.RewardMachineAnalyzer(allRewards, grid.DefaultStateAbstractor()), policies.RewardMachineCoverageComparator())
+	rm := policies.NewRewardMachine(horizon)
+	rm.On(grid.ToGrid(grids-1), policies.FinalState)
+
+	c := types.NewComparison(grid.GridAnalyzer, grid.GridDepthComparator())
 
 	c.AddExperiment(types.NewExperiment(
 		"Random",
@@ -27,16 +31,16 @@ func GridRewardMachine(episodes, horizon int, height, width, grids int) {
 			Episodes:    episodes,
 			Horizon:     horizon,
 			Policy:      types.NewRandomPolicy(),
-			Environment: grid.NewGridEnvironment(height, width, grids),
+			Environment: grid.NewGridEnvironment(height, width, grids, doors...),
 		},
 	))
 	c.AddExperiment(types.NewExperiment(
-		"Biased-Policy",
+		"Exploration",
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
-			Policy:      policies.NewGuidedPolicy(grid.NextGrid(height, width), 0.3, 0.95, 0.1),
-			Environment: grid.NewGridEnvironment(height, width, grids),
+			Policy:      policies.NewBonusPolicyGreedy(horizon, 0.99, 0.2),
+			Environment: grid.NewGridEnvironment(height, width, grids, doors...),
 		},
 	))
 	c.AddExperiment(types.NewExperiment(
@@ -45,7 +49,7 @@ func GridRewardMachine(episodes, horizon int, height, width, grids int) {
 			Episodes:    episodes,
 			Horizon:     horizon,
 			Policy:      policies.NewRewardMachinePolicy(rm),
-			Environment: grid.NewGridEnvironment(height, width, grids),
+			Environment: grid.NewGridEnvironment(height, width, grids, doors...),
 		},
 	))
 
