@@ -76,7 +76,7 @@ func (g *GridEnvironment) Step(a types.Action) types.State {
 	case "Right":
 		newPos.J = min(g.Width-1, g.CurPos.J+1)
 	case "Next":
-		if g.CurPos.I == min(10, g.Height-1) && g.CurPos.J == min(10, g.Width-1) {
+		if g.CurPos.I == min(g.Height/2, g.Height-1) && g.CurPos.J == min(g.Width/2, g.Width-1) {
 			if g.CurPos.K < g.Grids-1 {
 				newPos.I = 0
 				newPos.J = 0

@@ -29,7 +29,7 @@ func PaxosPart(episodes, horizon int, saveFile string) {
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
-			Policy:      policies.NewBonusPolicyGreedy(horizon, 0.99, 0.2),
+			Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
 			Environment: getLPaxosPartEnv(lPaxosConfig, true),
 		},
 	))
@@ -47,7 +47,7 @@ func PaxosPart(episodes, horizon int, saveFile string) {
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
-			Policy:      policies.NewBonusPolicyGreedy(horizon, 0.99, 0.2),
+			Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
 			Environment: getLPaxosPartEnv(lPaxosConfig, false),
 		},
 	))

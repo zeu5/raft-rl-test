@@ -11,14 +11,14 @@ type RewardMachine struct {
 	states     []string
 }
 
-func NewRewardMachine(horizon int) *RewardMachine {
+func NewRewardMachine() *RewardMachine {
 	rm := &RewardMachine{
 		predicates: make(map[string]types.RewardFunc),
 		policies:   make(map[string]types.Policy),
 		states:     make([]string, 0),
 	}
-	rm.policies[FinalState] = NewBonusPolicyGreedy(horizon, 0.99, 0.02)
-	rm.policies[InitState] = NewBonusPolicyGreedy(horizon, 0.99, 0.02)
+	rm.policies[FinalState] = NewBonusPolicyGreedy(0.1, 0.99, 0.02)
+	rm.policies[InitState] = NewBonusPolicyGreedy(0.1, 0.99, 0.02)
 	rm.states = append(rm.states, InitState)
 	return rm
 }

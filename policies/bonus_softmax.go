@@ -15,9 +15,9 @@ type BonusPolicySoftMax struct {
 	rand        rand.Source
 }
 
-func NewBonusPolicySoftMax(horizon int, discount float64, temperature float64) *BonusPolicySoftMax {
+func NewBonusPolicySoftMax(alpha, discount float64, temperature float64) *BonusPolicySoftMax {
 	return &BonusPolicySoftMax{
-		BonusPolicyGreedy: NewBonusPolicyGreedy(horizon, discount, 0),
+		BonusPolicyGreedy: NewBonusPolicyGreedy(alpha, discount, 0),
 		temperature:       temperature,
 		rand:              rand.NewSource(uint64(time.Now().UnixNano())),
 	}

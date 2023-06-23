@@ -25,7 +25,7 @@ func GridReward(episodes, horizon int, saveFile string, height, width, grids int
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
-			Policy:      policies.NewBonusPolicyGreedy(horizon, 0.99, 0.02),
+			Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.02),
 			Environment: grid.NewGridEnvironment(height, width, grids),
 		},
 	))

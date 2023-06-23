@@ -49,7 +49,7 @@ func Paxos(episodes, horizon int, saveFile string) {
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
-			Policy:      policies.NewBonusPolicyGreedy(horizon, 0.99, 0.2),
+			Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
 			Environment: getLPaxosEnv(lPaxosConfig, abstracter),
 		},
 		[]*types.Monitor{property},
@@ -59,7 +59,7 @@ func Paxos(episodes, horizon int, saveFile string) {
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
-			Policy:      policies.NewBonusPolicySoftMax(horizon, 0.99, 0.01),
+			Policy:      policies.NewBonusPolicySoftMax(0.1, 0.99, 0.01),
 			Environment: getLPaxosEnv(lPaxosConfig, abstracter),
 		},
 		[]*types.Monitor{property}))

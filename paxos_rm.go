@@ -18,7 +18,7 @@ func PaxosRewardMachine(episodes, horizon int) {
 	commit := lpaxos.Commit()
 	allPredicates := []types.RewardFunc{commit}
 
-	rm := policies.NewRewardMachine(horizon)
+	rm := policies.NewRewardMachine()
 	rm.On(commit, "commit")
 
 	c := types.NewComparison(policies.RewardMachineAnalyzer(allPredicates, lpaxos.PaxosStateAbstractor()), policies.RewardMachineCoverageComparator())
@@ -36,7 +36,7 @@ func PaxosRewardMachine(episodes, horizon int) {
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
-			Policy:      policies.NewBonusPolicyGreedy(horizon, 0.99, 0.2),
+			Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
 			Environment: getLPaxosEnv(lPaxosConfig, abstracter),
 		},
 	))

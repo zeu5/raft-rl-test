@@ -17,11 +17,11 @@ func GridRewardMachine(episodes, horizon int, height, width, grids int) {
 	// rm.On(grid.ToGrid(grids-1), policies.FinalState)
 
 	doors := []grid.Door{
-		{From: grid.Position{I: height / 2, J: width / 2, K: 0}, To: grid.Position{I: 0, J: 0, K: grids - 1}},
+		{From: grid.Position{I: 10, J: 10, K: 0}, To: grid.Position{I: 0, J: 0, K: grids - 1}},
 	}
 
-	rm := policies.NewRewardMachine(horizon)
-	rm.On(grid.ToGrid(grids-1), policies.FinalState)
+	rm := policies.NewRewardMachine()
+	rm.On(grid.TakesDoor(doors[0]), policies.FinalState)
 
 	c := types.NewComparison(grid.GridAnalyzer, grid.GridDepthComparator())
 
@@ -39,7 +39,7 @@ func GridRewardMachine(episodes, horizon int, height, width, grids int) {
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
-			Policy:      policies.NewBonusPolicyGreedy(horizon, 0.99, 0.2),
+			Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
 			Environment: grid.NewGridEnvironment(height, width, grids, doors...),
 		},
 	))

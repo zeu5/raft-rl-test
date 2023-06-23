@@ -1,9 +1,6 @@
-.vscode
-
 raft-rl-test
 
 *.png
-*.json
 
 results
 __pycache__

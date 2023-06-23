@@ -39,7 +39,7 @@ func Raft(episodes, horizon int, saveFile string) {
 	c.AddExperiment(types.NewExperiment("BonusMaxRL", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
-		Policy:      policies.NewBonusPolicyGreedy(horizon, 0.99, 0),
+		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0),
 		Environment: getRaftEnv(raftConfig, abstracter),
 	}))
 
