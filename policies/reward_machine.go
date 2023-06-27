@@ -51,24 +51,12 @@ func (rm *RewardMachine) WithExplorationPolicy(policy types.RmPolicy) *RewardMac
 	return rm
 }
 
-type segmentInfo struct {
-	end       int
-	nextState string
-}
-
-type transition struct {
-	state     types.State
-	action    types.Action
-	nextState types.State
-	reward    bool
-}
-
 type RewardMachinePolicy struct {
 	curRMState    string
 	curRmStatePos int
 	rm            *RewardMachine
 
-	curTraceSegments map[int][]transition
+	curTraceSegments map[string]*types.Trace
 }
 
 func NewRewardMachinePolicy(rm *RewardMachine) *RewardMachinePolicy {
@@ -76,33 +64,22 @@ func NewRewardMachinePolicy(rm *RewardMachine) *RewardMachinePolicy {
 		curRMState:       InitState,
 		curRmStatePos:    0,
 		rm:               rm,
-		curTraceSegments: make(map[int][]transition),
+		curTraceSegments: make(map[string]*types.Trace),
 	}
 }
 
 var _ types.Policy = &RewardMachinePolicy{}
 
 func (rp *RewardMachinePolicy) UpdateIteration(iteration int, trace *types.Trace) {
-	start := 0
-	policy := rp.rm.policies[InitState]
-	for _, seg := range rp.curTraceSegments {
-		segment := trace.Slice(start, seg.end)
+	for state, segment := range rp.curTraceSegments {
+		policy := rp.rm.policies[state]
 		policy.UpdateIteration(iteration, segment)
-
-		start = seg.end
-		policy = rp.rm.policies[seg.nextState]
-	}
-
-	if start < trace.Len() {
-		lastSlice := trace.Slice(start, trace.Len())
-		explorationPolicy := rp.rm.policies[FinalState]
-		explorationPolicy.UpdateIteration(iteration, lastSlice)
 	}
 
 	// Resetting values at the end of an iteration
 	rp.curRMState = InitState
 	rp.curRmStatePos = 0
-	rp.curTraceSegments = make(map[int][]transition, 0)
+	rp.curTraceSegments = make(map[string]*types.Trace)
 }
 
 func (rp *RewardMachinePolicy) NextAction(step int, state types.State, actions []types.Action) (types.Action, bool) {
@@ -112,7 +89,6 @@ func (rp *RewardMachinePolicy) NextAction(step int, state types.State, actions [
 			rmState := rp.rm.states[i]
 			predicate, ok := rp.rm.predicates[rmState]
 			if ok && predicate(state) { // if current transition satisfies predicate for that rm_state
-				rp.curTraceSegments = append(rp.curTraceSegments, segmentInfo{end: step, nextState: rmState})
 				rp.curRMState = rmState // change current state of the rm
 				rp.curRmStatePos = i    // and index
 				break
@@ -127,13 +103,13 @@ func (rp *RewardMachinePolicy) NextAction(step int, state types.State, actions [
 func (rp *RewardMachinePolicy) Update(step int, state types.State, action types.Action, nextState types.State) {
 	curPolicy := rp.rm.policies[rp.curRMState]
 	curRmStatePos := rp.curRmStatePos
+	curRmState := rp.curRMState
 	reward := false
 
 	for i := len(rp.rm.states) - 1; i >= 0; i-- { // for all rm_states starting from the last
 		rmState := rp.rm.states[i]
 		predicate, ok := rp.rm.predicates[rmState]
 		if ok && predicate(nextState) { // if current transition satisfies predicate for that rm_state
-			rp.curTraceSegments = append(rp.curTraceSegments, segmentInfo{end: step, nextState: rmState})
 			if i > curRmStatePos {
 				reward = true
 			}
@@ -142,6 +118,10 @@ func (rp *RewardMachinePolicy) Update(step int, state types.State, action types.
 			break
 		}
 	}
+	if _, ok := rp.curTraceSegments[curRmState]; !ok {
+		rp.curTraceSegments[curRmState] = types.NewTrace()
+	}
+	rp.curTraceSegments[curRmState].AppendWithReward(step, state, action, nextState, reward)
 
 	// NEED TO ADD INFO IF RM TRANSITIONED... THAT IS THE REWARD TRUE => 1, FALSE => 0
 	curPolicy.UpdateRm(step, state, action, nextState, reward) // call the single step update function on the current policy (followed to take the step)
@@ -153,5 +133,5 @@ func (rp *RewardMachinePolicy) Reset() {
 	}
 	rp.curRMState = InitState
 	rp.curRmStatePos = 0
-	rp.curTraceSegments = make(map[int][]transition)
+	rp.curTraceSegments = make(map[string]*types.Trace)
 }
