@@ -76,13 +76,23 @@ func (g *GridEnvironment) Step(a types.Action) types.State {
 	case "Right":
 		newPos.J = min(g.Width-1, g.CurPos.J+1)
 	case "Next":
-		if g.CurPos.I == min(g.Height/2, g.Height-1) && g.CurPos.J == min(g.Width/2, g.Width-1) {
-			if g.CurPos.K < g.Grids-1 {
-				newPos.I = 0
-				newPos.J = 0
-				newPos.K = g.CurPos.K + 1
+		for _, d := range g.Doors { // check doors
+			if d.From.Eq(*g.CurPos) { // if there's a door in this position, transition to door.To
+				newPos.I = d.To.I
+				newPos.J = d.To.J
+				newPos.K = d.To.K
+				g.CurPos = newPos
+				return newPos
 			}
 		}
+
+		// if g.CurPos.I == min(g.Height/2, g.Height-1) && g.CurPos.J == min(g.Width/2, g.Width-1) {
+		// 	if g.CurPos.K < g.Grids-1 {
+		// 		newPos.I = 0
+		// 		newPos.J = 0
+		// 		newPos.K = g.CurPos.K + 1
+		// 	}
+		// }
 	}
 	g.CurPos = newPos
 	return newPos

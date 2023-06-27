@@ -9,6 +9,10 @@ var (
 // Currently defined on a transition (pair of states)
 type RewardFunc func(State, State) bool
 
+// Primitive reward function to determine which states to give a reward to
+// Currently defined on a transition (pair of states)
+type RewardFuncSingle func(State) bool
+
 // MonitorState is a state in the state machine (Monitor)
 // Use MonitorBuilder to create monitor states (do not instantiate directly)
 type MonitorState struct {

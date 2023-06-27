@@ -16,12 +16,45 @@ func GridRewardMachine(episodes, horizon int, height, width, grids int) {
 	// }
 	// rm.On(grid.ToGrid(grids-1), policies.FinalState)
 
+	// doors := []grid.Door{
+	// 	{From: grid.Position{I: 10, J: 10, K: 0}, To: grid.Position{I: 0, J: 0, K: grids - 1}},
+	// }
+
+	// possible set of doors, designed for 40x40 grids, 5 grids
 	doors := []grid.Door{
-		{From: grid.Position{I: 10, J: 10, K: 0}, To: grid.Position{I: 0, J: 0, K: grids - 1}},
+		// from grid 0
+		{From: grid.Position{I: 2, J: 3, K: 0}, To: grid.Position{I: 0, J: 0, K: 1}},
+		{From: grid.Position{I: 4, J: 4, K: 0}, To: grid.Position{I: 0, J: 0, K: 2}},
+		{From: grid.Position{I: 1, J: 5, K: 0}, To: grid.Position{I: 0, J: 0, K: 3}},
+		{From: grid.Position{I: 16, J: 22, K: 0}, To: grid.Position{I: 0, J: 0, K: 2}},
+		{From: grid.Position{I: 31, J: 23, K: 0}, To: grid.Position{I: 0, J: 0, K: 3}},
+		{From: grid.Position{I: 26, J: 5, K: 0}, To: grid.Position{I: 0, J: 0, K: 1}},
+		{From: grid.Position{I: 12, J: 32, K: 0}, To: grid.Position{I: 0, J: 0, K: 2}},
+		{From: grid.Position{I: 10, J: 10, K: 0}, To: grid.Position{I: 0, J: 0, K: 3}},
+		{From: grid.Position{I: 9, J: 6, K: 0}, To: grid.Position{I: 0, J: 0, K: 4}},
+
+		// from grid 1
+		{From: grid.Position{I: 4, J: 4, K: 1}, To: grid.Position{I: 0, J: 0, K: 2}},
+		{From: grid.Position{I: 1, J: 5, K: 1}, To: grid.Position{I: 0, J: 0, K: 3}},
+		{From: grid.Position{I: 16, J: 22, K: 1}, To: grid.Position{I: 0, J: 0, K: 2}},
+		{From: grid.Position{I: 31, J: 23, K: 1}, To: grid.Position{I: 0, J: 0, K: 3}},
+		{From: grid.Position{I: 12, J: 32, K: 1}, To: grid.Position{I: 0, J: 0, K: 2}},
+		{From: grid.Position{I: 10, J: 10, K: 1}, To: grid.Position{I: 0, J: 0, K: 3}},
+		{From: grid.Position{I: 9, J: 6, K: 1}, To: grid.Position{I: 0, J: 0, K: 4}},
+
+		// from grid 2
+		{From: grid.Position{I: 1, J: 5, K: 2}, To: grid.Position{I: 0, J: 0, K: 3}},
+		{From: grid.Position{I: 31, J: 23, K: 2}, To: grid.Position{I: 0, J: 0, K: 3}},
+		{From: grid.Position{I: 10, J: 10, K: 2}, To: grid.Position{I: 0, J: 0, K: 3}},
+		{From: grid.Position{I: 9, J: 6, K: 2}, To: grid.Position{I: 0, J: 0, K: 4}},
+
+		// from grid 3
+		{From: grid.Position{I: 9, J: 6, K: 3}, To: grid.Position{I: 0, J: 0, K: 4}},
 	}
 
 	rm := policies.NewRewardMachine()
-	rm.On(grid.TakesDoor(doors[0]), policies.FinalState)
+	// rm.On(grid.TakesDoor(doors[0]), policies.FinalState)
+	rm.On(grid.ReachGrid(4), policies.FinalState)
 
 	c := types.NewComparison(grid.GridAnalyzer, grid.GridDepthComparator())
 

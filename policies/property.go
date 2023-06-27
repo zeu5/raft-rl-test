@@ -12,13 +12,13 @@ type GuidedPolicy struct {
 	alpha   float64
 	gamma   float64
 	epsilon float64
-	reward  types.RewardFunc
+	reward  types.RewardFuncSingle
 	rand    *rand.Rand
 }
 
-var _ types.Policy = &GuidedPolicy{}
+var _ types.RmPolicy = &GuidedPolicy{}
 
-func NewGuidedPolicy(reward types.RewardFunc, alpha, gamma, epsilon float64) *GuidedPolicy {
+func NewGuidedPolicy(reward types.RewardFuncSingle, alpha, gamma, epsilon float64) *GuidedPolicy {
 	return &GuidedPolicy{
 		qTable:  NewQTable(),
 		alpha:   alpha,
@@ -62,7 +62,24 @@ func (g *GuidedPolicy) NextAction(step int, state types.State, actions []types.A
 
 func (g *GuidedPolicy) Update(step int, state types.State, action types.Action, nextState types.State) {
 	reward := 0
-	if g.reward(state, nextState) {
+	if g.reward(nextState) {
+		reward = 1
+	}
+	stateHash := state.Hash()
+	nextStateHash := nextState.Hash()
+	actionKey := action.Hash()
+
+	curVal := g.qTable.Get(stateHash, actionKey, 0)
+	_, max := g.qTable.Max(nextStateHash, 0)
+
+	nextVal := (1-g.alpha)*curVal + g.alpha*(float64(reward)+g.gamma*max)
+
+	g.qTable.Set(stateHash, actionKey, nextVal)
+}
+
+func (g *GuidedPolicy) UpdateRm(step int, state types.State, action types.Action, nextState types.State, rwd bool) {
+	reward := 0
+	if rwd {
 		reward = 1
 	}
 	stateHash := state.Hash()

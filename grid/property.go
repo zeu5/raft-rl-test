@@ -1,6 +1,8 @@
 package grid
 
-import "github.com/zeu5/raft-rl-test/types"
+import (
+	"github.com/zeu5/raft-rl-test/types"
+)
 
 // func PosReached(i, j int) *types.Monitor {
 // 	monitor := types.NewMonitor()
@@ -59,5 +61,16 @@ func TakesDoor(door Door) types.RewardFunc {
 			return false
 		}
 		return pos1.Eq(door.From) && pos2.Eq(door.To)
+	}
+}
+
+func ReachGrid(num int) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		pos, ok := s.(*Position)
+		if !ok {
+			return false
+		}
+
+		return pos.K == num
 	}
 }
