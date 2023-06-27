@@ -24,7 +24,7 @@ func NewRewardMachine(pred types.RewardFuncSingle) *RewardMachine {
 		states:     make([]string, 0),
 	}
 	rm.policies[FinalState] = NewBonusPolicyGreedy(0.1, 0.99, 0.02)
-	rm.policies[InitState] = NewGuidedPolicy(nil, 0.2, 0.95, 0.02)
+	rm.policies[InitState] = NewBonusPolicyGreedyReward(0.1, 0.99, 0.02)
 	rm.states = append(rm.states, InitState)
 	rm.states = append(rm.states, FinalState)
 
@@ -36,14 +36,14 @@ func NewRewardMachine(pred types.RewardFuncSingle) *RewardMachine {
 
 // TODO: change states to not point to next states
 // add a new state in the reward machine, in the second last position (before final exploration), with predicate to go to 'to'?
-func (rm *RewardMachine) On(pred types.RewardFuncSingle, name string) *RewardMachine {
+func (rm *RewardMachine) AddState(pred types.RewardFuncSingle, name string) *RewardMachine {
 	index := len(rm.states) - 1
 	rm.states = append(rm.states, rm.states[index]) // duplicate last element
 
 	// modify second-last element, insert the new state
 	rm.states[index] = name
 	rm.predicates[name] = pred
-	rm.policies[name] = NewGuidedPolicy(nil, 0.2, 0.95, 0.02)
+	rm.policies[name] = NewBonusPolicyGreedyReward(0.1, 0.99, 0.02)
 
 	// curState := rm.states[len(rm.states)-1]
 	// rm.predicates[curState] = pred
@@ -53,12 +53,15 @@ func (rm *RewardMachine) On(pred types.RewardFuncSingle, name string) *RewardMac
 }
 
 // add a new state in the reward machine, in the second last position (before final exploration), with predicate to go to 'to'?
-func (rm *RewardMachine) OnWithPolicy(pred types.RewardFuncSingle, to string, policy types.RmPolicy) *RewardMachine {
-	curState := rm.states[len(rm.states)-1]
-	rm.predicates[curState] = pred
-	rm.predicates[curState] = pred
-	rm.policies[curState] = policy
-	rm.states = append(rm.states, to)
+func (rm *RewardMachine) AddStateWithPolicy(pred types.RewardFuncSingle, name string, policy types.RmPolicy) *RewardMachine {
+	index := len(rm.states) - 1
+	rm.states = append(rm.states, rm.states[index]) // duplicate last element
+
+	// modify second-last element, insert the new state
+	rm.states[index] = name
+	rm.predicates[name] = pred
+	rm.policies[name] = policy
+
 	return rm
 }
 

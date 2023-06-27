@@ -31,7 +31,7 @@ func GridRewardMachine(episodes, horizon int, height, width, grids int) {
 		{From: grid.Position{I: 26, J: 5, K: 0}, To: grid.Position{I: 0, J: 0, K: 1}},
 		{From: grid.Position{I: 12, J: 32, K: 0}, To: grid.Position{I: 0, J: 0, K: 2}},
 		{From: grid.Position{I: 10, J: 10, K: 0}, To: grid.Position{I: 0, J: 0, K: 3}},
-		{From: grid.Position{I: 9, J: 6, K: 0}, To: grid.Position{I: 0, J: 0, K: 4}},
+		// {From: grid.Position{I: 9, J: 6, K: 0}, To: grid.Position{I: 0, J: 0, K: 4}},
 
 		// from grid 1
 		{From: grid.Position{I: 4, J: 4, K: 1}, To: grid.Position{I: 0, J: 0, K: 2}},
@@ -40,21 +40,23 @@ func GridRewardMachine(episodes, horizon int, height, width, grids int) {
 		{From: grid.Position{I: 31, J: 23, K: 1}, To: grid.Position{I: 0, J: 0, K: 3}},
 		{From: grid.Position{I: 12, J: 32, K: 1}, To: grid.Position{I: 0, J: 0, K: 2}},
 		{From: grid.Position{I: 10, J: 10, K: 1}, To: grid.Position{I: 0, J: 0, K: 3}},
-		{From: grid.Position{I: 9, J: 6, K: 1}, To: grid.Position{I: 0, J: 0, K: 4}},
+		// {From: grid.Position{I: 9, J: 6, K: 1}, To: grid.Position{I: 0, J: 0, K: 4}},
 
 		// from grid 2
 		{From: grid.Position{I: 1, J: 5, K: 2}, To: grid.Position{I: 0, J: 0, K: 3}},
 		{From: grid.Position{I: 31, J: 23, K: 2}, To: grid.Position{I: 0, J: 0, K: 3}},
 		{From: grid.Position{I: 10, J: 10, K: 2}, To: grid.Position{I: 0, J: 0, K: 3}},
-		{From: grid.Position{I: 9, J: 6, K: 2}, To: grid.Position{I: 0, J: 0, K: 4}},
+		{From: grid.Position{I: 60, J: 60, K: 2}, To: grid.Position{I: 0, J: 0, K: 4}},
 
 		// from grid 3
-		{From: grid.Position{I: 9, J: 6, K: 3}, To: grid.Position{I: 0, J: 0, K: 4}},
+		{From: grid.Position{I: 60, J: 60, K: 3}, To: grid.Position{I: 0, J: 0, K: 4}},
 	}
 
 	rm := policies.NewRewardMachine(grid.ReachGrid(4))
 	// rm.On(grid.TakesDoor(doors[0]), policies.FinalState)
 	// rm.On(grid.ReachGrid(4), policies.FinalState)
+	rm.AddState(grid.ReachGrid(1), "Grid1")
+	rm.AddState(grid.ReachGrid(2), "Grid2")
 
 	c := types.NewComparison(grid.GridAnalyzer, grid.GridDepthComparator())
 
