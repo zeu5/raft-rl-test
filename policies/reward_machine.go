@@ -11,6 +11,8 @@ type RewardMachine struct {
 	states     []string
 }
 
+// TODO: traces maps ...
+// TODO: change policy for InitState to guided (no predicate)
 func NewRewardMachine(pred types.RewardFuncSingle) *RewardMachine {
 	rm := &RewardMachine{
 		predicates: make(map[string]types.RewardFuncSingle),
@@ -24,6 +26,7 @@ func NewRewardMachine(pred types.RewardFuncSingle) *RewardMachine {
 	return rm
 }
 
+// TODO: change states to not point to next states
 // add a new state in the reward machine, in the second last position (before final exploration), with predicate to go to 'to'?
 func (rm *RewardMachine) On(pred types.RewardFuncSingle, to string) *RewardMachine {
 	curState := rm.states[len(rm.states)-1]
