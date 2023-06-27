@@ -18,8 +18,8 @@ func PaxosRewardMachine(episodes, horizon int) {
 	commit := lpaxos.Commit()
 	allPredicates := []types.RewardFunc{commit}
 
-	rm := policies.NewRewardMachine()
-	rm.On(commit, "commit")
+	rm := policies.NewRewardMachine(nil)
+	// rm.On(commit, "commit")
 
 	c := types.NewComparison(policies.RewardMachineAnalyzer(allPredicates, lpaxos.PaxosStateAbstractor()), policies.RewardMachineCoverageComparator())
 	c.AddExperiment(types.NewExperiment(

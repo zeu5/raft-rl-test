@@ -52,9 +52,9 @@ func GridRewardMachine(episodes, horizon int, height, width, grids int) {
 		{From: grid.Position{I: 9, J: 6, K: 3}, To: grid.Position{I: 0, J: 0, K: 4}},
 	}
 
-	rm := policies.NewRewardMachine()
+	rm := policies.NewRewardMachine(grid.ReachGrid(4))
 	// rm.On(grid.TakesDoor(doors[0]), policies.FinalState)
-	rm.On(grid.ReachGrid(4), policies.FinalState)
+	// rm.On(grid.ReachGrid(4), policies.FinalState)
 
 	c := types.NewComparison(grid.GridAnalyzer, grid.GridDepthComparator())
 

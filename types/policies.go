@@ -24,18 +24,9 @@ type Policy interface {
 
 // Generic RM Policy interface
 type RmPolicy interface {
-	// Update at the end of the episode with the complete trace
-	UpdateIteration(int, *Trace)
-	// Policy should return the next action to take at a given state
-	// The second return param indicates if the policy did choose an action
-	NextAction(int, State, []Action) (Action, bool)
-	// Update called after each transition
-	Update(int, State, Action, State)
+	Policy
 	// Update with explicit reward flag, called after each transition
 	UpdateRm(int, State, Action, State, bool)
-	// Reset at the end of running all the episodes
-	// Used to invoke a cleanup of in memory resources
-	Reset()
 }
 
 // A fixed negative reward policy (-1) at all states

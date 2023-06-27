@@ -32,7 +32,7 @@ func PaxosReward(episodes, horizon int, saveFile string) {
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
-			Policy:      policies.NewGuidedPolicy(inPrepare, 0.2, 0.95, 0.02),
+			Policy:      policies.NewGuidedPolicy(nil, 0.2, 0.95, 0.02),
 			Environment: getLPaxosPartEnv(lPaxosConfig, true),
 		},
 	))

@@ -11,8 +11,12 @@ type RewardMachine struct {
 	states     []string
 }
 
-// TODO: traces maps ...
-// TODO: change policy for InitState to guided (no predicate)
+func TruePred() types.RewardFuncSingle {
+	return func(s types.State) bool {
+		return true
+	}
+}
+
 func NewRewardMachine(pred types.RewardFuncSingle) *RewardMachine {
 	rm := &RewardMachine{
 		predicates: make(map[string]types.RewardFuncSingle),
@@ -20,19 +24,31 @@ func NewRewardMachine(pred types.RewardFuncSingle) *RewardMachine {
 		states:     make([]string, 0),
 	}
 	rm.policies[FinalState] = NewBonusPolicyGreedy(0.1, 0.99, 0.02)
-	rm.policies[InitState] = NewBonusPolicyGreedy(0.1, 0.99, 0.02)
+	rm.policies[InitState] = NewGuidedPolicy(nil, 0.2, 0.95, 0.02)
 	rm.states = append(rm.states, InitState)
 	rm.states = append(rm.states, FinalState)
+
+	rm.predicates[InitState] = TruePred()
+	rm.predicates[FinalState] = pred
+
 	return rm
 }
 
 // TODO: change states to not point to next states
 // add a new state in the reward machine, in the second last position (before final exploration), with predicate to go to 'to'?
-func (rm *RewardMachine) On(pred types.RewardFuncSingle, to string) *RewardMachine {
-	curState := rm.states[len(rm.states)-1]
-	rm.predicates[curState] = pred
-	rm.policies[curState] = NewGuidedPolicy(pred, 0.2, 0.95, 0.02)
-	rm.states = append(rm.states, to)
+func (rm *RewardMachine) On(pred types.RewardFuncSingle, name string) *RewardMachine {
+	index := len(rm.states) - 1
+	rm.states = append(rm.states, rm.states[index]) // duplicate last element
+
+	// modify second-last element, insert the new state
+	rm.states[index] = name
+	rm.predicates[name] = pred
+	rm.policies[name] = NewGuidedPolicy(nil, 0.2, 0.95, 0.02)
+
+	// curState := rm.states[len(rm.states)-1]
+	// rm.predicates[curState] = pred
+	// rm.policies[curState] = NewGuidedPolicy(pred, 0.2, 0.95, 0.02)
+	// rm.states = append(rm.states, to)
 	return rm
 }
 
