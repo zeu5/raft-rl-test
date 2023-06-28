@@ -45,10 +45,6 @@ func (rm *RewardMachine) AddState(pred types.RewardFuncSingle, name string) *Rew
 	rm.predicates[name] = pred
 	rm.policies[name] = NewBonusPolicyGreedyReward(0.1, 0.99, 0.02)
 
-	// curState := rm.states[len(rm.states)-1]
-	// rm.predicates[curState] = pred
-	// rm.policies[curState] = NewGuidedPolicy(pred, 0.2, 0.95, 0.02)
-	// rm.states = append(rm.states, to)
 	return rm
 }
 

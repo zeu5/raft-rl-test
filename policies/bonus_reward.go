@@ -3,8 +3,9 @@ package policies
 import (
 	"time"
 
+	"math/rand"
+
 	"github.com/zeu5/raft-rl-test/types"
-	"golang.org/x/exp/rand"
 )
 
 type BonusPolicyGreedyReward struct {
@@ -13,7 +14,7 @@ type BonusPolicyGreedyReward struct {
 	discount float64
 	visits   *QTable
 	epsilon  float64
-	rand     rand.Rand
+	rand     *rand.Rand
 }
 
 var _ types.RmPolicy = &BonusPolicyGreedyReward{}
@@ -25,7 +26,7 @@ func NewBonusPolicyGreedyReward(alpha, discount, epsilon float64) *BonusPolicyGr
 		discount: discount,
 		visits:   NewQTable(),
 		epsilon:  epsilon,
-		rand:     *rand.New(rand.NewSource(uint64(time.Now().UnixNano()))),
+		rand:     rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
