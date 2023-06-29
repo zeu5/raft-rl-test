@@ -172,3 +172,10 @@ func RewardStateComparator() types.Comparator {
 		}
 	}
 }
+
+func PaxosStateAbstractor() types.StateAbstractor {
+	return func(s types.State) string {
+		ls := NewLPaxosGraphState(s)
+		return ls.Hash()
+	}
+}

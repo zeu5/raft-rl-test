@@ -23,3 +23,5 @@ type Action interface {
 	// Should be deterministic
 	Hash() string
 }
+
+type StateAbstractor func(State) string

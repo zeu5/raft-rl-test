@@ -7,7 +7,7 @@ import (
 	"github.com/zeu5/raft-rl-test/types"
 )
 
-func PaxosReward(episodes, horizon int, saveFile string) {
+func PaxosRewardMachine(episodes, horizon int) {
 	lPaxosConfig := lpaxos.LPaxosEnvConfig{
 		Replicas: 3,
 		Requests: requests,
@@ -16,8 +16,12 @@ func PaxosReward(episodes, horizon int, saveFile string) {
 	}
 
 	commit := lpaxos.Commit()
+	allPredicates := []types.RewardFunc{commit}
 
-	c := types.NewComparison(lpaxos.RewardStatesVisitedAnalyzer([]string{"commit"}, []types.RewardFunc{commit}, saveFile), lpaxos.RewardStateComparator())
+	rm := policies.NewRewardMachine(nil)
+	// rm.On(commit, "commit")
+
+	c := types.NewComparison(policies.RewardMachineAnalyzer(allPredicates, lpaxos.PaxosStateAbstractor()), policies.RewardMachineCoverageComparator())
 	c.AddExperiment(types.NewExperiment(
 		"Random-Part",
 		&types.AgentConfig{
@@ -28,36 +32,31 @@ func PaxosReward(episodes, horizon int, saveFile string) {
 		},
 	))
 	c.AddExperiment(types.NewExperiment(
-		"Biased-Policy",
+		"BonusMaxRL",
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
-			Policy:      policies.NewGuidedPolicy(nil, 0.2, 0.95, 0.02),
-			Environment: getLPaxosPartEnv(lPaxosConfig, true),
+			Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
+			Environment: getLPaxosEnv(lPaxosConfig, abstracter),
 		},
 	))
-
-	strictPolicy := policies.NewStrictPolicy(types.NewRandomPolicy())
-	strictPolicy.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
-
 	c.AddExperiment(types.NewExperiment(
-		"Strict-Policy",
+		"RewardMachine",
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
-			Policy:      strictPolicy,
+			Policy:      policies.NewRewardMachinePolicy(rm),
 			Environment: getLPaxosPartEnv(lPaxosConfig, true),
 		},
 	))
-
 	c.Run()
 }
 
-func PaxosRewardCommand() *cobra.Command {
+func PaxosRewardMachineCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use: "paxos-reward",
+		Use: "paxos-reward-rm",
 		Run: func(cmd *cobra.Command, args []string) {
-			PaxosReward(episodes, horizon, saveFile)
+			PaxosRewardMachine(episodes, horizon)
 		},
 	}
 	cmd.PersistentFlags().IntVarP(&requests, "requests", "r", 1, "Number of requests to run with")

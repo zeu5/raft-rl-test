@@ -1,0 +1,86 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run Grid reward machine",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "-e",
+                "100",
+                "grid-reward-rm",
+                "--height",
+                "40",
+                "--width",
+                "40",
+                "--grids",
+                "5"
+            ]
+        },
+        {
+            "name": "Run Grid exploration",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "-e",
+                "100",
+                "grid",
+                "--height",
+                "20",
+                "--width",
+                "20",
+                "--grids",
+                "3"
+            ]
+        },
+        {
+            "name": "Run paxos",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "-e",
+                "10",
+                "paxos"
+            ]
+        },
+        {
+            "name": "Graph analysis",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/visualize/analyze_graph.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "results/visit_graph_RL.json"
+            ]
+        },
+        {
+            "name": "Viz server",
+            "type": "python",
+            "request": "launch",
+            "module": "flask",
+            "cwd": "${workspaceFolder}/scripts/visualize",
+            "env": {
+                "FLASK_APP": "viz.py",
+                "FLASK_DEBUG": "1",
+                "GRAPH_PATH": "${workspaceFolder}/results"
+            },
+            "args": [
+                "run",
+                "--no-debugger",
+                "--no-reload"
+            ],
+            "jinja": true,
+            "justMyCode": true
+        }
+    ]
+}

@@ -1,6 +1,8 @@
 package grid
 
-import "github.com/zeu5/raft-rl-test/types"
+import (
+	"github.com/zeu5/raft-rl-test/types"
+)
 
 // func PosReached(i, j int) *types.Monitor {
 // 	monitor := types.NewMonitor()
@@ -19,12 +21,56 @@ import "github.com/zeu5/raft-rl-test/types"
 // 	}
 // }
 
-func InPosition(i, j int) types.RewardFunc {
+func InPosition(i, j, k int) types.RewardFunc {
 	return func(s1, s2 types.State) bool {
 		pos1, ok := s2.(*Position)
 		if !ok {
 			return false
 		}
-		return pos1.I == i && pos1.J == j
+		return pos1.I == i && pos1.J == j && pos1.K == k
+	}
+}
+
+func NextGrid(height, width int) types.RewardFunc {
+	return func(s1, s2 types.State) bool {
+		pos1, ok := s1.(*Position)
+		pos2, _ := s2.(*Position)
+		if !ok {
+			return false
+		}
+		return pos1.I == height-1 && pos1.J == width-1 && pos1.K+1 == pos2.K
+	}
+}
+
+func ToGrid(k int) types.RewardFunc {
+	return func(s1, s2 types.State) bool {
+		pos1, ok := s1.(*Position)
+		pos2, _ := s2.(*Position)
+		if !ok {
+			return false
+		}
+		return pos1.K != pos2.K && pos2.K == k
+	}
+}
+
+func TakesDoor(door Door) types.RewardFunc {
+	return func(s1, s2 types.State) bool {
+		pos1, ok := s1.(*Position)
+		pos2, _ := s2.(*Position)
+		if !ok {
+			return false
+		}
+		return pos1.Eq(door.From) && pos2.Eq(door.To)
+	}
+}
+
+func ReachGrid(num int) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		pos, ok := s.(*Position)
+		if !ok {
+			return false
+		}
+
+		return pos.K == num
 	}
 }

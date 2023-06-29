@@ -5,6 +5,7 @@ type Trace struct {
 	states     []State
 	actions    []Action
 	nextStates []State
+	rewards    []bool
 }
 
 func NewTrace() *Trace {
@@ -12,13 +13,30 @@ func NewTrace() *Trace {
 		states:     make([]State, 0),
 		actions:    make([]Action, 0),
 		nextStates: make([]State, 0),
+		rewards:    make([]bool, 0),
 	}
+}
+
+func (t *Trace) Slice(from, to int) *Trace {
+	slicedTrace := NewTrace()
+	for i := from; i < to; i++ {
+		slicedTrace.AppendWithReward(i-from, t.states[i], t.actions[i], t.nextStates[i], t.rewards[i])
+	}
+	return slicedTrace
 }
 
 func (t *Trace) Append(step int, state State, action Action, nextState State) {
 	t.states = append(t.states, state)
 	t.actions = append(t.actions, action)
 	t.nextStates = append(t.nextStates, nextState)
+	t.rewards = append(t.rewards, false)
+}
+
+func (t *Trace) AppendWithReward(step int, state State, action Action, nextState State, reward bool) {
+	t.states = append(t.states, state)
+	t.actions = append(t.actions, action)
+	t.nextStates = append(t.nextStates, nextState)
+	t.rewards = append(t.rewards, reward)
 }
 
 func (t *Trace) Len() int {
@@ -30,6 +48,13 @@ func (t *Trace) Get(i int) (State, Action, State, bool) {
 		return nil, nil, nil, false
 	}
 	return t.states[i], t.actions[i], t.nextStates[i], true
+}
+
+func (t *Trace) GetWithReward(i int) (State, Action, State, bool, bool) {
+	if i >= len(t.states) {
+		return nil, nil, nil, false, false
+	}
+	return t.states[i], t.actions[i], t.nextStates[i], t.rewards[i], true
 }
 
 func (t *Trace) Last() (State, Action, State, bool) {
@@ -48,5 +73,6 @@ func (t *Trace) GetPrefix(i int) (*Trace, bool) {
 		states:     t.states[0:i],
 		actions:    t.actions[0:i],
 		nextStates: t.nextStates[0:i],
+		rewards:    t.rewards[0:i],
 	}, true
 }

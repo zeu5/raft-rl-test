@@ -22,6 +22,13 @@ type Policy interface {
 	Reset()
 }
 
+// Generic RM Policy interface
+type RmPolicy interface {
+	Policy
+	// Update with explicit reward flag, called after each transition
+	UpdateRm(int, State, Action, State, bool)
+}
+
 // A fixed negative reward policy (-1) at all states
 // The next action is chosen according to the softmax function
 // With a temperature

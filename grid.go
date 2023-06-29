@@ -7,11 +7,9 @@ import (
 	"github.com/zeu5/raft-rl-test/types"
 )
 
-func GridReward(episodes, horizon int, saveFile string) {
+func GridReward(episodes, horizon int, saveFile string, height, width, grids int) {
 
-	inPosition := grid.InPosition(3, 4)
-
-	c := types.NewComparison(grid.GridAnalyzer, grid.GridPositionComparator(3, 4))
+	c := types.NewComparison(grid.GridAnalyzer, grid.GridDepthComparator())
 
 	c.AddExperiment(types.NewExperiment(
 		"Random-Part",
@@ -19,16 +17,16 @@ func GridReward(episodes, horizon int, saveFile string) {
 			Episodes:    episodes,
 			Horizon:     horizon,
 			Policy:      types.NewRandomPolicy(),
-			Environment: grid.NewGridEnvironment(5, 5),
+			Environment: grid.NewGridEnvironment(height, width, grids),
 		},
 	))
 	c.AddExperiment(types.NewExperiment(
-		"Biased-Policy",
+		"Exploration-Policy",
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
-			Policy:      policies.NewGuidedPolicy([]types.RewardFunc{inPosition}, 0.3, 0.95, 0.1),
-			Environment: grid.NewGridEnvironment(5, 5),
+			Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.02),
+			Environment: grid.NewGridEnvironment(height, width, grids),
 		},
 	))
 
@@ -36,11 +34,18 @@ func GridReward(episodes, horizon int, saveFile string) {
 }
 
 func GridRewardCommand() *cobra.Command {
+	var height int
+	var width int
+	var grids int
+
 	cmd := &cobra.Command{
-		Use: "grid-reward",
+		Use: "grid",
 		Run: func(cmd *cobra.Command, args []string) {
-			GridReward(episodes, horizon, saveFile)
+			GridReward(episodes, horizon, saveFile, height, width, grids)
 		},
 	}
+	cmd.PersistentFlags().IntVar(&height, "height", 5, "Height of each grid")
+	cmd.PersistentFlags().IntVar(&width, "width", 5, "Width of each grid")
+	cmd.PersistentFlags().IntVar(&grids, "grids", 2, "Number of grids")
 	return cmd
 }
