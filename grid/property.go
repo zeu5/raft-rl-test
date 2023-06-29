@@ -74,3 +74,69 @@ func ReachGrid(num int) types.RewardFuncSingle {
 		return pos.K == num
 	}
 }
+
+func GridAndPos_23_20() types.RewardFuncSingle {
+	return func(s types.State) bool {
+		pos, ok := s.(*Position)
+		if !ok {
+			return false
+		}
+
+		return (pos.K == 2 || pos.K == 3) && pos.I >= 20 && pos.J >= 20
+	}
+}
+
+func GridAndPos_23_30() types.RewardFuncSingle {
+	return func(s types.State) bool {
+		pos, ok := s.(*Position)
+		if !ok {
+			return false
+		}
+
+		return (pos.K == 2 || pos.K == 3) && pos.I >= 30 && pos.J >= 30
+	}
+}
+
+func GridAndPos_23_40() types.RewardFuncSingle {
+	return func(s types.State) bool {
+		pos, ok := s.(*Position)
+		if !ok {
+			return false
+		}
+
+		return (pos.K == 2 || pos.K == 3) && pos.I >= 40 && pos.J >= 40
+	}
+}
+
+func GridAndPos_23_50() types.RewardFuncSingle {
+	return func(s types.State) bool {
+		pos, ok := s.(*Position)
+		if !ok {
+			return false
+		}
+
+		return (pos.K == 2 || pos.K == 3) && pos.I >= 50 && pos.J >= 50
+	}
+}
+
+func GridAndPos_1_2() types.RewardFuncSingle {
+	return func(s types.State) bool {
+		pos, ok := s.(*Position)
+		if !ok {
+			return false
+		}
+
+		return pos.K == 1 && pos.I >= 2 && pos.J >= 2
+	}
+}
+
+func GridAndPos_1_4() types.RewardFuncSingle {
+	return func(s types.State) bool {
+		pos, ok := s.(*Position)
+		if !ok {
+			return false
+		}
+
+		return pos.K == 1 && pos.I >= 4 && pos.J >= 4
+	}
+}

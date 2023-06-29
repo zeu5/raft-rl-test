@@ -23,8 +23,8 @@ func NewRewardMachine(pred types.RewardFuncSingle) *RewardMachine {
 		policies:   make(map[string]types.RmPolicy),
 		states:     make([]string, 0),
 	}
-	rm.policies[FinalState] = NewBonusPolicyGreedy(0.1, 0.99, 0.02)
-	rm.policies[InitState] = NewBonusPolicyGreedyReward(0.1, 0.99, 0.02)
+	rm.policies[FinalState] = NewBonusPolicyGreedy(0.1, 0.99, 0.05)
+	rm.policies[InitState] = NewBonusPolicyGreedyReward(0.1, 0.99, 0.05)
 	rm.states = append(rm.states, InitState)
 	rm.states = append(rm.states, FinalState)
 
@@ -43,7 +43,7 @@ func (rm *RewardMachine) AddState(pred types.RewardFuncSingle, name string) *Rew
 	// modify second-last element, insert the new state
 	rm.states[index] = name
 	rm.predicates[name] = pred
-	rm.policies[name] = NewBonusPolicyGreedyReward(0.1, 0.99, 0.02)
+	rm.policies[name] = NewBonusPolicyGreedyReward(0.1, 0.99, 0.05)
 
 	return rm
 }
@@ -120,6 +120,7 @@ func (rp *RewardMachinePolicy) Update(step int, state types.State, action types.
 	curRmStatePos := rp.curRmStatePos
 	curRmState := rp.curRMState
 	reward := false
+	out_of_space := false
 
 	for i := len(rp.rm.states) - 1; i >= 0; i-- { // for all rm_states starting from the last
 		rmState := rp.rm.states[i]
@@ -128,6 +129,11 @@ func (rp *RewardMachinePolicy) Update(step int, state types.State, action types.
 			if i > curRmStatePos {
 				reward = true
 			}
+
+			if i != rp.curRmStatePos {
+				out_of_space = true
+			}
+
 			rp.curRMState = rmState // change current state of the rm
 			rp.curRmStatePos = i    // and index
 			break
@@ -139,7 +145,7 @@ func (rp *RewardMachinePolicy) Update(step int, state types.State, action types.
 	rp.curTraceSegments[curRmState].AppendWithReward(step, state, action, nextState, reward)
 
 	// NEED TO ADD INFO IF RM TRANSITIONED... THAT IS THE REWARD TRUE => 1, FALSE => 0
-	curPolicy.UpdateRm(step, state, action, nextState, reward) // call the single step update function on the current policy (followed to take the step)
+	curPolicy.UpdateRm(step, state, action, nextState, reward, out_of_space) // call the single step update function on the current policy (followed to take the step)
 }
 
 func (rp *RewardMachinePolicy) Reset() {

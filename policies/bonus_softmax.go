@@ -16,12 +16,12 @@ type BonusPolicySoftMax struct {
 	normalize   bool
 }
 
-func NewBonusPolicySoftMax(alpha, discount float64, temperature float64, normalize bool) *BonusPolicySoftMax {
+func NewBonusPolicySoftMax(alpha, discount float64, temperature float64) *BonusPolicySoftMax {
 	return &BonusPolicySoftMax{
 		BonusPolicyGreedy: NewBonusPolicyGreedy(alpha, discount, 0),
 		temperature:       temperature,
 		rand:              rand.NewSource(uint64(time.Now().UnixNano())),
-		normalize:         normalize,
+		normalize:         true,
 	}
 }
 
@@ -36,16 +36,28 @@ func (b *BonusPolicySoftMax) NextAction(step int, state types.State, actions []t
 	}
 	if b.normalize {
 		minVal := float64(math.MaxInt)
+		maxVal := float64(math.MinInt)
 		for _, val := range vals {
 			if val < minVal {
 				minVal = val
+			}
+			if val > maxVal {
+				maxVal = val
+			}
+		}
+
+		if maxVal == minVal { // avoid div by 0 when all values are equal
+			minVal = 0
+			if maxVal == 0 {
+				maxVal = 1
 			}
 		}
 
 		maxNewVal := float64(math.MinInt)
 		newVals := make([]float64, len(vals))
 		for i, val := range vals {
-			newVals[i] = val / minVal
+			newVals[i] = ((val - minVal) / (maxVal - minVal)) * b.temperature
+			// newVals[i] = (val / minVal) * b.temperature
 			if newVals[i] > maxNewVal {
 				maxNewVal = newVals[i]
 			}

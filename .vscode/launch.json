@@ -12,14 +12,16 @@
             "program": "${workspaceFolder}",
             "args": [
                 "-e",
-                "100",
+                "1000",
                 "grid-reward-rm",
                 "--height",
-                "40",
+                "6",
                 "--width",
-                "40",
+                "6",
                 "--grids",
-                "5"
+                "5",
+                "--horizon",
+                "50"
             ]
         },
         {

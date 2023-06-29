@@ -26,7 +26,7 @@ type Policy interface {
 type RmPolicy interface {
 	Policy
 	// Update with explicit reward flag, called after each transition
-	UpdateRm(int, State, Action, State, bool)
+	UpdateRm(int, State, Action, State, bool, bool)
 }
 
 // A fixed negative reward policy (-1) at all states

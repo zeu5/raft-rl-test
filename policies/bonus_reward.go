@@ -70,11 +70,12 @@ func (b *BonusPolicyGreedyReward) Update(step int, state types.State, action typ
 	b.qTable.Set(stateHash, actionHash, newVal)
 }
 
-func (b *BonusPolicyGreedyReward) UpdateRm(step int, state types.State, action types.Action, nextState types.State, rwd bool) {
+func (b *BonusPolicyGreedyReward) UpdateRm(step int, state types.State, action types.Action, nextState types.State, rwd bool, out_of_space bool) {
 	stateHash := state.Hash()
 	actionHash := action.Hash()
 	nextStateHash := nextState.Hash()
 	var r float64
+	var nextStateVal float64
 
 	t := b.visits.Get(stateHash, actionHash, 0) + 1
 	b.visits.Set(stateHash, actionHash, t)
@@ -85,7 +86,12 @@ func (b *BonusPolicyGreedyReward) UpdateRm(step int, state types.State, action t
 		r = 1 / t
 	}
 
-	_, nextStateVal := b.qTable.Max(nextStateHash, 1)
+	if out_of_space {
+		_, nextStateVal = b.qTable.Max(nextStateHash, 0)
+	} else {
+		_, nextStateVal = b.qTable.Max(nextStateHash, 1) // if you end out of the rm_state, value is always 1
+	}
+
 	curVal := b.qTable.Get(stateHash, actionHash, 1)
 
 	newVal := (1-b.alpha)*curVal + b.alpha*max(r, b.discount*nextStateVal)

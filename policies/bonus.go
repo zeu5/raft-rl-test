@@ -69,7 +69,7 @@ func (b *BonusPolicyGreedy) Update(step int, state types.State, action types.Act
 	b.qTable.Set(stateHash, actionHash, newVal)
 }
 
-func (b *BonusPolicyGreedy) UpdateRm(step int, state types.State, action types.Action, nextState types.State, rwd bool) {
+func (b *BonusPolicyGreedy) UpdateRm(step int, state types.State, action types.Action, nextState types.State, rwd bool, oos bool) {
 	stateHash := state.Hash()
 	actionHash := action.Hash()
 	nextStateHash := nextState.Hash()
