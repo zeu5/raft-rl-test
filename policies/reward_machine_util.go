@@ -64,3 +64,43 @@ func RewardMachineCoverageComparator() types.Comparator {
 		}
 	}
 }
+
+type predicatesDataset struct {
+	predicates map[int]int
+}
+
+func PredicatesAnalyzer(predicates ...types.RewardFuncSingle) types.Analyzer {
+	return func(s string, traces []*types.Trace) types.DataSet {
+		d := &predicatesDataset{
+			predicates: make(map[int]int),
+		}
+		for _, t := range traces {
+			for i := 0; i < t.Len(); i++ {
+				s, _, _, _ := t.Get(i)
+				for j, p := range predicates {
+					if p(s) {
+						count, ok := d.predicates[j]
+						if !ok {
+							d.predicates[j] = 0
+							count = 0
+						}
+						d.predicates[j] = count + 1
+					}
+				}
+			}
+		}
+		return d
+	}
+}
+
+func PredicatesComparator() types.Comparator {
+	return func(s []string, ds []types.DataSet) {
+		for i := 0; i < len(s); i++ {
+			fmt.Printf("For experiment: %s\n", s[i])
+			pDS := ds[i].(*predicatesDataset)
+			for s, count := range pDS.predicates {
+				fmt.Printf("\tPredicate: %d, num of times satisfied: %d", s, count)
+			}
+		}
+	}
+}

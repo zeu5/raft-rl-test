@@ -12,7 +12,10 @@ import (
 )
 
 // Color of each replica
-type Color int
+type Color interface {
+	Hash() string
+	Copy() Color
+}
 
 // Accepts a replica state and colors it
 type Painter interface {
@@ -66,6 +69,8 @@ type Partition struct {
 	Partition [][]Color
 }
 
+var _ State = &Partition{}
+
 // Action to transition to a corresponding partition
 type CreatePartitionAction struct {
 	Partition [][]Color
@@ -91,7 +96,9 @@ func (p PartitionSlice) Less(i, j int) bool {
 	}
 	less := false
 	for k := 0; k < len(p[j]); k++ {
-		if int(p[i][k]) < int(p[j][k]) {
+		one := p[i][k].Hash()
+		two := p[j][k].Hash()
+		if one < two {
 			less = true
 			break
 		}
@@ -107,7 +114,9 @@ type ColorSlice []Color
 
 func (c ColorSlice) Len() int { return len(c) }
 func (c ColorSlice) Less(i, j int) bool {
-	return int(c[i]) < int(c[j])
+	one := c[i].Hash()
+	two := c[j].Hash()
+	return one < two
 }
 func (c ColorSlice) Swap(i, j int) {
 	c[i], c[j] = c[j], c[i]
@@ -124,8 +133,11 @@ func (c *CreatePartitionAction) Hash() string {
 // Additionally an action to not do anything
 func (p *Partition) Actions() []Action {
 	colorElems := make([]util.Elem, 0)
+	colorsHash := make(map[string]Color)
 	for _, c := range p.ReplicaColors {
-		colorElems = append(colorElems, util.IntElem(int(c)))
+		hash := c.Hash()
+		colorsHash[hash] = c
+		colorElems = append(colorElems, util.StringElem(hash))
 	}
 	partitionActions := make([]Action, 0)
 	partitionActions = append(partitionActions, &KeepSamePartitionAction{})
@@ -134,7 +146,8 @@ func (p *Partition) Actions() []Action {
 		for i, ps := range p {
 			partition[i] = make([]Color, len(ps))
 			for j, c := range ps {
-				partition[i][j] = Color(int(c.(util.IntElem)))
+				hash := string(c.(util.StringElem))
+				partition[i][j] = colorsHash[hash]
 			}
 		}
 		partitionActions = append(partitionActions, &CreatePartitionAction{Partition: partition})
@@ -143,7 +156,14 @@ func (p *Partition) Actions() []Action {
 }
 
 func (p *Partition) Hash() string {
-	bs, _ := json.Marshal(p.Partition)
+	partition := make([][]string, len(p.Partition))
+	for i, par := range p.Partition {
+		partition[i] = make([]string, len(par))
+		for j, color := range par {
+			partition[i][j] = color.Hash()
+		}
+	}
+	bs, _ := json.Marshal(partition)
 	hash := sha256.Sum256(bs)
 	return hex.EncodeToString(hash[:])
 }
@@ -159,7 +179,7 @@ func copyPartition(p *Partition) *Partition {
 		PartitionMap:  make(map[uint64]int),
 	}
 	for i, s := range p.ReplicaColors {
-		n.ReplicaColors[i] = Color(int(s))
+		n.ReplicaColors[i] = s.Copy()
 	}
 	for i, s := range p.ReplicaStates {
 		n.ReplicaStates[i] = s
@@ -170,7 +190,7 @@ func copyPartition(p *Partition) *Partition {
 	for i, par := range p.Partition {
 		n.Partition[i] = make([]Color, len(par))
 		for j, col := range par {
-			n.Partition[i][j] = Color(int(col))
+			n.Partition[i][j] = col.Copy()
 		}
 	}
 	return n
@@ -265,19 +285,21 @@ func (p *PartitionEnv) Step(a Action) State {
 		ca, _ := a.(*CreatePartitionAction)
 
 		// 1. Change partition
-		coloredReplicas := make(map[int][]uint64)
+		coloredReplicas := make(map[string][]uint64)
 		for r, c := range p.curPartition.ReplicaColors {
-			if _, ok := coloredReplicas[int(c)]; !ok {
-				coloredReplicas[int(c)] = make([]uint64, 0)
+			cHash := c.Hash()
+			if _, ok := coloredReplicas[cHash]; !ok {
+				coloredReplicas[cHash] = make([]uint64, 0)
 			}
-			coloredReplicas[int(c)] = append(coloredReplicas[int(c)], r)
+			coloredReplicas[cHash] = append(coloredReplicas[cHash], r)
 		}
 		newPartition = make([][]uint64, len(ca.Partition))
 		for i, p := range ca.Partition {
 			newPartition[i] = make([]uint64, len(p))
 			for j, c := range p {
-				nextReplica := coloredReplicas[int(c)][0]
-				coloredReplicas[int(c)] = coloredReplicas[int(c)][1:]
+				cHash := c.Hash()
+				nextReplica := coloredReplicas[cHash][0]
+				coloredReplicas[cHash] = coloredReplicas[cHash][1:]
 				newPartition[i][j] = nextReplica
 				newPartitionMap[nextReplica] = i
 			}

@@ -2,17 +2,13 @@ package lpaxos
 
 import "github.com/zeu5/raft-rl-test/types"
 
-// TODO: define some basic properties to bias exploration
-// Benchmark between different environments for same algorithm
-// Basic property - check if a process moved to propose phase
-
-func InPhase(step Step) types.RewardFunc {
-	return func(s types.State, _ types.State) bool {
+func InPhase(step Step) types.RewardFuncSingle {
+	return func(s types.State) bool {
 		pS, ok := s.(*types.Partition)
-		// nS, _ := ns.(*types.Partition)
 		if ok {
-			for _, c := range pS.ReplicaColors {
-				if int(c) == int(step) {
+			for _, c := range pS.ReplicaStates {
+				lC := c.(LNodeState)
+				if ok && int(lC.Step) == int(step) {
 					return true
 				}
 			}
@@ -55,6 +51,40 @@ func Commit() types.RewardFunc {
 					return true
 				}
 			}
+		}
+		return false
+	}
+}
+
+func Decided() types.RewardFuncSingle {
+	return func(s types.State) bool {
+		pS, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+		for _, rs := range pS.ReplicaStates {
+			decided := rs.(LNodeState).Decided
+			if decided > 0 {
+				return true
+			}
+		}
+		return false
+	}
+}
+
+func OnlyMajorityDecidedOne() types.RewardFuncSingle {
+	return func(s types.State) bool {
+		pS, ok := s.(*types.Partition)
+		if ok {
+			numReplicas := len(pS.ReplicaColors)
+			numDecided := 0
+			for _, rs := range pS.ReplicaStates {
+				decided := rs.(LNodeState).Decided
+				if decided > 0 {
+					numDecided += 1
+				}
+			}
+			return numDecided == numReplicas/2+1
 		}
 		return false
 	}

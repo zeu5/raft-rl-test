@@ -1,6 +1,10 @@
 package raft
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+
 	"github.com/zeu5/raft-rl-test/types"
 	"go.etcd.io/raft/v3"
 	pb "go.etcd.io/raft/v3/raftpb"
@@ -8,12 +12,49 @@ import (
 
 var _ types.ReplicaState = raft.Status{}
 
+type RaftPartitionColor struct {
+	Params map[string]interface{}
+}
+
+var _ types.Color = &RaftPartitionColor{}
+
+func (r *RaftPartitionColor) Hash() string {
+	bs, _ := json.Marshal(r.Params)
+	hash := sha256.Sum256(bs)
+	return hex.EncodeToString(hash[:])
+}
+
+func (r *RaftPartitionColor) Copy() types.Color {
+	new := &RaftPartitionColor{
+		Params: make(map[string]interface{}),
+	}
+	for k, v := range r.Params {
+		new.Params[k] = v
+	}
+	return new
+}
+
 type RaftStatePainter struct {
+	paramFuncs []func(types.ReplicaState) (string, interface{})
+}
+
+func NewRaftStatePainter(paramFuncs ...func(types.ReplicaState) (string, interface{})) *RaftStatePainter {
+	return &RaftStatePainter{
+		paramFuncs: paramFuncs,
+	}
 }
 
 func (p *RaftStatePainter) Color(s types.ReplicaState) types.Color {
 	rs := s.(raft.Status)
-	return types.Color(rs.RaftState)
+	c := &RaftPartitionColor{
+		Params: make(map[string]interface{}),
+	}
+
+	for _, p := range p.paramFuncs {
+		k, v := p(rs)
+		c.Params[k] = v
+	}
+	return c
 }
 
 var _ types.Painter = &RaftStatePainter{}

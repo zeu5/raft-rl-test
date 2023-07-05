@@ -15,13 +15,11 @@ func PaxosRewardMachine(episodes, horizon int) {
 		Timeouts: timeouts,
 	}
 
-	commit := lpaxos.Commit()
-	allPredicates := []types.RewardFunc{commit}
+	decided := lpaxos.Decided()
 
-	rm := policies.NewRewardMachine(nil)
-	// rm.On(commit, "commit")
+	rm := policies.NewRewardMachine(decided)
 
-	c := types.NewComparison(policies.RewardMachineAnalyzer(allPredicates, lpaxos.PaxosStateAbstractor()), policies.RewardMachineCoverageComparator())
+	c := types.NewComparison(policies.PredicatesAnalyzer(decided), policies.PredicatesComparator())
 	c.AddExperiment(types.NewExperiment(
 		"Random-Part",
 		&types.AgentConfig{
@@ -32,12 +30,12 @@ func PaxosRewardMachine(episodes, horizon int) {
 		},
 	))
 	c.AddExperiment(types.NewExperiment(
-		"BonusMaxRL",
+		"Exploration",
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
 			Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
-			Environment: getLPaxosEnv(lPaxosConfig, abstracter),
+			Environment: getLPaxosPartEnv(lPaxosConfig, true),
 		},
 	))
 	c.AddExperiment(types.NewExperiment(

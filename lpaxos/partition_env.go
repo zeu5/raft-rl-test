@@ -1,15 +1,53 @@
 package lpaxos
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+
 	"github.com/zeu5/raft-rl-test/types"
 )
 
+type LNodeStateColor struct {
+	Params map[string]interface{}
+}
+
+func (c LNodeStateColor) Hash() string {
+	bs, _ := json.Marshal(c.Params)
+	hash := sha256.Sum256(bs)
+	return hex.EncodeToString(hash[:])
+}
+
+func (c LNodeStateColor) Copy() types.Color {
+	new := LNodeStateColor{
+		Params: make(map[string]interface{}),
+	}
+	for k, v := range c.Params {
+		new.Params[k] = v
+	}
+	return new
+}
+
 type LNodeStatePainter struct {
+	paramFuncs []func(LNodeState) (string, interface{})
+}
+
+func NewLNodeStatePainter(paramfunc ...func(LNodeState) (string, interface{})) *LNodeStatePainter {
+	return &LNodeStatePainter{
+		paramFuncs: paramfunc,
+	}
 }
 
 func (l *LNodeStatePainter) Color(s types.ReplicaState) types.Color {
 	ls := s.(LNodeState)
-	return types.Color(int(ls.Step))
+	color := LNodeStateColor{
+		Params: make(map[string]interface{}),
+	}
+	for _, pf := range l.paramFuncs {
+		key, value := pf(ls)
+		color.Params[key] = value
+	}
+	return color
 }
 
 var _ types.Painter = &LNodeStatePainter{}
