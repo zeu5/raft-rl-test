@@ -24,8 +24,8 @@ func GridRewardMachine(episodes, horizon int, height, width, grids int) {
 	doors := []grid.Door{
 		// from grid 0
 		{From: grid.Position{I: 2, J: 3, K: 0}, To: grid.Position{I: 0, J: 0, K: 1}},
-		{From: grid.Position{I: 4, J: 4, K: 0}, To: grid.Position{I: 0, J: 0, K: 2}},
-		{From: grid.Position{I: 1, J: 5, K: 0}, To: grid.Position{I: 0, J: 0, K: 3}},
+		// {From: grid.Position{I: 4, J: 4, K: 0}, To: grid.Position{I: 0, J: 0, K: 2}},
+		// {From: grid.Position{I: 5, J: 5, K: 0}, To: grid.Position{I: 0, J: 0, K: 3}},
 		{From: grid.Position{I: 16, J: 22, K: 0}, To: grid.Position{I: 0, J: 0, K: 2}},
 		{From: grid.Position{I: 31, J: 23, K: 0}, To: grid.Position{I: 0, J: 0, K: 3}},
 		{From: grid.Position{I: 26, J: 5, K: 0}, To: grid.Position{I: 0, J: 0, K: 1}},
@@ -34,8 +34,8 @@ func GridRewardMachine(episodes, horizon int, height, width, grids int) {
 		// {From: grid.Position{I: 9, J: 6, K: 0}, To: grid.Position{I: 0, J: 0, K: 4}},
 
 		// from grid 1
-		{From: grid.Position{I: 4, J: 4, K: 1}, To: grid.Position{I: 0, J: 0, K: 2}},
-		{From: grid.Position{I: 1, J: 5, K: 1}, To: grid.Position{I: 0, J: 0, K: 3}},
+		{From: grid.Position{I: 5, J: 5, K: 1}, To: grid.Position{I: 0, J: 0, K: 2}},
+		// {From: grid.Position{I: 1, J: 5, K: 1}, To: grid.Position{I: 0, J: 0, K: 3}},
 		{From: grid.Position{I: 16, J: 22, K: 1}, To: grid.Position{I: 0, J: 0, K: 2}},
 		{From: grid.Position{I: 31, J: 23, K: 1}, To: grid.Position{I: 0, J: 0, K: 3}},
 		{From: grid.Position{I: 12, J: 32, K: 1}, To: grid.Position{I: 0, J: 0, K: 2}},
@@ -56,7 +56,13 @@ func GridRewardMachine(episodes, horizon int, height, width, grids int) {
 	// rm.On(grid.TakesDoor(doors[0]), policies.FinalState)
 	// rm.On(grid.ReachGrid(4), policies.FinalState)
 	rm.AddState(grid.ReachGrid(1), "Grid1")
+	// rm.AddState(grid.GridAndPos_1_2(), "Grid01_2")
+	// rm.AddState(grid.GridAndPos_1_4(), "Grid01_4")
 	rm.AddState(grid.ReachGrid(2), "Grid2")
+	rm.AddState(grid.GridAndPos_23_20(), "Grid23_20")
+	rm.AddState(grid.GridAndPos_23_30(), "Grid23_30")
+	rm.AddState(grid.GridAndPos_23_40(), "Grid23_40")
+	rm.AddState(grid.GridAndPos_23_50(), "Grid23_50")
 
 	c := types.NewComparison(grid.GridAnalyzer, grid.GridDepthComparator())
 
@@ -74,10 +80,19 @@ func GridRewardMachine(episodes, horizon int, height, width, grids int) {
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
-			Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
+			Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.05),
 			Environment: grid.NewGridEnvironment(height, width, grids, doors...),
 		},
 	))
+	// c.AddExperiment(types.NewExperiment(
+	// 	"Exploration-Softmax",
+	// 	&types.AgentConfig{
+	// 		Episodes:    episodes,
+	// 		Horizon:     horizon,
+	// 		Policy:      policies.NewBonusPolicySoftMax(0.1, 0.99, 10000.0),
+	// 		Environment: grid.NewGridEnvironment(height, width, grids, doors...),
+	// 	},
+	// ))
 	c.AddExperiment(types.NewExperiment(
 		"Reward-Machine",
 		&types.AgentConfig{

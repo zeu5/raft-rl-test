@@ -77,7 +77,7 @@ func (g *GuidedPolicy) Update(step int, state types.State, action types.Action, 
 	g.qTable.Set(stateHash, actionKey, nextVal)
 }
 
-func (g *GuidedPolicy) UpdateRm(step int, state types.State, action types.Action, nextState types.State, rwd bool) {
+func (g *GuidedPolicy) UpdateRm(step int, state types.State, action types.Action, nextState types.State, rwd bool, oos bool) {
 	reward := 0
 	if rwd {
 		reward = 1
