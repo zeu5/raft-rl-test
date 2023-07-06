@@ -13,6 +13,24 @@ type RewardFunc func(State, State) bool
 // Currently defined on a transition (pair of states)
 type RewardFuncSingle func(State) bool
 
+func (r RewardFuncSingle) And(other RewardFuncSingle) RewardFuncSingle {
+	return func(s State) bool {
+		return r(s) && other(s)
+	}
+}
+
+func (r RewardFuncSingle) Or(other RewardFuncSingle) RewardFuncSingle {
+	return func(s State) bool {
+		return r(s) || other(s)
+	}
+}
+
+func (r RewardFuncSingle) Not() RewardFuncSingle {
+	return func(s State) bool {
+		return !r(s)
+	}
+}
+
 // MonitorState is a state in the state machine (Monitor)
 // Use MonitorBuilder to create monitor states (do not instantiate directly)
 type MonitorState struct {

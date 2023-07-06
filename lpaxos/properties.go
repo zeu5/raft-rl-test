@@ -114,3 +114,18 @@ func OnlyMajorityDecidedOne() types.RewardFuncSingle {
 		return false
 	}
 }
+
+func EmptyLogLeader() types.RewardFuncSingle {
+	return func(s types.State) bool {
+		pS, ok := s.(*types.Partition)
+		if ok {
+			for id, rs := range pS.ReplicaStates {
+				lS := rs.(LNodeState)
+				if lS.Leader == id && lS.Log.Size() == 0 {
+					return true
+				}
+			}
+		}
+		return false
+	}
+}

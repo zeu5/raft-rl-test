@@ -1,6 +1,8 @@
 package policies
 
-import "github.com/zeu5/raft-rl-test/types"
+import (
+	"github.com/zeu5/raft-rl-test/types"
+)
 
 var InitState string = "Init"
 var FinalState string = "Final"
