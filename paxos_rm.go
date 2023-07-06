@@ -15,11 +15,16 @@ func PaxosRewardMachine(episodes, horizon int) {
 		Timeouts: timeouts,
 	}
 
-	decided := lpaxos.Decided()
+	// decided := lpaxos.Decided()
+	// inPhase := lpaxos.InPhase(3)
+	inStep := lpaxos.InStep(lpaxos.StepPromise)
+	// onlyMajorityDecided := lpaxos.OnlyMajorityDecidedOne()
 
-	rm := policies.NewRewardMachine(decided)
+	rm := policies.NewRewardMachine(inStep)
 
-	c := types.NewComparison(policies.PredicatesAnalyzer(decided), policies.PredicatesComparator())
+	// c := types.NewComparison(lpaxos.BugAnalyzer(lpaxos.SafetyBug()), lpaxos.BugComparator())
+	// c := types.NewComparison(policies.PredicatesAnalyzer(decided), policies.PredicatesComparator())
+	c := types.NewComparison(lpaxos.LPaxosAnalyzer(saveFile), lpaxos.LPaxosComparator(saveFile))
 	c.AddExperiment(types.NewExperiment(
 		"Random-Part",
 		&types.AgentConfig{
@@ -29,6 +34,19 @@ func PaxosRewardMachine(episodes, horizon int) {
 			Environment: getLPaxosPartEnv(lPaxosConfig, true),
 		},
 	))
+
+	strictPolicy := policies.NewStrictPolicy(types.NewRandomPolicy())
+	strictPolicy.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
+	c.AddExperiment(types.NewExperiment(
+		"Strict",
+		&types.AgentConfig{
+			Episodes:    episodes,
+			Horizon:     horizon,
+			Policy:      strictPolicy,
+			Environment: getLPaxosPartEnv(lPaxosConfig, true),
+		},
+	))
+
 	c.AddExperiment(types.NewExperiment(
 		"Exploration",
 		&types.AgentConfig{

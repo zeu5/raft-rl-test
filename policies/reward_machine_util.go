@@ -99,7 +99,7 @@ func PredicatesComparator() types.Comparator {
 			fmt.Printf("For experiment: %s\n", s[i])
 			pDS := ds[i].(*predicatesDataset)
 			for s, count := range pDS.predicates {
-				fmt.Printf("\tPredicate: %d, num of times satisfied: %d", s, count)
+				fmt.Printf("\tPredicate: %d, num of times satisfied: %d\n", s, count)
 			}
 		}
 	}

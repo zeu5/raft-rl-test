@@ -56,7 +56,7 @@ func Paxos(episodes, horizon int, saveFile string) {
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
-			Policy:      policies.NewBonusPolicySoftMax(0.1, 0.99, 0.01, true),
+			Policy:      policies.NewBonusPolicySoftMax(0.1, 0.99, 0.01),
 			Environment: getLPaxosEnv(lPaxosConfig, abstracter),
 		},
 	))

@@ -78,6 +78,13 @@ func (l *Log) Hash() string {
 	return LogHash(l.entries)
 }
 
+func (l *Log) Get(i int) (Entry, bool) {
+	if i > len(l.entries) {
+		return Entry{}, false
+	}
+	return l.entries[i], true
+}
+
 type Ack struct {
 	Peer    uint64
 	Phase   int
@@ -166,7 +173,7 @@ func (t *Tracker) ValidAcks(phase int) int {
 func (t *Tracker) ValidPromises(phase int, logHash string) int {
 	count := 0
 	for _, p := range t.Promises {
-		if p.Phase == phase && p.LogHash == logHash {
+		if p.Phase == phase { // && p.LogHash == logHash
 			count += 1
 		}
 	}

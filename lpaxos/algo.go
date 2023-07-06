@@ -35,11 +35,12 @@ type LNodeState struct {
 
 func (l LNodeState) Copy() LNodeState {
 	return LNodeState{
-		Last:   l.Last,
-		Phase:  l.Phase,
-		Leader: l.Leader,
-		Step:   l.Step,
-		Log:    l.Log.Copy(),
+		Last:    l.Last,
+		Phase:   l.Phase,
+		Leader:  l.Leader,
+		Step:    l.Step,
+		Log:     l.Log.Copy(),
+		Decided: l.Decided,
 	}
 }
 
@@ -200,7 +201,7 @@ func (l *LPaxosNode) Step(m Message) {
 		l.promise()
 	case PromiseMessage:
 		l.Tracker.TrackPromise(Promise{
-			Peer:    m.T,
+			Peer:    m.F,
 			Phase:   m.Phase,
 			Log:     m.Log,
 			LogHash: m.LogHash,

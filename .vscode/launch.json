@@ -55,6 +55,20 @@
             ]
         },
         {
+            "name": "Run paxos reward rm",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "-e",
+                "10",
+                "--horizon",
+                "100",
+                "paxos-reward-rm"
+            ]
+        },
+        {
             "name": "Graph analysis",
             "type": "python",
             "request": "launch",

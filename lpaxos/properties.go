@@ -2,7 +2,7 @@ package lpaxos
 
 import "github.com/zeu5/raft-rl-test/types"
 
-func InPhase(step Step) types.RewardFuncSingle {
+func InStep(step Step) types.RewardFuncSingle {
 	return func(s types.State) bool {
 		pS, ok := s.(*types.Partition)
 		if ok {
@@ -19,6 +19,31 @@ func InPhase(step Step) types.RewardFuncSingle {
 			}
 			for _, c := range lS.NodeStates {
 				if c.Step == step {
+					return true
+				}
+			}
+		}
+		return false
+	}
+}
+
+func InPhase(phase int) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		pS, ok := s.(*types.Partition)
+		if ok {
+			for _, c := range pS.ReplicaStates {
+				lC := c.(LNodeState)
+				if ok && lC.Phase == phase {
+					return true
+				}
+			}
+		} else {
+			lS, ok := s.(*LPaxosState)
+			if !ok {
+				return false
+			}
+			for _, c := range lS.NodeStates {
+				if c.Phase == phase {
 					return true
 				}
 			}

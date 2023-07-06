@@ -241,7 +241,7 @@ func copyNodeStates(ns map[uint64]LNodeState) map[uint64]LNodeState {
 	for k, s := range ns {
 		res[k] = s.Copy()
 	}
-	return ns
+	return res
 }
 
 func copyMessages(messages map[string]Message) map[string]Message {

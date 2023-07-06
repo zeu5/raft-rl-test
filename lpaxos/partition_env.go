@@ -29,10 +29,12 @@ func (c LNodeStateColor) Copy() types.Color {
 }
 
 type LNodeStatePainter struct {
-	paramFuncs []func(LNodeState) (string, interface{})
+	paramFuncs []LColorFunc
 }
 
-func NewLNodeStatePainter(paramfunc ...func(LNodeState) (string, interface{})) *LNodeStatePainter {
+type LColorFunc func(LNodeState) (string, interface{})
+
+func NewLNodeStatePainter(paramfunc ...LColorFunc) *LNodeStatePainter {
 	return &LNodeStatePainter{
 		paramFuncs: paramfunc,
 	}
@@ -48,6 +50,30 @@ func (l *LNodeStatePainter) Color(s types.ReplicaState) types.Color {
 		color.Params[key] = value
 	}
 	return color
+}
+
+func ColorStep() LColorFunc {
+	return func(ls LNodeState) (string, interface{}) {
+		return "Step", int(ls.Step)
+	}
+}
+
+func ColorPhase() LColorFunc {
+	return func(ls LNodeState) (string, interface{}) {
+		return "Phase", ls.Phase
+	}
+}
+
+func ColorDecided() LColorFunc {
+	return func(ls LNodeState) (string, interface{}) {
+		return "Decided", ls.Decided
+	}
+}
+
+func ColorLeader() LColorFunc {
+	return func(ls LNodeState) (string, interface{}) {
+		return "Leader", ls.Leader
+	}
 }
 
 var _ types.Painter = &LNodeStatePainter{}

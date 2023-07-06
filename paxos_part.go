@@ -34,32 +34,15 @@ func PaxosPart(episodes, horizon int, saveFile string) {
 			Environment: getLPaxosPartEnv(lPaxosConfig, true),
 		},
 	))
-	c.AddExperiment(types.NewExperiment(
-		"Random",
-		&types.AgentConfig{
-			Episodes:    episodes,
-			Horizon:     horizon,
-			Policy:      types.NewRandomPolicy(),
-			Environment: getLPaxosPartEnv(lPaxosConfig, false),
-		},
-	))
-	c.AddExperiment(types.NewExperiment(
-		"BonusMaxRL",
-		&types.AgentConfig{
-			Episodes:    episodes,
-			Horizon:     horizon,
-			Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
-			Environment: getLPaxosPartEnv(lPaxosConfig, false),
-		},
-	))
 
 	c.Run()
 }
 
 func getLPaxosPartEnv(config lpaxos.LPaxosEnvConfig, part bool) types.Environment {
 	if part {
+		colors := []lpaxos.LColorFunc{lpaxos.ColorStep(), lpaxos.ColorPhase(), lpaxos.ColorDecided(), lpaxos.ColorLeader()}
 		return types.NewPartitionEnv(types.PartitionEnvConfig{
-			Painter:                &lpaxos.LNodeStatePainter{},
+			Painter:                lpaxos.NewLNodeStatePainter(colors...),
 			Env:                    lpaxos.NewLPaxosPartitionEnv(config),
 			NumReplicas:            config.Replicas,
 			TicketBetweenPartition: 5,
