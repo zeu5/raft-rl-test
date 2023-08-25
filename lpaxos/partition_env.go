@@ -158,12 +158,12 @@ func (l *LPaxosPartitionEnv) DeliverMessage(m types.Message) types.PartitionedSy
 }
 
 func (l *LPaxosPartitionEnv) DropMessage(m types.Message) types.PartitionedSystemState {
+	delete(l.messages, m.Hash())
 	newState := &LPaxosState{
 		NodeStates:   copyNodeStates(l.curState.NodeStates),
-		Messages:     copyMessages(l.curState.Messages),
+		Messages:     copyMessages(l.messages),
 		WithTimeouts: l.config.Timeouts,
 	}
-	delete(newState.Messages, m.Hash())
 	l.curState = newState
 	return newState
 }

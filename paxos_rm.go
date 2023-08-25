@@ -21,14 +21,18 @@ func PaxosRewardMachine(episodes, horizon int) {
 	onlyMajorityDecided := lpaxos.OnlyMajorityDecidedOne()
 	emptyLogLeader := lpaxos.EmptyLogLeader().And(lpaxos.InPhase(4)).And(decided)
 
-	rm := policies.NewRewardMachine(emptyLogLeader)
-	rm.AddState(onlyMajorityDecided, "OnlyMajorityDecided")
-	rm.AddState(inPhase.And(onlyMajorityDecided), "InPhase3")
+	checkRM := policies.NewRewardMachine(emptyLogLeader)
+	checkRM.AddState(onlyMajorityDecided, "OnlyMajorityDecided")
+	checkRM.AddState(inPhase.And(onlyMajorityDecided), "InPhase3")
+	checkRM.AddState(lpaxos.InPhase(4).And(decided), "Decided")
 
-	c := types.NewComparison(lpaxos.BugAnalyzer(lpaxos.SafetyBug()), lpaxos.BugComparator())
+	guideRM := policies.NewRewardMachine(onlyMajorityDecided)
+	// guideRM.AddState(onlyMajorityDecided, "OnlyMajorityDecided")
+
+	// c := types.NewComparison(lpaxos.BugAnalyzer(lpaxos.SafetyBug()), lpaxos.BugComparator())
 	// c := types.NewComparison(policies.PredicatesAnalyzer(onlyMajorityDecided, inPhase, emptyLogLeader), policies.PredicatesComparator())
 	// c := types.NewComparison(lpaxos.LPaxosAnalyzer(saveFile), lpaxos.LPaxosComparator(saveFile))
-	// c := types.NewComparison(policies.RewardMachineAnalyzer(rm), policies.RewardMachineCoverageComparator())
+	c := types.NewComparison(policies.RewardMachineAnalyzer(checkRM), policies.RewardMachineCoverageComparator())
 	c.AddExperiment(types.NewExperiment(
 		"Random-Part",
 		&types.AgentConfig{
@@ -65,7 +69,7 @@ func PaxosRewardMachine(episodes, horizon int) {
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
-			Policy:      policies.NewRewardMachinePolicy(rm),
+			Policy:      policies.NewRewardMachinePolicy(guideRM),
 			Environment: getLPaxosPartEnv(lPaxosConfig, true),
 		},
 	))

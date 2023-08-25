@@ -69,6 +69,38 @@
             ]
         },
         {
+            "name": "Run rsl exploration",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "-e",
+                "10",
+                "--horizon",
+                "100",
+                "-r",
+                "3",
+                "rsl"
+            ]
+        },
+        {
+            "name": "Run rsl reward machine",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "-e",
+                "10",
+                "--horizon",
+                "100",
+                "-r",
+                "3",
+                "rsl-rm"
+            ]
+        },
+        {
             "name": "Graph analysis",
             "type": "python",
             "request": "launch",

@@ -27,6 +27,8 @@ func main() {
 	rootCommand.AddCommand(PaxosRewardMachineCommand())
 	rootCommand.AddCommand(GridRewardCommand())
 	rootCommand.AddCommand(GridRewardMachineCommand())
+	rootCommand.AddCommand(RSLExplorationCommand())
+	rootCommand.AddCommand(RSLRewardMachineCommand())
 
 	if err := rootCommand.Execute(); err != nil {
 		fmt.Println(err)

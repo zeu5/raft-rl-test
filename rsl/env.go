@@ -1,0 +1,247 @@
+package rsl
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"strconv"
+
+	"github.com/zeu5/raft-rl-test/types"
+)
+
+type MessageWrapper struct {
+	m Message
+}
+
+func (m MessageWrapper) From() uint64 {
+	return m.m.From
+}
+
+func (m MessageWrapper) To() uint64 {
+	return m.m.To
+}
+
+func (m MessageWrapper) Hash() string {
+	return m.m.Hash()
+}
+
+var _ types.Message = MessageWrapper{}
+
+type RSLPartitionState struct {
+	ReplicaStates map[uint64]LocalState
+	Messages      map[string]Message
+}
+
+func (p *RSLPartitionState) GetReplicaState(node uint64) types.ReplicaState {
+	return p.ReplicaStates[node].Copy()
+}
+
+func (p *RSLPartitionState) PendingMessages() map[string]types.Message {
+	return copyToMessageWrappers(p.Messages)
+}
+
+func copyToMessageWrappers(messages map[string]Message) map[string]types.Message {
+	out := make(map[string]types.Message)
+	for hash, m := range messages {
+		out[hash] = MessageWrapper{
+			m: m.Copy(),
+		}
+	}
+	return out
+}
+
+var _ types.PartitionedSystemState = &RSLPartitionState{}
+
+type RSLEnvConfig struct {
+	Nodes       int
+	NodeConfig  NodeConfig
+	NumCommands int
+}
+
+type RSLPartitionEnv struct {
+	config   RSLEnvConfig
+	nodes    map[uint64]*Node
+	messages map[string]Message
+	curState *RSLPartitionState
+}
+
+var _ types.PartitionedSystemEnvironment = &RSLPartitionEnv{}
+
+func NewRLSPartitionEnv(c RSLEnvConfig) *RSLPartitionEnv {
+	e := &RSLPartitionEnv{
+		config:   c,
+		nodes:    make(map[uint64]*Node),
+		messages: make(map[string]Message),
+	}
+	e.Reset()
+	return e
+}
+
+func (r *RSLPartitionEnv) Reset() types.PartitionedSystemState {
+	peers := make([]uint64, r.config.Nodes)
+	for i := 0; i < r.config.Nodes; i++ {
+		peers[i] = uint64(i + 1)
+	}
+
+	newState := &RSLPartitionState{
+		ReplicaStates: make(map[uint64]LocalState),
+		Messages:      copyMessages(r.messages),
+	}
+
+	r.config.NodeConfig.Peers = peers
+	for i := 0; i < r.config.Nodes; i++ {
+		cfg := r.config.NodeConfig.Copy()
+		cfg.ID = uint64(i + 1)
+		node := NewNode(&cfg)
+		r.nodes[node.ID] = node
+		newState.ReplicaStates[node.ID] = node.State()
+
+		node.Start()
+	}
+	for i := 0; i < r.config.NumCommands; i++ {
+		cmd := Message{Type: MessageCommand, Command: Command{Data: []byte(strconv.Itoa(i + 1))}}
+		r.messages[cmd.Hash()] = cmd
+	}
+	r.curState = newState
+	return newState
+}
+
+func (r *RSLPartitionEnv) Tick() types.PartitionedSystemState {
+	newState := &RSLPartitionState{
+		ReplicaStates: make(map[uint64]LocalState),
+		Messages:      make(map[string]Message),
+	}
+	for _, node := range r.nodes {
+		node.Tick()
+		if node.HasReady() {
+			rd := node.Ready()
+			for _, m := range rd.Messages {
+				r.messages[m.Hash()] = m
+			}
+		}
+		newState.ReplicaStates[node.ID] = node.State()
+	}
+	newState.Messages = copyMessages(r.messages)
+	r.curState = newState
+	return newState
+}
+
+func (r *RSLPartitionEnv) DeliverMessage(m types.Message) types.PartitionedSystemState {
+	// Node that m is of type MessageWrapper
+	message := m.(MessageWrapper).m
+
+	if message.Type == MessageCommand {
+		for _, n := range r.nodes {
+			if n.IsPrimary() {
+				n.Propose(message.Command)
+				delete(r.messages, m.Hash())
+			}
+		}
+	} else {
+		node, ok := r.nodes[message.To]
+		if ok {
+			node.Step(message)
+			delete(r.messages, message.Hash())
+		}
+	}
+
+	newState := &RSLPartitionState{
+		ReplicaStates: make(map[uint64]LocalState),
+		Messages:      make(map[string]Message),
+	}
+	for id, node := range r.nodes {
+		newState.ReplicaStates[id] = node.State()
+		if node.HasReady() {
+			rd := node.Ready()
+			for _, m := range rd.Messages {
+				r.messages[m.Hash()] = m
+			}
+		}
+	}
+	newState.Messages = copyMessages(r.messages)
+	r.curState = newState
+
+	return newState
+}
+
+func (r *RSLPartitionEnv) DropMessage(m types.Message) types.PartitionedSystemState {
+	// Node that m is of type MessageWrapper
+	message := m.(MessageWrapper).m
+	delete(r.messages, message.Hash())
+	newState := &RSLPartitionState{
+		ReplicaStates: copyReplicaStates(r.curState.ReplicaStates),
+		Messages:      copyMessages(r.messages),
+	}
+	r.curState = newState
+	return newState
+}
+
+type RSLColorFunc func(LocalState) (string, interface{})
+
+type RSLColor struct {
+	Params map[string]interface{}
+}
+
+func (r *RSLColor) Hash() string {
+	bs, _ := json.Marshal(r)
+	hash := sha256.Sum256(bs)
+	return hex.EncodeToString(hash[:])
+}
+
+func (r *RSLColor) Copy() types.Color {
+	out := &RSLColor{
+		Params: make(map[string]interface{}),
+	}
+	for k, val := range r.Params {
+		out.Params[k] = val
+	}
+	return out
+}
+
+type RSLPainter struct {
+	colorFuncs []RSLColorFunc
+}
+
+func (r *RSLPainter) Color(s types.ReplicaState) types.Color {
+	rslState := s.(LocalState)
+	c := &RSLColor{
+		Params: make(map[string]interface{}),
+	}
+	for _, f := range r.colorFuncs {
+		key, val := f(rslState)
+		c.Params[key] = val
+	}
+	return c
+}
+
+var _ types.Painter = &RSLPainter{}
+
+func NewRSLPainter(colors ...RSLColorFunc) *RSLPainter {
+	return &RSLPainter{
+		colorFuncs: colors,
+	}
+}
+
+func ColorState() RSLColorFunc {
+	return func(ls LocalState) (string, interface{}) {
+		return "state", string(ls.state)
+	}
+}
+
+func ColorBallot() RSLColorFunc {
+	return func(ls LocalState) (string, interface{}) {
+		return "ballot", ls.maxAcceptedProposal.Ballot.Num
+	}
+}
+
+func ColorDecree() RSLColorFunc {
+	return func(ls LocalState) (string, interface{}) {
+		return "decree", ls.maxAcceptedProposal.Decree
+	}
+}
+
+func ColorDecided() RSLColorFunc {
+	return func(ls LocalState) (string, interface{}) {
+		return "decided", ls.decided
+	}
+}
