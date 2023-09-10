@@ -315,30 +315,37 @@ func (p *PartitionEnv) Step(a Action) State {
 	}
 
 	// 2. Perform ticks, delivering messages in between
-	allMessages := make([]Message, len(p.messages))
-	i := 0
-	for _, m := range p.messages {
-		allMessages[i] = m
-		i++
-	}
-	if len(allMessages) > 0 {
-		p.rand.Shuffle(len(allMessages), func(i, j int) {
-			allMessages[i], allMessages[j] = allMessages[j], allMessages[i]
-		})
-	}
-	var s PartitionedSystemState
+	var s PartitionedSystemState = nil
 	for i := 0; i < p.ticksBetweenPartitions; i++ {
-		mToDeliver := p.rand.Intn(p.maxMessagesPerTick)
-		for j := 0; j < mToDeliver; j++ {
-			if len(allMessages) > 0 {
-				next := allMessages[0]
-				allMessages = allMessages[1:]
-				fromP, fromOk := newPartitionMap[next.From()]
-				toP, toOk := newPartitionMap[next.To()]
-				if !fromOk || !toOk || fromP == toP {
-					p.underlyingEnv.DeliverMessage(next)
-				} else {
-					p.underlyingEnv.DropMessage(next)
+
+		messages := make([]Message, 0)
+		if s == nil {
+			for _, m := range p.messages {
+				messages = append(messages, m)
+			}
+		} else {
+			for _, m := range s.PendingMessages() {
+				messages = append(messages, m)
+			}
+		}
+
+		if len(messages) > 0 {
+			p.rand.Shuffle(len(messages), func(i, j int) {
+				messages[i], messages[j] = messages[j], messages[i]
+			})
+
+			mToDeliver := p.rand.Intn(p.maxMessagesPerTick)
+			for j := 0; j < mToDeliver; j++ {
+				if len(messages) > 0 {
+					next := messages[0]
+					messages = messages[1:]
+					fromP, fromOk := newPartitionMap[next.From()]
+					toP, toOk := newPartitionMap[next.To()]
+					if !fromOk || !toOk || fromP == toP {
+						p.underlyingEnv.DeliverMessage(next)
+					} else {
+						p.underlyingEnv.DropMessage(next)
+					}
 				}
 			}
 		}

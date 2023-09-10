@@ -17,3 +17,18 @@ func Decided() types.RewardFuncSingle {
 		return false
 	}
 }
+
+func InState(state RSLState) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		ps, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+		for _, rs := range ps.ReplicaStates {
+			if rs.(LocalState).state == state {
+				return true
+			}
+		}
+		return false
+	}
+}

@@ -24,9 +24,10 @@ func RSLRewardMachine() {
 		NumCommands: requests,
 	}
 
-	rm := policies.NewRewardMachine(rsl.Decided())
+	guideRM := policies.NewRewardMachine(rsl.InState(rsl.StateStablePrimary))
+	// monitorRM := policies.NewRewardMachine(rsl.Decided())
 
-	c := types.NewComparison(policies.RewardMachineAnalyzer(rm), policies.RewardMachineCoverageComparator())
+	c := types.NewComparison(policies.RewardMachineAnalyzer(guideRM), policies.RewardMachineCoverageComparator())
 	c.AddExperiment(types.NewExperiment(
 		"random",
 		&types.AgentConfig{
@@ -62,7 +63,7 @@ func RSLRewardMachine() {
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
-			Policy:      policies.NewRewardMachinePolicy(rm),
+			Policy:      policies.NewRewardMachinePolicy(guideRM),
 			Environment: GetRSLEnvironment(config),
 		},
 	))

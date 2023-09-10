@@ -25,15 +25,15 @@ func RSLExploration() {
 	}
 
 	c := types.NewComparison(rsl.CoverageAnalyzer(), rsl.CoverageComparator(saveFile))
-	// c.AddExperiment(types.NewExperiment(
-	// 	"random",
-	// 	&types.AgentConfig{
-	// 		Episodes:    episodes,
-	// 		Horizon:     horizon,
-	// 		Policy:      types.NewRandomPolicy(),
-	// 		Environment: GetRSLEnvironment(config),
-	// 	},
-	// ))
+	c.AddExperiment(types.NewExperiment(
+		"random",
+		&types.AgentConfig{
+			Episodes:    episodes,
+			Horizon:     horizon,
+			Policy:      types.NewRandomPolicy(),
+			Environment: GetRSLEnvironment(config),
+		},
+	))
 	strictPolicy := policies.NewStrictPolicy(types.NewRandomPolicy())
 	strictPolicy.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
 
@@ -46,15 +46,15 @@ func RSLExploration() {
 			Environment: GetRSLEnvironment(config),
 		},
 	))
-	// c.AddExperiment(types.NewExperiment(
-	// 	"BonusMax",
-	// 	&types.AgentConfig{
-	// 		Episodes:    episodes,
-	// 		Horizon:     horizon,
-	// 		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
-	// 		Environment: GetRSLEnvironment(config),
-	// 	},
-	// ))
+	c.AddExperiment(types.NewExperiment(
+		"BonusMax",
+		&types.AgentConfig{
+			Episodes:    episodes,
+			Horizon:     horizon,
+			Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
+			Environment: GetRSLEnvironment(config),
+		},
+	))
 
 	c.Run()
 }
@@ -65,7 +65,7 @@ func GetRSLEnvironment(c rsl.RSLEnvConfig) types.Environment {
 		Painter:                rsl.NewRSLPainter(colors...),
 		Env:                    rsl.NewRLSPartitionEnv(c),
 		NumReplicas:            c.Nodes,
-		TicketBetweenPartition: 5,
+		TicketBetweenPartition: 3,
 		MaxMessagesPerTick:     3,
 	})
 }

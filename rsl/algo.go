@@ -234,12 +234,11 @@ func (n *Node) sendNextCommand() {
 		return
 	}
 	n.remoteStates = make(map[uint64]RemoteState)
-	if n.readyToPropose {
-		// TODO: figure out what is the command to propose
+	if n.readyToPropose && len(n.commandQ) > 0 {
 		newProposal := Proposal{
 			Ballot:  n.maxAcceptedProposal.Ballot.Copy(),
 			Decree:  n.maxAcceptedProposal.Decree + 1,
-			Command: n.maxAcceptedProposal.Command.Copy(),
+			Command: n.commandQ[0].Copy(),
 		}
 		n.broadcast(Message{
 			Type:    MessageAcceptReq,
@@ -351,38 +350,38 @@ func (n *Node) handleStatusResponse(m Message) {
 					return
 				}
 			}
-		}
+			// Bug: Need to do what follows only if we see a majority responses
+			minDecreeNeeded := n.maxAcceptedProposal.Decree
+			minNeededBallot := n.maxAcceptedProposal.Ballot
 
-		minDecreeNeeded := n.maxAcceptedProposal.Decree
-		minNeededBallot := n.maxAcceptedProposal.Ballot
-
-		filteredNodes := make([]uint64, 0)
-		for n, rs := range n.remoteStates {
-			if rs.MaxChosen == minDecreeNeeded && rs.MaxBallot.Num > minNeededBallot.Num {
-				filteredNodes = append(filteredNodes, n)
-			} else if rs.MaxChosen > minDecreeNeeded && rs.MaxBallot.Num >= minNeededBallot.Num {
-				filteredNodes = append(filteredNodes, n)
-			}
-		}
-		if len(filteredNodes) > 0 {
-			nodeToLearn := filteredNodes[n.rand.Intn(len(filteredNodes))]
-			n.learnVotes(nodeToLearn)
-			return
-		}
-
-		if n.nextElectionTime == math.MaxInt {
-			maxChosen := 0
-			for _, rs := range n.remoteStates {
-				if rs.LastChosenTime > maxChosen {
-					maxChosen = rs.LastChosenTime
+			filteredNodes := make([]uint64, 0)
+			for n, rs := range n.remoteStates {
+				if rs.MaxChosen == minDecreeNeeded && rs.MaxBallot.Num > minNeededBallot.Num {
+					filteredNodes = append(filteredNodes, n)
+				} else if rs.MaxChosen > minDecreeNeeded && rs.MaxBallot.Num >= minNeededBallot.Num {
+					filteredNodes = append(filteredNodes, n)
 				}
 			}
-			n.nextElectionTime = min(n.ticks, maxChosen) + n.config.BaseElectionDelay
-		}
-		if n.ticks > n.nextElectionTime || n.maxPreparedBallot.Node == n.ID {
-			n.prepare()
-		} else {
-			n.stabilize(false)
+			if len(filteredNodes) > 0 {
+				nodeToLearn := filteredNodes[n.rand.Intn(len(filteredNodes))]
+				n.learnVotes(nodeToLearn)
+				return
+			}
+
+			if n.nextElectionTime == math.MaxInt {
+				maxChosen := 0
+				for _, rs := range n.remoteStates {
+					if rs.LastChosenTime > maxChosen {
+						maxChosen = rs.LastChosenTime
+					}
+				}
+				n.nextElectionTime = min(n.ticks, maxChosen) + n.config.BaseElectionDelay
+			}
+			if n.ticks > n.nextElectionTime || n.maxPreparedBallot.Node == n.ID {
+				n.prepare()
+			} else {
+				n.stabilize(false)
+			}
 		}
 	}
 }
@@ -463,6 +462,7 @@ func (n *Node) prepare() {
 	n.broadcast(Message{
 		Type:   MessagePrepareReq,
 		Decree: n.maxAcceptedProposal.Decree,
+		Ballot: n.maxPreparedBallot.Copy(),
 	})
 	n.actionTimeout = n.ticks + n.config.PrepareRetryInterval
 }
@@ -476,7 +476,7 @@ func (n *Node) handlePrepareRequest(m Message) {
 			Ballot: n.maxPreparedBallot.Copy(),
 			Decree: n.maxAcceptedProposal.Decree,
 		})
-	} else if n.state == StateStablePrimary || n.state == StateStableSecondary || n.state == StatePreparing {
+	} else if n.state != StateInitializing {
 		if m.Ballot.Num > n.maxPreparedBallot.Num {
 			n.maxPreparedBallot = m.Ballot.Copy()
 			n.log.Add(Entry{
@@ -546,7 +546,7 @@ func (n *Node) handleAcceptRequest(m Message) {
 		// Assertion
 		return
 	}
-	if n.state == StateStablePrimary || n.state == StateStableSecondary || n.state == StatePreparing {
+	if n.state != StateInitializing {
 		if m.Decree < n.maxAcceptedProposal.Decree || m.Ballot.Num < n.maxPreparedBallot.Num {
 			n.send(Message{
 				To:     m.From,
@@ -631,7 +631,7 @@ func (n *Node) handleNotAccept(m Message) {
 	if m.Decree < n.maxAcceptedProposal.Decree || m.Ballot.Num < n.maxAcceptedProposal.Ballot.Num {
 		return
 	}
-	if n.state == StateStablePrimary || n.state == StateStableSecondary || n.state == StatePreparing {
+	if n.state != StateInitializing {
 		if m.Decree > n.maxAcceptedProposal.Decree {
 			n.initialize()
 		} else if m.Ballot.Num > n.maxPreparedBallot.Num {

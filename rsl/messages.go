@@ -41,7 +41,7 @@ func (m Message) Hash() string {
 }
 
 func (m Message) Copy() Message {
-	return Message{
+	new := Message{
 		From:   m.From,
 		To:     m.To,
 		Type:   m.Type,
@@ -50,7 +50,15 @@ func (m Message) Copy() Message {
 		Command: Command{
 			Data: bytes.Clone(m.Command.Data),
 		},
+		ProposalBallot: m.ProposalBallot.Copy(),
+		Timestamp:      m.Timestamp,
+		Accept:         m.Accept,
+		Proposals:      make([]Proposal, len(m.Proposals)),
 	}
+	for i, p := range m.Proposals {
+		new.Proposals[i] = p.Copy()
+	}
+	return new
 }
 
 func (n *Node) broadcast(m Message) {
