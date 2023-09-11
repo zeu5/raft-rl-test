@@ -59,9 +59,9 @@ func GridRewardMachine(episodes, horizon int, height, width, grids int) {
 	// rm.AddState(grid.GridAndPos_1_2(), "Grid01_2")
 	// rm.AddState(grid.GridAndPos_1_4(), "Grid01_4")
 	rm.AddState(grid.ReachGrid(2), "Grid2")
-	rm.AddState(grid.GridAndPos_23_20(), "Grid23_20")
-	rm.AddState(grid.GridAndPos_23_30(), "Grid23_30")
-	rm.AddState(grid.GridAndPos_23_40(), "Grid23_40")
+	// rm.AddState(grid.GridAndPos_23_20(), "Grid23_20")
+	// rm.AddState(grid.GridAndPos_23_30(), "Grid23_30")
+	// rm.AddState(grid.GridAndPos_23_40(), "Grid23_40")
 	rm.AddState(grid.GridAndPos_23_50(), "Grid23_50")
 
 	c := types.NewComparison(grid.GridAnalyzer, grid.GridDepthComparator())
