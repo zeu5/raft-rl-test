@@ -72,6 +72,7 @@ func GetRSLEnvironment(c rsl.RSLEnvConfig) types.Environment {
 		NumReplicas:            c.Nodes,
 		TicketBetweenPartition: 3,
 		MaxMessagesPerTick:     3,
+		StaySameStateUpto:      5,
 	})
 }
 

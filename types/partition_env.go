@@ -217,6 +217,7 @@ type PartitionEnvConfig struct {
 	TicketBetweenPartition int
 	NumReplicas            int
 	MaxMessagesPerTick     int
+	StaySameStateUpto      int
 }
 
 func NewPartitionEnv(c PartitionEnvConfig) *PartitionEnv {

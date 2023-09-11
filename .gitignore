@@ -2,5 +2,7 @@ raft-rl-test
 
 *.png
 
+*.DS_Store
+
 results
 __pycache__
