@@ -58,6 +58,8 @@ type RSLEnvConfig struct {
 	NumCommands int
 }
 
+// RSL partition environment
+// structure that wraps the nodes to fir the RL environment
 type RSLPartitionEnv struct {
 	config   RSLEnvConfig
 	nodes    map[uint64]*Node
@@ -77,6 +79,7 @@ func NewRLSPartitionEnv(c RSLEnvConfig) *RSLPartitionEnv {
 	return e
 }
 
+// Reset creates new nodes and clears all messages
 func (r *RSLPartitionEnv) Reset() types.PartitionedSystemState {
 	peers := make([]uint64, r.config.Nodes)
 	for i := 0; i < r.config.Nodes; i++ {
@@ -106,6 +109,8 @@ func (r *RSLPartitionEnv) Reset() types.PartitionedSystemState {
 	return newState
 }
 
+// Moves clock of each process by one
+// Checks for messages after clock has advanced
 func (r *RSLPartitionEnv) Tick() types.PartitionedSystemState {
 	newState := &RSLPartitionState{
 		ReplicaStates: make(map[uint64]LocalState),
@@ -126,6 +131,7 @@ func (r *RSLPartitionEnv) Tick() types.PartitionedSystemState {
 	return newState
 }
 
+// Deliver the message
 func (r *RSLPartitionEnv) DeliverMessage(m types.Message) types.PartitionedSystemState {
 	// Node that m is of type MessageWrapper
 	message := m.(MessageWrapper).m
@@ -164,6 +170,7 @@ func (r *RSLPartitionEnv) DeliverMessage(m types.Message) types.PartitionedSyste
 	return newState
 }
 
+// Remove the message from the pool
 func (r *RSLPartitionEnv) DropMessage(m types.Message) types.PartitionedSystemState {
 	// Node that m is of type MessageWrapper
 	message := m.(MessageWrapper).m
@@ -178,6 +185,8 @@ func (r *RSLPartitionEnv) DropMessage(m types.Message) types.PartitionedSystemSt
 
 type RSLColorFunc func(LocalState) (string, interface{})
 
+// The color of each node/replica marked by a key value
+// The Hash function returns the color hash
 type RSLColor struct {
 	Params map[string]interface{}
 }
@@ -198,6 +207,8 @@ func (r *RSLColor) Copy() types.Color {
 	return out
 }
 
+// Painter to paint nodes with colors
+// The state abstraction is useful here
 type RSLPainter struct {
 	colorFuncs []RSLColorFunc
 }

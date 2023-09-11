@@ -7,7 +7,9 @@ import (
 	"github.com/zeu5/raft-rl-test/types"
 )
 
+// Run exploration of the RSL algorithm
 func RSLExploration() {
+	// Config for the RSL environment
 	config := rsl.RSLEnvConfig{
 		Nodes: 3,
 		NodeConfig: rsl.NodeConfig{
@@ -25,6 +27,7 @@ func RSLExploration() {
 	}
 
 	c := types.NewComparison(rsl.CoverageAnalyzer(), rsl.CoverageComparator(saveFile))
+	// Random exploration
 	c.AddExperiment(types.NewExperiment(
 		"random",
 		&types.AgentConfig{
@@ -37,6 +40,7 @@ func RSLExploration() {
 	strictPolicy := policies.NewStrictPolicy(types.NewRandomPolicy())
 	strictPolicy.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
 
+	// Policy to never partition
 	c.AddExperiment(types.NewExperiment(
 		"Strict",
 		&types.AgentConfig{
@@ -46,6 +50,7 @@ func RSLExploration() {
 			Environment: GetRSLEnvironment(config),
 		},
 	))
+	// RL based exploration
 	c.AddExperiment(types.NewExperiment(
 		"BonusMax",
 		&types.AgentConfig{
