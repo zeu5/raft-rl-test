@@ -66,7 +66,8 @@ type Partition struct {
 	ReplicaStates map[uint64]ReplicaState
 	// The actual partition of colors
 	// Only this is used to hash (therefore indexed by RL)
-	Partition [][]Color
+	Partition   [][]Color
+	RepeatCount int
 }
 
 var _ State = &Partition{}
@@ -163,7 +164,7 @@ func (p *Partition) Hash() string {
 			partition[i][j] = color.Hash()
 		}
 	}
-	bs, _ := json.Marshal(partition)
+	bs, _ := json.Marshal(map[string]interface{}{"colors": partition, "repeat_count": p.RepeatCount})
 	hash := sha256.Sum256(bs)
 	return hex.EncodeToString(hash[:])
 }
@@ -177,6 +178,7 @@ func copyPartition(p *Partition) *Partition {
 		Partition:     make([][]Color, len(p.Partition)),
 		ReplicaStates: make(map[uint64]ReplicaState),
 		PartitionMap:  make(map[uint64]int),
+		RepeatCount:   p.RepeatCount,
 	}
 	for i, s := range p.ReplicaColors {
 		n.ReplicaColors[i] = s.Copy()
@@ -206,6 +208,7 @@ type PartitionEnv struct {
 	messages               map[string]Message
 	ticksBetweenPartitions int
 	maxMessagesPerTick     int
+	staySamePartitionBound int
 	rand                   *rand.Rand
 }
 
@@ -229,6 +232,7 @@ func NewPartitionEnv(c PartitionEnvConfig) *PartitionEnv {
 		messages:               make(map[string]Message),
 		curPartition:           nil,
 		maxMessagesPerTick:     c.MaxMessagesPerTick,
+		staySamePartitionBound: c.StaySameStateUpto,
 		rand:                   rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 	p.reset()
@@ -243,6 +247,7 @@ func (p *PartitionEnv) reset() {
 		PartitionMap:  make(map[uint64]int),
 		ReplicaStates: make(map[uint64]ReplicaState),
 		Partition:     make([][]Color, 1),
+		RepeatCount:   0,
 	}
 	for i := 0; i < p.NumReplicas; i++ {
 		id := uint64(i + 1)
@@ -278,6 +283,7 @@ func (p *PartitionEnv) Step(a Action) State {
 		PartitionMap:  make(map[uint64]int),
 		ReplicaStates: make(map[uint64]ReplicaState),
 		Partition:     make([][]Color, 0),
+		RepeatCount:   p.curPartition.RepeatCount,
 	}
 	newPartition := make([][]uint64, len(p.curPartition.Partition))
 	newPartitionMap := make(map[uint64]int)
@@ -313,6 +319,11 @@ func (p *PartitionEnv) Step(a Action) State {
 			newPartition[i] = append(newPartition[i], r)
 			newPartitionMap[r] = i
 		}
+		newRepeatCount := p.curPartition.RepeatCount + 1
+		if newRepeatCount > p.staySamePartitionBound {
+			newRepeatCount = p.staySamePartitionBound
+		}
+		nextState.RepeatCount = newRepeatCount
 	}
 
 	// 2. Perform ticks, delivering messages in between

@@ -21,7 +21,8 @@ func RSLRewardMachine() {
 			MaxCachedLength:         10,
 			ProposalRetryInterval:   5,
 		},
-		NumCommands: requests,
+		NumCommands:        requests,
+		AdditionalCommands: make([]rsl.Command, 0),
 	}
 
 	guideRM := policies.NewRewardMachine(rsl.InState(rsl.StateStablePrimary))

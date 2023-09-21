@@ -73,6 +73,7 @@ type LocalState struct {
 	maxPreparedBallot   Ballot
 	oldFreshestProposal Proposal
 	decided             int
+	peerConfig          RSLConfig
 }
 
 func (l LocalState) Copy() LocalState {
@@ -81,6 +82,8 @@ func (l LocalState) Copy() LocalState {
 		maxAcceptedProposal: l.maxAcceptedProposal.Copy(),
 		maxPreparedBallot:   l.maxPreparedBallot.Copy(),
 		oldFreshestProposal: l.oldFreshestProposal.Copy(),
+		decided:             l.decided,
+		peerConfig:          l.peerConfig.Copy(),
 	}
 }
 
@@ -149,9 +152,14 @@ func (n NodeConfig) Copy() NodeConfig {
 }
 
 func NewNode(c *NodeConfig) *Node {
+	initialConfig := RSLConfig{Members: make(map[uint64]bool)}
+	for _, p := range c.Peers {
+		initialConfig.Members[p] = true
+	}
+
 	return &Node{
 		ID:                    c.ID,
-		LocalState:            LocalState{state: StateInactive},
+		LocalState:            LocalState{state: StateInactive, peerConfig: initialConfig},
 		config:                c,
 		log:                   NewLog(),
 		commandQ:              make([]Command, 0),
@@ -387,7 +395,7 @@ func (n *Node) handleStatusResponse(m Message) {
 }
 
 func (n *Node) isMajority(count int) bool {
-	return count > len(n.config.Peers)/2
+	return count >= len(n.config.Peers)/2
 }
 
 func (n *Node) learnVotes(toLearnFrom uint64) {
@@ -401,8 +409,27 @@ func (n *Node) learnVotes(toLearnFrom uint64) {
 	n.learningFrom = toLearnFrom
 }
 
-func (n *Node) addtoExecutionQueue(c Command) {
-	n.log.AddDecided(c)
+func (n *Node) Peers() []uint64 {
+	peers := make([]uint64, len(n.config.Peers))
+	copy(peers, n.config.Peers)
+	return peers
+}
+
+func (n *Node) addtoExecutionQueue(p Proposal) {
+	if IsConfigCommand(p.Command) {
+		newConfig, _ := GetRSLConfig(p.Command)
+		newMembers := make(map[uint64]bool)
+		for k := range newConfig.Members {
+			newMembers[k] = true
+		}
+		n.peerConfig = RSLConfig{
+			InitialDecree: p.Decree,
+			Number:        n.peerConfig.Number + 1,
+			Members:       newMembers,
+		}
+	}
+
+	n.log.AddDecided(p.Command.Copy())
 	n.decided = n.log.NumDecided()
 }
 
@@ -563,7 +590,7 @@ func (n *Node) handleAcceptRequest(m Message) {
 			}
 		} else if (m.Decree == n.maxAcceptedProposal.Decree && m.Ballot.Num >= n.maxAcceptedProposal.Ballot.Num) || (m.Decree == n.maxAcceptedProposal.Decree+1 && m.Ballot.Num == n.maxAcceptedProposal.Ballot.Num) {
 			if m.Decree == n.maxAcceptedProposal.Decree+1 {
-				n.addtoExecutionQueue(n.maxAcceptedProposal.Command.Copy())
+				n.addtoExecutionQueue(n.maxAcceptedProposal.Copy())
 				n.nextElectionTime = n.ticks + n.config.BaseElectionDelay
 			}
 			n.logProposal(Proposal{
@@ -663,7 +690,7 @@ func (n *Node) handleAcceptResponse(m Message) {
 			LastChosenTime: 0,
 		}
 		if n.isMajority(len(n.remoteStates) + 1) {
-			n.addtoExecutionQueue(n.maxAcceptedProposal.Command)
+			n.addtoExecutionQueue(n.maxAcceptedProposal)
 			n.readyToPropose = true
 			n.actionTimeout = math.MaxInt
 		}
@@ -708,7 +735,7 @@ func (n *Node) handleFetchResponse(m Message) {
 		}
 		if p.Decree == n.maxAcceptedProposal.Decree+1 && p.Ballot.Num > n.maxAcceptedProposal.Ballot.Num {
 			// Add to execution queue
-			n.addtoExecutionQueue(n.maxAcceptedProposal.Command)
+			n.addtoExecutionQueue(n.maxAcceptedProposal)
 			n.nextElectionTime = n.ticks + n.config.BaseElectionDelay
 			n.logProposal(Proposal{
 				Ballot:  n.maxAcceptedProposal.Ballot.Copy(),
@@ -721,7 +748,7 @@ func (n *Node) handleFetchResponse(m Message) {
 			return
 		}
 		if p.Decree == n.maxAcceptedProposal.Decree+1 {
-			n.addtoExecutionQueue(n.maxAcceptedProposal.Command)
+			n.addtoExecutionQueue(n.maxAcceptedProposal)
 			n.nextElectionTime = n.ticks + n.config.BaseElectionDelay
 		}
 		n.logProposal(p.Copy())
@@ -729,7 +756,7 @@ func (n *Node) handleFetchResponse(m Message) {
 		if !haveMinNeeded || minNeeded.Decree <= m.Decree {
 			for _, p := range n.proposalQ {
 				if p.Decree == n.maxAcceptedProposal.Decree+1 {
-					n.addtoExecutionQueue(n.maxAcceptedProposal.Command)
+					n.addtoExecutionQueue(n.maxAcceptedProposal)
 					n.nextElectionTime = n.ticks + n.config.BaseElectionDelay
 				}
 				n.logProposal(p)

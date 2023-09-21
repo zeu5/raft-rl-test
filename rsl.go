@@ -23,7 +23,8 @@ func RSLExploration() {
 			MaxCachedLength:         10,
 			ProposalRetryInterval:   5,
 		},
-		NumCommands: requests,
+		NumCommands:        requests,
+		AdditionalCommands: make([]rsl.Command, 0),
 	}
 
 	c := types.NewComparison(rsl.CoverageAnalyzer(), rsl.CoverageComparator(saveFile))
@@ -37,19 +38,19 @@ func RSLExploration() {
 			Environment: GetRSLEnvironment(config),
 		},
 	))
-	strictPolicy := policies.NewStrictPolicy(types.NewRandomPolicy())
-	strictPolicy.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
+	// strictPolicy := policies.NewStrictPolicy(types.NewRandomPolicy())
+	// strictPolicy.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
 
-	// Policy to never partition
-	c.AddExperiment(types.NewExperiment(
-		"Strict",
-		&types.AgentConfig{
-			Episodes:    episodes,
-			Horizon:     horizon,
-			Policy:      policies.NewStrictPolicy(strictPolicy),
-			Environment: GetRSLEnvironment(config),
-		},
-	))
+	// // Policy to never partition
+	// c.AddExperiment(types.NewExperiment(
+	// 	"Strict",
+	// 	&types.AgentConfig{
+	// 		Episodes:    episodes,
+	// 		Horizon:     horizon,
+	// 		Policy:      policies.NewStrictPolicy(strictPolicy),
+	// 		Environment: GetRSLEnvironment(config),
+	// 	},
+	// ))
 	// RL based exploration
 	c.AddExperiment(types.NewExperiment(
 		"BonusMax",
@@ -70,9 +71,9 @@ func GetRSLEnvironment(c rsl.RSLEnvConfig) types.Environment {
 		Painter:                rsl.NewRSLPainter(colors...),
 		Env:                    rsl.NewRLSPartitionEnv(c),
 		NumReplicas:            c.Nodes,
-		TicketBetweenPartition: 3,
+		TicketBetweenPartition: 5,
 		MaxMessagesPerTick:     3,
-		StaySameStateUpto:      5,
+		StaySameStateUpto:      0,
 	})
 }
 
@@ -86,3 +87,9 @@ func RSLExplorationCommand() *cobra.Command {
 	cmd.PersistentFlags().IntVarP(&requests, "requests", "r", 1, "Number of requests to run with")
 	return cmd
 }
+
+// Experiments to run
+// 1. Find the tradeoff between ticks and stay same upto
+// 2. Define reward machines with more than one state.
+// 3. Check if variability is important for finding bugs.
+// 4. Check if granularity matters to find a bug.

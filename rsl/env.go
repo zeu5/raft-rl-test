@@ -53,9 +53,10 @@ func copyToMessageWrappers(messages map[string]Message) map[string]types.Message
 var _ types.PartitionedSystemState = &RSLPartitionState{}
 
 type RSLEnvConfig struct {
-	Nodes       int
-	NodeConfig  NodeConfig
-	NumCommands int
+	Nodes              int
+	NodeConfig         NodeConfig
+	NumCommands        int
+	AdditionalCommands []Command
 }
 
 // RSL partition environment
@@ -103,6 +104,10 @@ func (r *RSLPartitionEnv) Reset() types.PartitionedSystemState {
 	}
 	for i := 0; i < r.config.NumCommands; i++ {
 		cmd := Message{Type: MessageCommand, Command: Command{Data: []byte(strconv.Itoa(i + 1))}}
+		r.messages[cmd.Hash()] = cmd
+	}
+	for _, c := range r.config.AdditionalCommands {
+		cmd := Message{Type: MessageCommand, Command: c.Copy()}
 		r.messages[cmd.Hash()] = cmd
 	}
 	r.curState = newState

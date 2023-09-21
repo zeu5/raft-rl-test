@@ -40,7 +40,7 @@ func PaxosPart(episodes, horizon int, saveFile string) {
 
 func getLPaxosPartEnv(config lpaxos.LPaxosEnvConfig, part bool) types.Environment {
 	if part {
-		colors := []lpaxos.LColorFunc{lpaxos.ColorStep(), lpaxos.ColorPhase(), lpaxos.ColorDecided(), lpaxos.ColorLeader()}
+		colors := []lpaxos.LColorFunc{lpaxos.ColorStep(), lpaxos.ColorDecided(), lpaxos.ColorLeader()}
 		return types.NewPartitionEnv(types.PartitionEnvConfig{
 			Painter:                lpaxos.NewLNodeStatePainter(colors...),
 			Env:                    lpaxos.NewLPaxosPartitionEnv(config),
