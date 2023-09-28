@@ -1,6 +1,9 @@
 package rsl
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"os"
 	"path"
 
@@ -11,6 +14,28 @@ import (
 	"gonum.org/v1/plot/vg"
 )
 
+type rslPartState struct {
+	nodeStates map[uint64]LocalState
+}
+
+func (r *rslPartState) Hash() string {
+	bs, _ := json.Marshal(r.nodeStates)
+	hash := sha256.Sum256(bs)
+	return hex.EncodeToString(hash[:])
+}
+
+func newRSLPartState(s types.State) *rslPartState {
+	p, ok := s.(*types.Partition)
+	if ok {
+		r := &rslPartState{nodeStates: make(map[uint64]LocalState)}
+		for id, s := range p.ReplicaStates {
+			r.nodeStates[id] = s.(LocalState)
+		}
+		return r
+	}
+	return &rslPartState{nodeStates: make(map[uint64]LocalState)}
+}
+
 func CoverageAnalyzer() types.Analyzer {
 	return func(s string, t []*types.Trace) types.DataSet {
 		c := make([]int, 0)
@@ -18,8 +43,9 @@ func CoverageAnalyzer() types.Analyzer {
 		for _, trace := range t {
 			for i := 0; i < trace.Len(); i++ {
 				state, _, _, _ := trace.Get(i)
-				if _, ok := states[state.Hash()]; !ok {
-					states[state.Hash()] = true
+				rslState := newRSLPartState(state)
+				if _, ok := states[rslState.Hash()]; !ok {
+					states[rslState.Hash()] = true
 				}
 			}
 			c = append(c, len(states))

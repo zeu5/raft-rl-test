@@ -93,3 +93,7 @@ func RSLExplorationCommand() *cobra.Command {
 // 2. Define reward machines with more than one state.
 // 3. Check if variability is important for finding bugs.
 // 4. Check if granularity matters to find a bug.
+
+// Some scenarios
+// Select a node to be primary (in a particular phase) and transition to a different primary (in a different phase)
+// Select a node to be primary and wait for x commits with that node as primary
