@@ -26,6 +26,15 @@ func PaxosPart(episodes, horizon int, saveFile string) {
 		},
 	))
 	c.AddExperiment(types.NewExperiment(
+		"NegReward-Part",
+		&types.AgentConfig{
+			Episodes:    episodes,
+			Horizon:     horizon,
+			Policy:      types.NewSoftMaxNegPolicy(0.1, 0.99, 1),
+			Environment: getLPaxosPartEnv(lPaxosConfig, true),
+		},
+	))
+	c.AddExperiment(types.NewExperiment(
 		"BonusMaxRL-Part",
 		&types.AgentConfig{
 			Episodes:    episodes,
