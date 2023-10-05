@@ -54,8 +54,9 @@ func getLPaxosPartEnv(config lpaxos.LPaxosEnvConfig, part bool) types.Environmen
 			Painter:                lpaxos.NewLNodeStatePainter(colors...),
 			Env:                    lpaxos.NewLPaxosPartitionEnv(config),
 			NumReplicas:            config.Replicas,
-			TicketBetweenPartition: 5,
+			TicketBetweenPartition: 3,
 			MaxMessagesPerTick:     3,
+			StaySameStateUpto:      3,
 		})
 	}
 	return lpaxos.NewLPaxosEnv(config)
