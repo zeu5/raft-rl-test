@@ -5,6 +5,8 @@ import (
 	"math/rand"
 	"time"
 
+	erand "golang.org/x/exp/rand"
+
 	"gonum.org/v1/gonum/stat/sampleuv"
 )
 
@@ -39,6 +41,8 @@ type SoftMaxNegPolicy struct {
 	temperature float64
 
 	smallest float64
+
+	rand erand.Source
 }
 
 // NewSoftMaxNegPolicy instantiated the SoftMaxNegPolicy
@@ -50,6 +54,7 @@ func NewSoftMaxNegPolicy(alpha, gamma, temperature float64) *SoftMaxNegPolicy {
 		temperature: temperature,
 
 		smallest: 0,
+		rand:     erand.NewSource(uint64(time.Now().UnixMilli())),
 	}
 }
 
@@ -59,6 +64,7 @@ var _ Policy = &SoftMaxNegPolicy{}
 // Reset clears the QTable
 func (s *SoftMaxNegPolicy) Reset() {
 	s.QTable = make(map[string]map[string]float64)
+	s.rand = erand.NewSource(uint64(time.Now().UnixMilli()))
 }
 
 func (s *SoftMaxNegPolicy) UpdateIteration(_ int, _ *Trace) {
@@ -108,7 +114,7 @@ func (s *SoftMaxNegPolicy) NextAction(step int, state State, actions []Action) (
 		weights[i] = v / sum
 	}
 	// using the sampleuv library to sample based on the weights
-	i, ok := sampleuv.NewWeighted(weights, nil).Take()
+	i, ok := sampleuv.NewWeighted(weights, s.rand).Take()
 	if !ok {
 		return nil, false
 	}
