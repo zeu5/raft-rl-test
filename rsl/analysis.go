@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path"
+	"strconv"
 
 	"github.com/zeu5/raft-rl-test/types"
 	"gonum.org/v1/plot"
@@ -29,7 +30,7 @@ func newRSLPartState(s types.State) *rslPartState {
 	if ok {
 		r := &rslPartState{nodeStates: make(map[uint64]LocalState)}
 		for id, s := range p.ReplicaStates {
-			r.nodeStates[id] = s.(LocalState)
+			r.nodeStates[id] = s.(LocalState).Copy()
 		}
 		return r
 	}
@@ -37,15 +38,16 @@ func newRSLPartState(s types.State) *rslPartState {
 }
 
 func CoverageAnalyzer() types.Analyzer {
-	return func(s string, t []*types.Trace) types.DataSet {
+	return func(run int, s string, t []*types.Trace) types.DataSet {
 		c := make([]int, 0)
 		states := make(map[string]bool)
 		for _, trace := range t {
 			for i := 0; i < trace.Len(); i++ {
 				state, _, _, _ := trace.Get(i)
 				rslState := newRSLPartState(state)
-				if _, ok := states[rslState.Hash()]; !ok {
-					states[rslState.Hash()] = true
+				rslStateHash := rslState.Hash()
+				if _, ok := states[rslStateHash]; !ok {
+					states[rslStateHash] = true
 				}
 			}
 			c = append(c, len(states))
@@ -58,7 +60,7 @@ func CoverageComparator(plotPath string) types.Comparator {
 	if _, err := os.Stat(plotPath); err != nil {
 		os.Mkdir(plotPath, os.ModePerm)
 	}
-	return func(s []string, ds []types.DataSet) {
+	return func(run int, s []string, ds []types.DataSet) {
 		p := plot.New()
 
 		p.Title.Text = "Comparison"
@@ -83,6 +85,6 @@ func CoverageComparator(plotPath string) types.Comparator {
 			p.Legend.Add(s[i], line)
 		}
 
-		p.Save(8*vg.Inch, 8*vg.Inch, path.Join(plotPath, "coverage.png"))
+		p.Save(8*vg.Inch, 8*vg.Inch, path.Join(plotPath, strconv.Itoa(run)+"_coverage.png"))
 	}
 }

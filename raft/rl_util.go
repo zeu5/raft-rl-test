@@ -1,15 +1,16 @@
 package raft
 
 import (
+	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"image/png"
 	"math"
 	"os"
 	"path"
 	"sort"
+	"strconv"
 
 	"github.com/zeu5/raft-rl-test/types"
 	"go.etcd.io/raft/v3"
@@ -17,8 +18,6 @@ import (
 	"gonum.org/v1/plot/plotter"
 	"gonum.org/v1/plot/plotutil"
 	"gonum.org/v1/plot/vg"
-	"gonum.org/v1/plot/vg/draw"
-	"gonum.org/v1/plot/vg/vgimg"
 )
 
 // This file defines the analyzer and comparator for the raft experiments
@@ -26,10 +25,25 @@ import (
 // The dataset contains a visit graph, unique states observed per iteration
 // and the path to save the visit graph at
 type RaftDataSet struct {
-	savePath           string
-	visitGraph         *types.VisitGraph
-	uniqueStates       []int
-	uniqueActualStates []int
+	savePath     string
+	states       map[string]bool
+	UniqueStates []int
+}
+
+func (d *RaftDataSet) Record() {
+	bs, err := json.Marshal(d)
+	if err != nil {
+		return
+	}
+	file, err := os.Create(d.savePath)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+	writer := bufio.NewWriter(file)
+	writer.Write(bs)
+	writer.Flush()
+
 }
 
 type RaftGraphState struct {
@@ -94,43 +108,36 @@ func RaftAnalyzer(savePath string) types.Analyzer {
 	if _, err := os.Stat(savePath); err != nil {
 		os.Mkdir(savePath, os.ModePerm)
 	}
-	return func(name string, traces []*types.Trace) types.DataSet {
+	return func(run int, name string, traces []*types.Trace) types.DataSet {
 		dataSet := &RaftDataSet{
-			savePath:           path.Join(savePath, "visit_graph_"+name+".json"),
-			visitGraph:         types.NewVisitGraph(),
-			uniqueStates:       make([]int, 0),
-			uniqueActualStates: make([]int, 0),
+			savePath:     path.Join(savePath, strconv.Itoa(run)+"_"+name+".json"),
+			states:       make(map[string]bool),
+			UniqueStates: make([]int, 0),
 		}
-		actualStatesMap := make(map[string]bool)
 		uniqueStates := 0
-		uniqueActualStates := 0
 		for _, trace := range traces {
 			for i := 0; i < trace.Len(); i++ {
-				state, action, nextState, _ := trace.Get(i)
+				state, _, _, _ := trace.Get(i)
 				rState, _ := state.(RaftStateType)
-				rNextState, _ := nextState.(RaftStateType)
-				rAction, _ := action.(*RaftAction)
-				if _, ok := actualStatesMap[state.Hash()]; !ok {
-					actualStatesMap[state.Hash()] = true
-					uniqueActualStates++
-				}
-				if dataSet.visitGraph.Update(&RaftGraphState{NodeStates: rState.GetNodeStates()}, rAction.Hash(), &RaftGraphState{NodeStates: rNextState.GetNodeStates()}) {
-					uniqueStates++
+				rgState := &RaftGraphState{NodeStates: rState.GetNodeStates()}
+				rgStateHash := rgState.Hash()
+				if _, ok := dataSet.states[rgStateHash]; !ok {
+					dataSet.states[rgStateHash] = true
+					uniqueStates += 1
 				}
 			}
-			dataSet.uniqueStates = append(dataSet.uniqueStates, uniqueStates)
-			dataSet.uniqueActualStates = append(dataSet.uniqueActualStates, uniqueActualStates)
+			dataSet.UniqueStates = append(dataSet.UniqueStates, uniqueStates)
 		}
-		dataSet.visitGraph.Record(path.Join(savePath, "visit_graph_"+name+".json"))
+		dataSet.Record()
 		return dataSet
 	}
 }
 
 // Print the coverage of the different experiments
-func RaftComparator(names []string, datasets []types.DataSet) {
+func RaftComparator(run int, names []string, datasets []types.DataSet) {
 	for i := 0; i < len(names); i++ {
 		raftDataSet := datasets[i].(*RaftDataSet)
-		fmt.Printf("Coverage for experiment: %s, states: %d\n", names[i], len(raftDataSet.visitGraph.Nodes))
+		fmt.Printf("Coverage for run: %d, experiment: %s, states: %d\n", run, names[i], len(raftDataSet.states))
 	}
 }
 
@@ -176,25 +183,21 @@ func MinCutOff(min float64) PlotFilter {
 }
 
 // Plot coverage of different experiments
-func RaftPlotComparator(figPath string, plotFilter PlotFilter) types.Comparator {
+func RaftPlotComparator(figPath string) types.Comparator {
+
 	if _, err := os.Stat(figPath); err != nil {
 		os.Mkdir(figPath, os.ModePerm)
 	}
-	return func(names []string, datasets []types.DataSet) {
+	return func(run int, names []string, datasets []types.DataSet) {
 		p := plot.New()
 		p.Title.Text = "Comparison"
 		p.X.Label.Text = "Iteration"
 		p.Y.Label.Text = "States covered"
 
-		img := vgimg.New(16*vg.Inch, 8*vg.Inch)
-		c := draw.New(img)
-		cSize := c.Size()
-		left, right := draw.Crop(c, 0, c.Min.X-c.Max.X+cSize.X/2, 0, 0), draw.Crop(c, cSize.X/2, 0, 0, 0)
-
 		for i := 0; i < len(names); i++ {
 			raftDataSet := datasets[i].(*RaftDataSet)
-			points := make(plotter.XYs, len(raftDataSet.uniqueStates))
-			for i, v := range raftDataSet.uniqueStates {
+			points := make(plotter.XYs, len(raftDataSet.UniqueStates))
+			for i, v := range raftDataSet.UniqueStates {
 				points[i] = plotter.XY{
 					X: float64(i),
 					Y: float64(v),
@@ -208,63 +211,7 @@ func RaftPlotComparator(figPath string, plotFilter PlotFilter) types.Comparator 
 			p.Add(line)
 			p.Legend.Add(names[i], line)
 		}
-
-		p.Draw(left)
-
-		p = plot.New()
-		p.Title.Text = "Comparison"
-		p.X.Label.Text = "Iteration"
-		p.Y.Label.Text = "Actual states covered"
-
-		for i := 0; i < len(names); i++ {
-			raftDataSet := datasets[i].(*RaftDataSet)
-			points := make(plotter.XYs, len(raftDataSet.uniqueActualStates))
-			for i, v := range raftDataSet.uniqueActualStates {
-				points[i] = plotter.XY{
-					X: float64(i),
-					Y: float64(v),
-				}
-			}
-			line, err := plotter.NewLine(points)
-			if err != nil {
-				continue
-			}
-			line.Color = plotutil.Color(i)
-			p.Add(line)
-			p.Legend.Add(names[i], line)
-		}
-		p.Draw(right)
-
-		// if len(names) == 0 {
-		// 	return
-		// }
-
-		// for i := 0; i < len(names); i++ {
-		// 	raftDataSet := datasets[i].(*RaftDataSet)
-		// 	points := make([]float64, len(raftDataSet.visitGraph.Nodes))
-		// 	j := 0
-		// 	for _, v := range raftDataSet.visitGraph.GetVisits() {
-		// 		points[j] = float64(v)
-		// 		j++
-		// 	}
-		// 	points = plotFilter(points)
-		// 	hist, err := plotter.NewHist(plotter.Values(points), len(points)/10)
-		// 	if err != nil {
-		// 		continue
-		// 	}
-		// 	hist.Color = plotutil.Color(i)
-		// 	p.Add(hist)
-		// 	p.Legend.Add(names[i], hist)
-		// }
-		// p.Legend.Top = true
-		// p.Draw(right)
-
-		f, err := os.Create(path.Join(figPath, "coverage.png"))
-		if err != nil {
-			return
-		}
-		png.Encode(f, img.Image())
-		f.Close()
+		p.Save(8*vg.Inch, 8*vg.Inch, path.Join(figPath, strconv.Itoa(run)+"_coverage.png"))
 	}
 }
 

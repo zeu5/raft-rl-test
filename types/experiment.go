@@ -75,10 +75,10 @@ func (e *Experiment) Reset() {
 type DataSet interface{}
 
 // Analyzer compresses the information in the traces to a DataSet
-type Analyzer func(string, []*Trace) DataSet
+type Analyzer func(int, string, []*Trace) DataSet
 
 // Comparator differentiates between different datasets with associated names
-type Comparator func([]string, []DataSet)
+type Comparator func(int, []string, []DataSet)
 
 // Comparison contains the different experiments to compare
 // The traces obtained from the experiments are analyzed
@@ -87,14 +87,16 @@ type Comparison struct {
 	Experiments []*Experiment
 	analyzer    Analyzer
 	comparator  Comparator
+	runs        int
 }
 
 // NewComparison creates a comparison instance
-func NewComparison(analyzer Analyzer, comparator Comparator) *Comparison {
+func NewComparison(analyzer Analyzer, comparator Comparator, runs int) *Comparison {
 	return &Comparison{
 		Experiments: make([]*Experiment, 0),
 		analyzer:    analyzer,
 		comparator:  comparator,
+		runs:        runs,
 	}
 }
 
@@ -106,12 +108,16 @@ func (c *Comparison) AddExperiment(e *Experiment) {
 // Run each experiment sequentially
 // TODO: Could be parallelized
 func (c *Comparison) Run() {
-	datasets := make([]DataSet, len(c.Experiments))
-	names := make([]string, len(c.Experiments))
-	for i, e := range c.Experiments {
-		e.Run()
-		datasets[i] = c.analyzer(e.name, e.Result)
-		names[i] = e.name
+	for run := 0; run < c.runs; run++ {
+		fmt.Printf("Run %d\n", run+1)
+		datasets := make([]DataSet, len(c.Experiments))
+		names := make([]string, len(c.Experiments))
+		for i, e := range c.Experiments {
+			e.Run()
+			datasets[i] = c.analyzer(run, e.name, e.Result)
+			names[i] = e.name
+			e.Reset()
+		}
+		c.comparator(run, names, datasets)
 	}
-	c.comparator(names, datasets)
 }

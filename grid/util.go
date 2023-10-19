@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/zeu5/raft-rl-test/types"
 	"gonum.org/v1/plot/plotter"
@@ -55,7 +56,7 @@ func (g *KGrid) Max() float64 {
 	return float64(max)
 }
 
-func GridAnalyzer(_ string, traces []*types.Trace) types.DataSet {
+func GridAnalyzer(_ int, _ string, traces []*types.Trace) types.DataSet {
 	dataSet := &GridDataSet{
 		Visits:    make(map[int]map[int]map[int]int),
 		RLActions: make(map[string]map[string]int),
@@ -97,13 +98,13 @@ func GridAnalyzer(_ string, traces []*types.Trace) types.DataSet {
 }
 
 func GridPlotComparator(figPath string) types.Comparator {
-	return func(s []string, ds []types.DataSet) {
+	return func(run int, s []string, ds []types.DataSet) {
 		for i := 0; i < len(s); i++ {
 			name := s[i]
 			dataSet := ds[i].(*GridDataSet)
 
 			bs, _ := json.Marshal(dataSet)
-			os.WriteFile(name+".json", bs, 0400)
+			os.WriteFile(strconv.Itoa(run)+"_"+name+".json", bs, 0400)
 
 			// p := plot.New()
 			// p.Title.Text = name
@@ -114,7 +115,7 @@ func GridPlotComparator(figPath string) types.Comparator {
 }
 
 func GridPositionComparator(iPos, jPos, kPos int) types.Comparator {
-	return func(s []string, ds []types.DataSet) {
+	return func(run int, s []string, ds []types.DataSet) {
 		for i := 0; i < len(s); i++ {
 			name := s[i]
 			dataSet := ds[i].(*GridDataSet)
@@ -128,13 +129,13 @@ func GridPositionComparator(iPos, jPos, kPos int) types.Comparator {
 				}
 			}
 
-			fmt.Printf("Experiment %s visited %d times\n", name, visits)
+			fmt.Printf("Run: %d, Experiment %s visited %d times\n", run, name, visits)
 		}
 	}
 }
 
 func GridDepthComparator() types.Comparator {
-	return func(s []string, ds []types.DataSet) {
+	return func(run int, s []string, ds []types.DataSet) {
 		for i := 0; i < len(s); i++ {
 			name := s[i]
 			dataSet := ds[i].(*GridDataSet)
@@ -147,7 +148,7 @@ func GridDepthComparator() types.Comparator {
 					gridVisits[k] += len(ivs)
 				}
 			}
-			fmt.Printf("Experiment %s:\n", name)
+			fmt.Printf("Run: %d, Experiment %s:\n", run, name)
 			for k, visits := range gridVisits {
 				fmt.Printf("Grid %d: covered %d positions\n", k, visits)
 			}

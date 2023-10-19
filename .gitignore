@@ -6,3 +6,4 @@ raft-rl-test
 
 results
 __pycache__
+result_*

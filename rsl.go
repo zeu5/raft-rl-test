@@ -27,7 +27,7 @@ func RSLExploration() {
 		AdditionalCommands: make([]rsl.Command, 0),
 	}
 
-	c := types.NewComparison(rsl.CoverageAnalyzer(), rsl.CoverageComparator(saveFile))
+	c := types.NewComparison(rsl.CoverageAnalyzer(), rsl.CoverageComparator(saveFile), runs)
 	// Random exploration
 	c.AddExperiment(types.NewExperiment(
 		"random",
@@ -53,6 +53,15 @@ func RSLExploration() {
 	// ))
 	// RL based exploration
 	c.AddExperiment(types.NewExperiment(
+		"NegReward-Part",
+		&types.AgentConfig{
+			Episodes:    episodes,
+			Horizon:     horizon,
+			Policy:      types.NewSoftMaxNegPolicy(0.1, 0.99, 1),
+			Environment: GetRSLEnvironment(config),
+		},
+	))
+	c.AddExperiment(types.NewExperiment(
 		"BonusMax",
 		&types.AgentConfig{
 			Episodes:    episodes,
@@ -71,9 +80,9 @@ func GetRSLEnvironment(c rsl.RSLEnvConfig) types.Environment {
 		Painter:                rsl.NewRSLPainter(colors...),
 		Env:                    rsl.NewRLSPartitionEnv(c),
 		NumReplicas:            c.Nodes,
-		TicketBetweenPartition: 5,
+		TicketBetweenPartition: 3,
 		MaxMessagesPerTick:     3,
-		StaySameStateUpto:      0,
+		StaySameStateUpto:      5,
 	})
 }
 

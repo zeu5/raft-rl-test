@@ -17,7 +17,7 @@ func PaxosReward(episodes, horizon int, saveFile string) {
 
 	commit := lpaxos.Commit()
 
-	c := types.NewComparison(lpaxos.RewardStatesVisitedAnalyzer([]string{"commit"}, []types.RewardFunc{commit}, saveFile), lpaxos.RewardStateComparator())
+	c := types.NewComparison(lpaxos.RewardStatesVisitedAnalyzer([]string{"commit"}, []types.RewardFunc{commit}, saveFile), lpaxos.RewardStateComparator(), runs)
 	c.AddExperiment(types.NewExperiment(
 		"Random-Part",
 		&types.AgentConfig{

@@ -10,6 +10,7 @@ var (
 	episodes int
 	horizon  int
 	saveFile string
+	runs     int
 )
 
 // main entry point to all the experiments
@@ -19,8 +20,10 @@ func main() {
 	rootCommand.PersistentFlags().IntVarP(&episodes, "episodes", "e", 10000, "Number of episodes to run")
 	rootCommand.PersistentFlags().IntVar(&horizon, "horizon", 50, "Horizon of each episode")
 	rootCommand.PersistentFlags().StringVarP(&saveFile, "save", "s", "results", "Save the result data in the specified folder")
+	rootCommand.PersistentFlags().IntVar(&runs, "runs", 1, "Number of experiment runs")
 	// adding the subcommands here
 	rootCommand.AddCommand(RaftCommand())
+	rootCommand.AddCommand(RaftPartCommand())
 	rootCommand.AddCommand(PaxosCommand())
 	rootCommand.AddCommand(PaxosPartCommand())
 	rootCommand.AddCommand(PaxosRewardCommand())

@@ -43,7 +43,7 @@
             ]
         },
         {
-            "name": "Run paxos",
+            "name": "Run paxos part",
             "type": "go",
             "request": "launch",
             "mode": "auto",
@@ -51,7 +51,11 @@
             "args": [
                 "-e",
                 "10",
-                "paxos"
+                "paxos-part",
+                "--horizon",
+                "100",
+                "--requests", 
+                "3", 
             ]
         },
         {

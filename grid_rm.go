@@ -7,7 +7,7 @@ import (
 	"github.com/zeu5/raft-rl-test/types"
 )
 
-func GridRewardMachine(episodes, horizon int, height, width, grids int) {
+func GridRewardMachine(episodes, horizon int, height, width, grids int, runs int) {
 
 	// rm := policies.NewRewardMachine()
 	// for i := 1; i < grids-1; i++ {
@@ -64,7 +64,7 @@ func GridRewardMachine(episodes, horizon int, height, width, grids int) {
 	rm.AddState(grid.GridAndPos_23_40(), "Grid23_40")
 	rm.AddState(grid.GridAndPos_23_50(), "Grid23_50")
 
-	c := types.NewComparison(grid.GridAnalyzer, grid.GridDepthComparator())
+	c := types.NewComparison(grid.GridAnalyzer, grid.GridDepthComparator(), runs)
 
 	c.AddExperiment(types.NewExperiment(
 		"Random",
@@ -114,7 +114,7 @@ func GridRewardMachineCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use: "grid-reward-rm",
 		Run: func(cmd *cobra.Command, args []string) {
-			GridRewardMachine(episodes, horizon, height, width, grids)
+			GridRewardMachine(episodes, horizon, height, width, grids, runs)
 		},
 	}
 	cmd.PersistentFlags().IntVar(&height, "height", 5, "Height of each grid")

@@ -37,6 +37,8 @@ type SoftMaxNegPolicy struct {
 	alpha       float64
 	gamma       float64
 	temperature float64
+
+	smallest float64
 }
 
 // NewSoftMaxNegPolicy instantiated the SoftMaxNegPolicy
@@ -46,6 +48,8 @@ func NewSoftMaxNegPolicy(alpha, gamma, temperature float64) *SoftMaxNegPolicy {
 		alpha:       alpha,
 		gamma:       gamma,
 		temperature: temperature,
+
+		smallest: 0,
 	}
 }
 
@@ -58,7 +62,9 @@ func (s *SoftMaxNegPolicy) Reset() {
 }
 
 func (s *SoftMaxNegPolicy) UpdateIteration(_ int, _ *Trace) {
-
+	// if episode%200 == 0 {
+	// 	fmt.Printf("Smallest value: %f\n", s.smallest)
+	// }
 }
 
 func (s *SoftMaxNegPolicy) NextAction(step int, state State, actions []Action) (Action, bool) {
@@ -79,12 +85,22 @@ func (s *SoftMaxNegPolicy) NextAction(step int, state State, actions []Action) (
 	sum := float64(0)
 	weights := make([]float64, len(actions))
 	vals := make([]float64, len(actions))
+	largestValue := s.QTable[stateHash][actions[0].Hash()]
 
-	for i, action := range actions {
-		val := s.QTable[stateHash][action.Hash()] * (1 / s.temperature)
-		exp := math.Exp(val)
-		vals[i] = exp
-		sum += exp
+	for i := 0; i < len(actions); i++ {
+		action := actions[i]
+		val := s.QTable[stateHash][action.Hash()]
+		vals[i] = val
+		if val > largestValue {
+			largestValue = val
+		}
+	}
+
+	// Normalizing
+	for i := 0; i < len(vals); i++ {
+		vals[i] = vals[i] - largestValue
+		vals[i] = math.Exp(vals[i])
+		sum += vals[i]
 	}
 
 	// Computing weights for each action
@@ -122,6 +138,10 @@ func (s *SoftMaxNegPolicy) Update(step int, state State, action Action, nextStat
 	// the update with -1 reward
 	nextVal := (1-s.alpha)*curVal + s.alpha*(-1+s.gamma*max)
 	s.QTable[stateHash][actionKey] = nextVal
+
+	if nextVal < s.smallest {
+		s.smallest = nextVal
+	}
 }
 
 // RandomPolicy to choose the next action purely randomly

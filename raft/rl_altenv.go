@@ -77,10 +77,7 @@ func (r *AbsRaftEnvironment) Step(action types.Action) types.State {
 		}
 		// Take random number of ticks and update node states
 		for _, node := range r.nodes {
-			ticks := r.config.TicksPerStep
-			for i := 0; i < ticks; i++ {
-				node.Tick()
-			}
+			node.Tick()
 		}
 		newState := RaftState{
 			NodeStates:   make(map[uint64]raft.Status),

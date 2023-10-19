@@ -240,24 +240,24 @@ func NewRSLPainter(colors ...RSLColorFunc) *RSLPainter {
 
 func ColorState() RSLColorFunc {
 	return func(ls LocalState) (string, interface{}) {
-		return "state", string(ls.state)
+		return "state", string(ls.State)
 	}
 }
 
 func ColorBallot() RSLColorFunc {
 	return func(ls LocalState) (string, interface{}) {
-		return "ballot", ls.maxAcceptedProposal.Ballot.Num
+		return "ballot", ls.MaxAcceptedProposal.Ballot.Num
 	}
 }
 
 func ColorDecree() RSLColorFunc {
 	return func(ls LocalState) (string, interface{}) {
-		return "decree", ls.maxAcceptedProposal.Decree
+		return "decree", ls.MaxAcceptedProposal.Decree
 	}
 }
 
 func ColorDecided() RSLColorFunc {
 	return func(ls LocalState) (string, interface{}) {
-		return "decided", ls.decided
+		return "decided", ls.Decided
 	}
 }

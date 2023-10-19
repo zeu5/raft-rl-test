@@ -15,7 +15,7 @@ func PaxosPart(episodes, horizon int, saveFile string) {
 		Timeouts: timeouts,
 	}
 
-	c := types.NewComparison(lpaxos.LPaxosAnalyzer(saveFile), lpaxos.LPaxosComparator(saveFile))
+	c := types.NewComparison(lpaxos.LPaxosAnalyzer(saveFile), lpaxos.LPaxosComparator(saveFile), runs)
 	c.AddExperiment(types.NewExperiment(
 		"Random-Part",
 		&types.AgentConfig{

@@ -1,6 +1,7 @@
 package lpaxos
 
 import (
+	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"path"
 	"sort"
+	"strconv"
 
 	"github.com/zeu5/raft-rl-test/types"
 	"gonum.org/v1/plot"
@@ -18,8 +20,23 @@ import (
 
 type LPaxosDataSet struct {
 	savePath     string
-	VisitGraph   *types.VisitGraph
+	states       map[string]bool
 	UniqueStates []int
+}
+
+func (d *LPaxosDataSet) Record(path string) {
+	bs, err := json.Marshal(d)
+	if err != nil {
+		return
+	}
+	file, err := os.Create(path)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+	writer := bufio.NewWriter(file)
+	writer.Write(bs)
+	writer.Flush()
 }
 
 type LPaxosGraphState struct {
@@ -72,26 +89,27 @@ func LPaxosAnalyzer(savePath string) types.Analyzer {
 	if _, err := os.Stat(savePath); err != nil {
 		os.Mkdir(savePath, os.ModePerm)
 	}
-	return func(name string, traces []*types.Trace) types.DataSet {
+	return func(run int, name string, traces []*types.Trace) types.DataSet {
 		dataset := &LPaxosDataSet{
 			savePath:     path.Join(savePath, name+".json"),
-			VisitGraph:   types.NewVisitGraph(),
+			states:       make(map[string]bool),
 			UniqueStates: make([]int, 0),
 		}
 		uniqueStates := 0
-		visitGraph := dataset.VisitGraph
 		for _, trace := range traces {
 			for i := 0; i < trace.Len(); i++ {
-				state, action, nextState, _ := trace.Get(i)
-				if visitGraph.Update(NewLPaxosGraphState(state), action.Hash(), NewLPaxosGraphState(nextState)) {
+				state, _, _, _ := trace.Get(i)
+				gState := NewLPaxosGraphState(state)
+				gStateHash := gState.Hash()
+				if _, ok := dataset.states[gStateHash]; !ok {
 					uniqueStates += 1
+					dataset.states[gStateHash] = true
 				}
 			}
 			dataset.UniqueStates = append(dataset.UniqueStates, uniqueStates)
 		}
 
-		dataset.VisitGraph.Record(path.Join(savePath, "visit_graph_"+name+".json"))
-		dataset.VisitGraph.Clear()
+		dataset.Record(path.Join(savePath, "run_"+strconv.Itoa(run)+"_"+name+".json"))
 		return dataset
 	}
 }
@@ -100,7 +118,7 @@ func LPaxosComparator(figPath string) types.Comparator {
 	if _, err := os.Stat(figPath); err != nil {
 		os.Mkdir(figPath, os.ModePerm)
 	}
-	return func(names []string, ds []types.DataSet) {
+	return func(run int, names []string, ds []types.DataSet) {
 		p := plot.New()
 		p.Title.Text = "Comparison"
 		p.X.Label.Text = "Iteration"
@@ -123,7 +141,7 @@ func LPaxosComparator(figPath string) types.Comparator {
 			p.Add(line)
 			p.Legend.Add(names[i], line)
 		}
-		p.Save(8*vg.Inch, 8*vg.Inch, path.Join(figPath, "coverage.png"))
+		p.Save(8*vg.Inch, 8*vg.Inch, path.Join(figPath, strconv.Itoa(run)+"_coverage.png"))
 	}
 }
 
@@ -136,7 +154,7 @@ func RewardStatesVisitedAnalyzer(names []string, rewardFuncs []types.RewardFunc,
 	if _, err := os.Stat(savePath); err != nil {
 		os.Mkdir(savePath, os.ModePerm)
 	}
-	return func(s string, traces []*types.Trace) types.DataSet {
+	return func(run int, s string, traces []*types.Trace) types.DataSet {
 		d := RewardStatesVisited{
 			visits:     make(map[string]int),
 			visitGraph: types.NewVisitGraph(),
@@ -162,7 +180,7 @@ func RewardStatesVisitedAnalyzer(names []string, rewardFuncs []types.RewardFunc,
 }
 
 func RewardStateComparator() types.Comparator {
-	return func(s []string, ds []types.DataSet) {
+	return func(run int, s []string, ds []types.DataSet) {
 		for i := 0; i < len(s); i++ {
 			fmt.Printf("For experiment: %s\n", s[i])
 			rewardvisits := ds[i].(RewardStatesVisited)

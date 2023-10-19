@@ -34,11 +34,49 @@ func (r *RaftPartitionColor) Copy() types.Color {
 	return new
 }
 
-type RaftStatePainter struct {
-	paramFuncs []func(types.ReplicaState) (string, interface{})
+type RaftColorFunc func(raft.Status) (string, interface{})
+
+func ColorState() RaftColorFunc {
+	return func(s raft.Status) (string, interface{}) {
+		return "state", s.RaftState.String()
+	}
 }
 
-func NewRaftStatePainter(paramFuncs ...func(types.ReplicaState) (string, interface{})) *RaftStatePainter {
+func ColorTerm() RaftColorFunc {
+	return func(s raft.Status) (string, interface{}) {
+		return "term", s.Term
+	}
+}
+
+func ColorCommit() RaftColorFunc {
+	return func(s raft.Status) (string, interface{}) {
+		return "commit", s.Commit
+	}
+}
+
+func ColorApplied() RaftColorFunc {
+	return func(s raft.Status) (string, interface{}) {
+		return "applied", s.Applied
+	}
+}
+
+func ColorVote() RaftColorFunc {
+	return func(s raft.Status) (string, interface{}) {
+		return "vote", s.Vote
+	}
+}
+
+func ColorLeader() RaftColorFunc {
+	return func(s raft.Status) (string, interface{}) {
+		return "leader", s.Lead
+	}
+}
+
+type RaftStatePainter struct {
+	paramFuncs []RaftColorFunc
+}
+
+func NewRaftStatePainter(paramFuncs ...RaftColorFunc) *RaftStatePainter {
 	return &RaftStatePainter{
 		paramFuncs: paramFuncs,
 	}
@@ -112,13 +150,11 @@ var _ types.PartitionedSystemEnvironment = &RaftPartitionEnv{}
 
 type RaftPartitionEnv struct {
 	*RaftEnvironment
-	abs StateAbstracter
 }
 
-func NewPartitionEnvironment(config RaftEnvironmentConfig, abstracter StateAbstracter) *RaftPartitionEnv {
+func NewPartitionEnvironment(config RaftEnvironmentConfig) *RaftPartitionEnv {
 	return &RaftPartitionEnv{
 		RaftEnvironment: NewRaftEnvironment(config),
-		abs:             abstracter,
 	}
 }
 

@@ -63,7 +63,7 @@ func isLogPrefix(l1, l2 []Entry) bool {
 }
 
 func BugAnalyzer(bug func(*types.Trace) bool) types.Analyzer {
-	return func(s string, traces []*types.Trace) types.DataSet {
+	return func(run int, s string, traces []*types.Trace) types.DataSet {
 		occurrences := 0
 		for _, t := range traces {
 			if bug(t) {
@@ -75,10 +75,10 @@ func BugAnalyzer(bug func(*types.Trace) bool) types.Analyzer {
 }
 
 func BugComparator() types.Comparator {
-	return func(s []string, ds []types.DataSet) {
+	return func(run int, s []string, ds []types.DataSet) {
 		for i, exp := range s {
 			bugOccurrences := ds[i].(int)
-			fmt.Printf("For experiment: %s, bug occurrences: %d\n", exp, bugOccurrences)
+			fmt.Printf("For run:%d, experiment: %s, bug occurrences: %d\n", run, exp, bugOccurrences)
 		}
 	}
 }

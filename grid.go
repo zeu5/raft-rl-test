@@ -7,9 +7,9 @@ import (
 	"github.com/zeu5/raft-rl-test/types"
 )
 
-func GridReward(episodes, horizon int, saveFile string, height, width, grids int) {
+func GridReward(episodes, horizon int, saveFile string, height, width, grids int, runs int) {
 
-	c := types.NewComparison(grid.GridAnalyzer, grid.GridDepthComparator())
+	c := types.NewComparison(grid.GridAnalyzer, grid.GridDepthComparator(), runs)
 
 	c.AddExperiment(types.NewExperiment(
 		"Random-Part",
@@ -41,7 +41,7 @@ func GridRewardCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use: "grid",
 		Run: func(cmd *cobra.Command, args []string) {
-			GridReward(episodes, horizon, saveFile, height, width, grids)
+			GridReward(episodes, horizon, saveFile, height, width, grids, runs)
 		},
 	}
 	cmd.PersistentFlags().IntVar(&height, "height", 5, "Height of each grid")

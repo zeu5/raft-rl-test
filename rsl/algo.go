@@ -68,22 +68,22 @@ func (p Proposal) Copy() Proposal {
 }
 
 type LocalState struct {
-	state               RSLState
-	maxAcceptedProposal Proposal
-	maxPreparedBallot   Ballot
-	oldFreshestProposal Proposal
-	decided             int
-	peerConfig          RSLConfig
+	State               RSLState
+	MaxAcceptedProposal Proposal
+	MaxPreparedBallot   Ballot
+	OldFreshestProposal Proposal
+	Decided             int
+	PeerConfig          RSLConfig
 }
 
 func (l LocalState) Copy() LocalState {
 	return LocalState{
-		state:               l.state,
-		maxAcceptedProposal: l.maxAcceptedProposal.Copy(),
-		maxPreparedBallot:   l.maxPreparedBallot.Copy(),
-		oldFreshestProposal: l.oldFreshestProposal.Copy(),
-		decided:             l.decided,
-		peerConfig:          l.peerConfig.Copy(),
+		State:               l.State,
+		MaxAcceptedProposal: l.MaxAcceptedProposal.Copy(),
+		MaxPreparedBallot:   l.MaxPreparedBallot.Copy(),
+		OldFreshestProposal: l.OldFreshestProposal.Copy(),
+		Decided:             l.Decided,
+		PeerConfig:          l.PeerConfig.Copy(),
 	}
 }
 
@@ -159,7 +159,7 @@ func NewNode(c *NodeConfig) *Node {
 
 	return &Node{
 		ID:                    c.ID,
-		LocalState:            LocalState{state: StateInactive, peerConfig: initialConfig},
+		LocalState:            LocalState{State: StateInactive, PeerConfig: initialConfig},
 		config:                c,
 		log:                   NewLog(),
 		commandQ:              make([]Command, 0),
@@ -178,7 +178,7 @@ func NewNode(c *NodeConfig) *Node {
 }
 
 func (n *Node) IsPrimary() bool {
-	return n.state == StateStablePrimary
+	return n.LocalState.State == StateStablePrimary
 }
 
 func (n *Node) Start() {
@@ -190,7 +190,7 @@ func (n *Node) Start() {
 }
 
 func (n *Node) initialize() {
-	n.state = StateInitializing
+	n.LocalState.State = StateInitializing
 	n.remoteStates = make(map[uint64]RemoteState)
 	n.broadcast(Message{Type: MessageStatusReq})
 	n.actionTimeout = n.ticks + n.config.InitializeRetryInterval
@@ -211,20 +211,20 @@ func (n *Node) Tick() {
 		// Supposed to quit
 		return
 	}
-	if (n.state == StateStablePrimary || n.state == StateStableSecondary) && n.maxPreparedBallot.Node != n.ID && n.ticks > n.nextElectionTime {
+	if (n.LocalState.State == StateStablePrimary || n.LocalState.State == StateStableSecondary) && n.MaxPreparedBallot.Node != n.ID && n.ticks > n.nextElectionTime {
 		n.initialize()
 	}
-	if (n.state == StateStablePrimary || n.state == StateStableSecondary) && n.maxPreparedBallot.Node == n.ID && n.readyToPropose {
+	if (n.LocalState.State == StateStablePrimary || n.LocalState.State == StateStableSecondary) && n.MaxPreparedBallot.Node == n.ID && n.readyToPropose {
 		if n.ticks-n.lastChosenTime > n.config.HeartBeatInterval || len(n.commandQ) > 0 {
 			n.sendNextCommand()
 		}
 	}
 	if n.ticks > n.actionTimeout {
-		if n.state == StateStablePrimary && n.maxPreparedBallot.Node == n.ID {
+		if n.LocalState.State == StateStablePrimary && n.MaxPreparedBallot.Node == n.ID {
 			n.sendNextCommand()
-		} else if n.state == StateInitializing {
+		} else if n.LocalState.State == StateInitializing {
 			n.initialize()
-		} else if n.state == StatePreparing {
+		} else if n.LocalState.State == StatePreparing {
 			n.prepare()
 		}
 	}
@@ -235,17 +235,17 @@ func (n *Node) Propose(c Command) {
 }
 
 func (n *Node) sendNextCommand() {
-	if n.state != StateStablePrimary || n.maxPreparedBallot.Node != n.ID {
+	if n.LocalState.State != StateStablePrimary || n.MaxPreparedBallot.Node != n.ID {
 		return
 	}
-	if n.maxPreparedBallot.Num != n.maxAcceptedProposal.Ballot.Num {
+	if n.MaxPreparedBallot.Num != n.MaxAcceptedProposal.Ballot.Num {
 		return
 	}
 	n.remoteStates = make(map[uint64]RemoteState)
 	if n.readyToPropose && len(n.commandQ) > 0 {
 		newProposal := Proposal{
-			Ballot:  n.maxAcceptedProposal.Ballot.Copy(),
-			Decree:  n.maxAcceptedProposal.Decree + 1,
+			Ballot:  n.MaxAcceptedProposal.Ballot.Copy(),
+			Decree:  n.MaxAcceptedProposal.Decree + 1,
 			Command: n.commandQ[0].Copy(),
 		}
 		n.broadcast(Message{
@@ -260,9 +260,9 @@ func (n *Node) sendNextCommand() {
 	} else {
 		n.broadcast(Message{
 			Type:    MessageAcceptReq,
-			Ballot:  n.maxAcceptedProposal.Ballot.Copy(),
-			Decree:  n.maxAcceptedProposal.Decree,
-			Command: n.maxAcceptedProposal.Command.Copy(),
+			Ballot:  n.MaxAcceptedProposal.Ballot.Copy(),
+			Decree:  n.MaxAcceptedProposal.Decree,
+			Command: n.MaxAcceptedProposal.Command.Copy(),
 		})
 	}
 	n.actionTimeout = n.ticks + n.config.ProposalRetryInterval
@@ -284,7 +284,7 @@ func (n *Node) Ready() Ready {
 }
 
 func (n *Node) Step(m Message) {
-	if n.state == StateInactive {
+	if n.LocalState.State == StateInactive {
 		// Discard message if not active
 		return
 	}
@@ -321,15 +321,15 @@ func (n *Node) handleStatusRequest(m Message) {
 	n.send(Message{
 		To:        m.From,
 		Type:      MessageStatusResp,
-		Ballot:    n.maxAcceptedProposal.Ballot,
-		Decree:    n.maxAcceptedProposal.Decree,
+		Ballot:    n.MaxAcceptedProposal.Ballot,
+		Decree:    n.MaxAcceptedProposal.Decree,
 		Timestamp: n.lastChosenTime,
 	})
 }
 
 func (n *Node) handleStatusResponse(m Message) {
-	if n.state != StateInitializing {
-		if m.Ballot.Num >= n.maxAcceptedProposal.Ballot.Num && m.Decree == n.maxAcceptedProposal.Decree && len(n.proposalQ) == 0 {
+	if n.LocalState.State != StateInitializing {
+		if m.Ballot.Num >= n.MaxAcceptedProposal.Ballot.Num && m.Decree == n.MaxAcceptedProposal.Decree && len(n.proposalQ) == 0 {
 			n.learnVotes(m.From)
 			return
 		}
@@ -343,7 +343,7 @@ func (n *Node) handleStatusResponse(m Message) {
 		if n.isMajority(1 + len(n.remoteStates)) {
 			if len(n.proposalQ) > 0 {
 				minDecreeNeeded := n.proposalQ[0].Decree
-				if minDecreeNeeded < n.maxAcceptedProposal.Decree {
+				if minDecreeNeeded < n.MaxAcceptedProposal.Decree {
 					return
 				}
 				higherNodes := make([]uint64, 0)
@@ -359,8 +359,8 @@ func (n *Node) handleStatusResponse(m Message) {
 				}
 			}
 			// Bug: Need to do what follows only if we see a majority responses
-			minDecreeNeeded := n.maxAcceptedProposal.Decree
-			minNeededBallot := n.maxAcceptedProposal.Ballot
+			minDecreeNeeded := n.MaxAcceptedProposal.Decree
+			minNeededBallot := n.MaxAcceptedProposal.Ballot
 
 			filteredNodes := make([]uint64, 0)
 			for n, rs := range n.remoteStates {
@@ -385,7 +385,7 @@ func (n *Node) handleStatusResponse(m Message) {
 				}
 				n.nextElectionTime = min(n.ticks, maxChosen) + n.config.BaseElectionDelay
 			}
-			if n.ticks > n.nextElectionTime || n.maxPreparedBallot.Node == n.ID {
+			if n.ticks > n.nextElectionTime || n.MaxPreparedBallot.Node == n.ID {
 				n.prepare()
 			} else {
 				n.stabilize(false)
@@ -402,8 +402,8 @@ func (n *Node) learnVotes(toLearnFrom uint64) {
 	n.send(Message{
 		To:     toLearnFrom,
 		Type:   MessageFetchReq,
-		Decree: n.maxAcceptedProposal.Decree,
-		Ballot: n.maxAcceptedProposal.Ballot.Copy(),
+		Decree: n.MaxAcceptedProposal.Decree,
+		Ballot: n.MaxAcceptedProposal.Ballot.Copy(),
 	})
 
 	n.learningFrom = toLearnFrom
@@ -422,15 +422,15 @@ func (n *Node) addtoExecutionQueue(p Proposal) {
 		for k := range newConfig.Members {
 			newMembers[k] = true
 		}
-		n.peerConfig = RSLConfig{
+		n.PeerConfig = RSLConfig{
 			InitialDecree: p.Decree,
-			Number:        n.peerConfig.Number + 1,
+			Number:        n.PeerConfig.Number + 1,
 			Members:       newMembers,
 		}
 	}
 
 	n.log.AddDecided(p.Command.Copy())
-	n.decided = n.log.NumDecided()
+	n.Decided = n.log.NumDecided()
 }
 
 func (n *Node) logProposal(p Proposal) {
@@ -440,24 +440,24 @@ func (n *Node) logProposal(p Proposal) {
 		Decree:   p.Decree,
 		Command:  p.Command,
 	})
-	n.maxAcceptedProposal = p
+	n.MaxAcceptedProposal = p
 	n.lastChosenTime = n.ticks
 	n.noProgressTime = n.ticks + n.config.NoProgressTimeout
-	if p.Ballot.Num > n.maxPreparedBallot.Num {
-		n.maxPreparedBallot = p.Ballot.Copy()
+	if p.Ballot.Num > n.MaxPreparedBallot.Num {
+		n.MaxPreparedBallot = p.Ballot.Copy()
 		n.nextElectionTime = max(n.nextElectionTime, n.ticks) + n.config.NewLeaderGracePeriod
 	}
 }
 
 func (n *Node) stabilize(asPrimary bool) {
-	oldState := n.state
+	oldState := n.LocalState.State
 	if asPrimary {
-		n.state = StateStablePrimary
+		n.LocalState.State = StateStablePrimary
 	} else {
-		n.state = StateStableSecondary
+		n.LocalState.State = StateStableSecondary
 	}
 	n.remoteStates = make(map[uint64]RemoteState)
-	if n.maxPreparedBallot.Node == n.ID {
+	if n.MaxPreparedBallot.Node == n.ID {
 		if oldState != StatePreparing {
 			// Assertion
 			return
@@ -469,43 +469,43 @@ func (n *Node) stabilize(asPrimary bool) {
 }
 
 func (n *Node) prepare() {
-	if n.state == StateInitializing {
-		n.state = StatePreparing
-		n.maxPreparedBallot = Ballot{
-			Num:  n.maxPreparedBallot.Num + 1,
+	if n.LocalState.State == StateInitializing {
+		n.LocalState.State = StatePreparing
+		n.MaxPreparedBallot = Ballot{
+			Num:  n.MaxPreparedBallot.Num + 1,
 			Node: n.ID,
 		}
 		n.log.Add(Entry{
-			Ballot: n.maxPreparedBallot.Copy(),
+			Ballot: n.MaxPreparedBallot.Copy(),
 		})
 		n.nextElectionTime = n.ticks + n.config.NewLeaderGracePeriod
-	} else if n.state != StatePreparing {
+	} else if n.LocalState.State != StatePreparing {
 		// Assertion
 		return
 	}
-	n.oldFreshestProposal = n.maxAcceptedProposal.Copy()
+	n.OldFreshestProposal = n.MaxAcceptedProposal.Copy()
 	n.remoteStates = make(map[uint64]RemoteState)
 	// Bug: Need to send ballot here?
 	n.broadcast(Message{
 		Type:   MessagePrepareReq,
-		Decree: n.maxAcceptedProposal.Decree,
-		Ballot: n.maxPreparedBallot.Copy(),
+		Decree: n.MaxAcceptedProposal.Decree,
+		Ballot: n.MaxPreparedBallot.Copy(),
 	})
 	n.actionTimeout = n.ticks + n.config.PrepareRetryInterval
 }
 
 func (n *Node) handlePrepareRequest(m Message) {
-	if m.Ballot.Num < n.maxPreparedBallot.Num || m.Decree < n.maxAcceptedProposal.Decree {
+	if m.Ballot.Num < n.MaxPreparedBallot.Num || m.Decree < n.MaxAcceptedProposal.Decree {
 		n.send(Message{
 			To:     m.From,
 			Type:   MessagePrepareResp,
 			Accept: false,
-			Ballot: n.maxPreparedBallot.Copy(),
-			Decree: n.maxAcceptedProposal.Decree,
+			Ballot: n.MaxPreparedBallot.Copy(),
+			Decree: n.MaxAcceptedProposal.Decree,
 		})
-	} else if n.state != StateInitializing {
-		if m.Ballot.Num > n.maxPreparedBallot.Num {
-			n.maxPreparedBallot = m.Ballot.Copy()
+	} else if n.LocalState.State != StateInitializing {
+		if m.Ballot.Num > n.MaxPreparedBallot.Num {
+			n.MaxPreparedBallot = m.Ballot.Copy()
 			n.log.Add(Entry{
 				Accepted: false,
 				Ballot:   m.Ballot.Copy(),
@@ -516,12 +516,12 @@ func (n *Node) handlePrepareRequest(m Message) {
 				Type:           MessagePrepareResp,
 				Accept:         true,
 				Ballot:         m.Ballot.Copy(),
-				ProposalBallot: n.maxAcceptedProposal.Ballot.Copy(),
-				Decree:         n.maxAcceptedProposal.Decree,
-				Command:        n.maxAcceptedProposal.Command.Copy(),
+				ProposalBallot: n.MaxAcceptedProposal.Ballot.Copy(),
+				Decree:         n.MaxAcceptedProposal.Decree,
+				Command:        n.MaxAcceptedProposal.Command.Copy(),
 			})
 		}
-		if m.Decree > n.maxAcceptedProposal.Decree {
+		if m.Decree > n.MaxAcceptedProposal.Decree {
 			n.initialize()
 		} else {
 			n.stabilize(false)
@@ -530,13 +530,13 @@ func (n *Node) handlePrepareRequest(m Message) {
 }
 
 func (n *Node) handlePrepareResponse(m Message) {
-	if n.state == StatePreparing && n.maxPreparedBallot.Num == m.Ballot.Num && n.maxAcceptedProposal.Decree == m.Decree {
+	if n.LocalState.State == StatePreparing && n.MaxPreparedBallot.Num == m.Ballot.Num && n.MaxAcceptedProposal.Decree == m.Decree {
 		if m.Ballot.Node != n.ID {
 			// Assertion
 			return
 		}
-		if m.Decree == n.oldFreshestProposal.Decree && m.ProposalBallot.Num > n.oldFreshestProposal.Ballot.Num {
-			n.oldFreshestProposal = Proposal{
+		if m.Decree == n.OldFreshestProposal.Decree && m.ProposalBallot.Num > n.OldFreshestProposal.Ballot.Num {
+			n.OldFreshestProposal = Proposal{
 				Ballot:  m.ProposalBallot.Copy(),
 				Decree:  m.Decree,
 				Command: m.Command.Copy(),
@@ -549,14 +549,14 @@ func (n *Node) handlePrepareResponse(m Message) {
 			LastChosenTime: 0,
 		}
 		if n.isMajority(len(n.remoteStates) + 1) {
-			n.oldFreshestProposal.Ballot = n.maxPreparedBallot.Copy()
+			n.OldFreshestProposal.Ballot = n.MaxPreparedBallot.Copy()
 			n.broadcast(Message{
 				Type:    MessageAcceptReq,
-				Ballot:  n.oldFreshestProposal.Ballot.Copy(),
-				Decree:  n.oldFreshestProposal.Decree,
-				Command: n.oldFreshestProposal.Command.Copy(),
+				Ballot:  n.OldFreshestProposal.Ballot.Copy(),
+				Decree:  n.OldFreshestProposal.Decree,
+				Command: n.OldFreshestProposal.Command.Copy(),
 			})
-			n.logProposal(n.oldFreshestProposal.Copy())
+			n.logProposal(n.OldFreshestProposal.Copy())
 			n.readyToPropose = false
 			n.stabilize(true)
 		}
@@ -569,28 +569,28 @@ func (n *Node) handleAcceptRequest(m Message) {
 		// Crucially, the Accept message sent to self is ignored
 		return
 	}
-	if n.maxPreparedBallot.Num < n.maxAcceptedProposal.Ballot.Num {
+	if n.MaxPreparedBallot.Num < n.MaxAcceptedProposal.Ballot.Num {
 		// Assertion
 		return
 	}
-	if n.state != StateInitializing {
-		if m.Decree < n.maxAcceptedProposal.Decree || m.Ballot.Num < n.maxPreparedBallot.Num {
+	if n.LocalState.State != StateInitializing {
+		if m.Decree < n.MaxAcceptedProposal.Decree || m.Ballot.Num < n.MaxPreparedBallot.Num {
 			n.send(Message{
 				To:     m.From,
 				Type:   MessageAcceptResp,
 				Accept: false,
-				Ballot: n.maxPreparedBallot.Copy(),
-				Decree: n.maxAcceptedProposal.Decree,
+				Ballot: n.MaxPreparedBallot.Copy(),
+				Decree: n.MaxAcceptedProposal.Decree,
 			})
 			return
-		} else if m.Decree == n.maxAcceptedProposal.Decree && m.Ballot.Num == n.maxAcceptedProposal.Ballot.Num {
-			if !m.Command.Eq(n.maxAcceptedProposal.Command) {
+		} else if m.Decree == n.MaxAcceptedProposal.Decree && m.Ballot.Num == n.MaxAcceptedProposal.Ballot.Num {
+			if !m.Command.Eq(n.MaxAcceptedProposal.Command) {
 				// Assertion
 				return
 			}
-		} else if (m.Decree == n.maxAcceptedProposal.Decree && m.Ballot.Num >= n.maxAcceptedProposal.Ballot.Num) || (m.Decree == n.maxAcceptedProposal.Decree+1 && m.Ballot.Num == n.maxAcceptedProposal.Ballot.Num) {
-			if m.Decree == n.maxAcceptedProposal.Decree+1 {
-				n.addtoExecutionQueue(n.maxAcceptedProposal.Copy())
+		} else if (m.Decree == n.MaxAcceptedProposal.Decree && m.Ballot.Num >= n.MaxAcceptedProposal.Ballot.Num) || (m.Decree == n.MaxAcceptedProposal.Decree+1 && m.Ballot.Num == n.MaxAcceptedProposal.Ballot.Num) {
+			if m.Decree == n.MaxAcceptedProposal.Decree+1 {
+				n.addtoExecutionQueue(n.MaxAcceptedProposal.Copy())
 				n.nextElectionTime = n.ticks + n.config.BaseElectionDelay
 			}
 			n.logProposal(Proposal{
@@ -613,13 +613,13 @@ func (n *Node) handleAcceptRequest(m Message) {
 		if len(n.proposalQ) > 0 {
 			lastP := n.proposalQ[len(n.proposalQ)-1]
 			if m.Decree < lastP.Decree || m.Ballot.Num < lastP.Ballot.Num {
-				if m.Decree < n.maxAcceptedProposal.Decree || m.Ballot.Num < n.maxAcceptedProposal.Ballot.Num {
+				if m.Decree < n.MaxAcceptedProposal.Decree || m.Ballot.Num < n.MaxAcceptedProposal.Ballot.Num {
 					n.send(Message{
 						To:     m.From,
 						Type:   MessageAcceptResp,
 						Accept: false,
-						Ballot: n.maxPreparedBallot.Copy(),
-						Decree: n.maxAcceptedProposal.Decree,
+						Ballot: n.MaxPreparedBallot.Copy(),
+						Decree: n.MaxAcceptedProposal.Decree,
 					})
 				}
 				return
@@ -655,14 +655,14 @@ func (n *Node) handleAcceptRequest(m Message) {
 }
 
 func (n *Node) handleNotAccept(m Message) {
-	if m.Decree < n.maxAcceptedProposal.Decree || m.Ballot.Num < n.maxAcceptedProposal.Ballot.Num {
+	if m.Decree < n.MaxAcceptedProposal.Decree || m.Ballot.Num < n.MaxAcceptedProposal.Ballot.Num {
 		return
 	}
-	if n.state != StateInitializing {
-		if m.Decree > n.maxAcceptedProposal.Decree {
+	if n.LocalState.State != StateInitializing {
+		if m.Decree > n.MaxAcceptedProposal.Decree {
 			n.initialize()
-		} else if m.Ballot.Num > n.maxPreparedBallot.Num {
-			n.maxPreparedBallot = m.Ballot.Copy()
+		} else if m.Ballot.Num > n.MaxPreparedBallot.Num {
+			n.MaxPreparedBallot = m.Ballot.Copy()
 			n.log.Add(Entry{
 				Accepted: false,
 				Ballot:   m.Ballot.Copy(),
@@ -674,12 +674,12 @@ func (n *Node) handleNotAccept(m Message) {
 }
 
 func (n *Node) handleAcceptResponse(m Message) {
-	if (n.state == StateStablePrimary || n.state == StateStableSecondary) &&
-		n.maxPreparedBallot.Num == m.Ballot.Num &&
-		n.maxAcceptedProposal.Decree == m.Decree &&
-		n.maxPreparedBallot.Node == n.ID &&
+	if (n.LocalState.State == StateStablePrimary || n.LocalState.State == StateStableSecondary) &&
+		n.MaxPreparedBallot.Num == m.Ballot.Num &&
+		n.MaxAcceptedProposal.Decree == m.Decree &&
+		n.MaxPreparedBallot.Node == n.ID &&
 		!n.readyToPropose {
-		if n.maxPreparedBallot.Num != n.maxAcceptedProposal.Ballot.Num {
+		if n.MaxPreparedBallot.Num != n.MaxAcceptedProposal.Ballot.Num {
 			// Assertion
 			return
 		}
@@ -690,7 +690,7 @@ func (n *Node) handleAcceptResponse(m Message) {
 			LastChosenTime: 0,
 		}
 		if n.isMajority(len(n.remoteStates) + 1) {
-			n.addtoExecutionQueue(n.maxAcceptedProposal)
+			n.addtoExecutionQueue(n.MaxAcceptedProposal)
 			n.readyToPropose = true
 			n.actionTimeout = math.MaxInt
 		}
@@ -730,33 +730,33 @@ func (n *Node) handleFetchResponse(m Message) {
 		n.learningFrom = 0
 	}(n)
 	for _, p := range m.Proposals {
-		if p.Decree <= n.maxAcceptedProposal.Decree || p.Ballot.Num <= n.maxAcceptedProposal.Ballot.Num {
+		if p.Decree <= n.MaxAcceptedProposal.Decree || p.Ballot.Num <= n.MaxAcceptedProposal.Ballot.Num {
 			return
 		}
-		if p.Decree == n.maxAcceptedProposal.Decree+1 && p.Ballot.Num > n.maxAcceptedProposal.Ballot.Num {
+		if p.Decree == n.MaxAcceptedProposal.Decree+1 && p.Ballot.Num > n.MaxAcceptedProposal.Ballot.Num {
 			// Add to execution queue
-			n.addtoExecutionQueue(n.maxAcceptedProposal)
+			n.addtoExecutionQueue(n.MaxAcceptedProposal)
 			n.nextElectionTime = n.ticks + n.config.BaseElectionDelay
 			n.logProposal(Proposal{
-				Ballot:  n.maxAcceptedProposal.Ballot.Copy(),
-				Decree:  n.maxAcceptedProposal.Decree + 1,
+				Ballot:  n.MaxAcceptedProposal.Ballot.Copy(),
+				Decree:  n.MaxAcceptedProposal.Decree + 1,
 				Command: p.Command.Copy(),
 			})
 		}
-		if !((p.Decree == n.maxAcceptedProposal.Decree && p.Ballot.Num >= n.maxAcceptedProposal.Ballot.Num) || (p.Decree == n.maxAcceptedProposal.Decree+1 && p.Ballot.Num == n.maxAcceptedProposal.Ballot.Num)) {
+		if !((p.Decree == n.MaxAcceptedProposal.Decree && p.Ballot.Num >= n.MaxAcceptedProposal.Ballot.Num) || (p.Decree == n.MaxAcceptedProposal.Decree+1 && p.Ballot.Num == n.MaxAcceptedProposal.Ballot.Num)) {
 			// Assertion
 			return
 		}
-		if p.Decree == n.maxAcceptedProposal.Decree+1 {
-			n.addtoExecutionQueue(n.maxAcceptedProposal)
+		if p.Decree == n.MaxAcceptedProposal.Decree+1 {
+			n.addtoExecutionQueue(n.MaxAcceptedProposal)
 			n.nextElectionTime = n.ticks + n.config.BaseElectionDelay
 		}
 		n.logProposal(p.Copy())
 
 		if !haveMinNeeded || minNeeded.Decree <= m.Decree {
 			for _, p := range n.proposalQ {
-				if p.Decree == n.maxAcceptedProposal.Decree+1 {
-					n.addtoExecutionQueue(n.maxAcceptedProposal)
+				if p.Decree == n.MaxAcceptedProposal.Decree+1 {
+					n.addtoExecutionQueue(n.MaxAcceptedProposal)
 					n.nextElectionTime = n.ticks + n.config.BaseElectionDelay
 				}
 				n.logProposal(p)

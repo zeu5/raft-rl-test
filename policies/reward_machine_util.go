@@ -15,7 +15,7 @@ type RewardMachineDataset struct {
 // The last segment contains the explored states
 
 func RewardMachineAnalyzer(rm *RewardMachine) types.Analyzer {
-	return func(s string, traces []*types.Trace) types.DataSet {
+	return func(run int, s string, traces []*types.Trace) types.DataSet {
 		ds := &RewardMachineDataset{
 			rmStateVisits: make(map[string]int),
 		}
@@ -60,9 +60,9 @@ func RewardMachineAnalyzer(rm *RewardMachine) types.Analyzer {
 }
 
 func RewardMachineCoverageComparator() types.Comparator {
-	return func(s []string, ds []types.DataSet) {
+	return func(run int, s []string, ds []types.DataSet) {
 		for i := 0; i < len(ds); i++ {
-			fmt.Printf("For experiment: %s\n", s[i])
+			fmt.Printf("For run: %d, experiment: %s\n", run, s[i])
 			rmDS := ds[i].(*RewardMachineDataset)
 			for state, count := range rmDS.rmStateVisits {
 				fmt.Printf("\tRM State %s, Visits: %d\n", state, count)
@@ -76,7 +76,7 @@ type predicatesDataset struct {
 }
 
 func PredicatesAnalyzer(predicates ...types.RewardFuncSingle) types.Analyzer {
-	return func(s string, traces []*types.Trace) types.DataSet {
+	return func(run int, s string, traces []*types.Trace) types.DataSet {
 		d := &predicatesDataset{
 			predicates: make(map[int]int),
 		}
@@ -100,9 +100,9 @@ func PredicatesAnalyzer(predicates ...types.RewardFuncSingle) types.Analyzer {
 }
 
 func PredicatesComparator() types.Comparator {
-	return func(s []string, ds []types.DataSet) {
+	return func(run int, s []string, ds []types.DataSet) {
 		for i := 0; i < len(s); i++ {
-			fmt.Printf("For experiment: %s\n", s[i])
+			fmt.Printf("For run: %d, experiment: %s\n", run, s[i])
 			pDS := ds[i].(*predicatesDataset)
 			for s, count := range pDS.predicates {
 				fmt.Printf("\tPredicate: %d, num of times satisfied: %d\n", s, count)
