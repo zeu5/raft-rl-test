@@ -64,7 +64,8 @@ func getLPaxosPartEnv(config lpaxos.LPaxosEnvConfig, part bool) types.Environmen
 
 func PaxosPartCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use: "paxos-part",
+		Use:  "paxos-part",
+		Long: "Run paxos pure exploration with partitions as environment",
 		Run: func(cmd *cobra.Command, args []string) {
 			PaxosPart(episodes, horizon, saveFile)
 		},

@@ -64,6 +64,16 @@ func ColorPhase() LColorFunc {
 	}
 }
 
+func ColorBoundedPhase(bound int) LColorFunc {
+	return func(ls LNodeState) (string, interface{}) {
+		phase := ls.Phase
+		if ls.Phase > bound {
+			phase = bound
+		}
+		return "BoundedPhase", phase
+	}
+}
+
 func ColorDecided() LColorFunc {
 	return func(ls LNodeState) (string, interface{}) {
 		return "Decided", ls.Decided

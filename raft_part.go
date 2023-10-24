@@ -39,7 +39,7 @@ func RaftPart(episodes, horizon int, saveFile string) {
 }
 
 func getRaftPartEnv(config raft.RaftEnvironmentConfig) types.Environment {
-	colors := []raft.RaftColorFunc{raft.ColorState()}
+	colors := []raft.RaftColorFunc{raft.ColorState(), raft.ColorCommit(), raft.ColorLeader(), raft.ColorVote()}
 
 	return types.NewPartitionEnv(types.PartitionEnvConfig{
 		Painter:                raft.NewRaftStatePainter(colors...),
