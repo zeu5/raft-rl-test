@@ -110,6 +110,7 @@ func (l *LPaxosNode) Tick() {
 			Log:     l.State.Log.Entries(),
 			LogHash: l.State.Log.Hash(),
 		})
+		l.ticks = 0
 	}
 }
 

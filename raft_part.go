@@ -9,37 +9,39 @@ import (
 
 func RaftPart(episodes, horizon int, saveFile string) {
 	raftConfig := raft.RaftEnvironmentConfig{
-		Replicas:      5,
-		ElectionTick:  15,
+		Replicas:      3,
+		ElectionTick:  10,
 		HeartbeatTick: 3,
 		Timeouts:      timeouts,
 		Requests:      requests,
 	}
-	c := types.NewComparison(raft.RaftAnalyzer(saveFile), raft.RaftPlotComparator(saveFile), runs)
+
+	colors := []raft.RaftColorFunc{raft.ColorState(), raft.ColorCommit(), raft.ColorLeader(), raft.ColorVote(), raft.ColorBoundedTerm(5)}
+
+	c := types.NewComparison(raft.RaftAnalyzer(saveFile, colors...), raft.RaftPlotComparator(saveFile), runs)
 	c.AddExperiment(types.NewExperiment("RL", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
-		Policy:      types.NewSoftMaxNegPolicy(0.3, 0.7, 1),
-		Environment: getRaftPartEnv(raftConfig),
+		Policy:      policies.NewSoftMaxNegFreqPolicy(0.3, 0.7, 1),
+		Environment: getRaftPartEnv(raftConfig, colors),
 	}))
 	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
 		Policy:      types.NewRandomPolicy(),
-		Environment: getRaftPartEnv(raftConfig),
+		Environment: getRaftPartEnv(raftConfig, colors),
 	}))
 	c.AddExperiment(types.NewExperiment("BonusMaxRL", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
-		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0),
-		Environment: getRaftPartEnv(raftConfig),
+		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
+		Environment: getRaftPartEnv(raftConfig, colors),
 	}))
 
 	c.Run()
 }
 
-func getRaftPartEnv(config raft.RaftEnvironmentConfig) types.Environment {
-	colors := []raft.RaftColorFunc{raft.ColorState(), raft.ColorCommit(), raft.ColorLeader(), raft.ColorVote()}
+func getRaftPartEnv(config raft.RaftEnvironmentConfig, colors []raft.RaftColorFunc) types.Environment {
 
 	return types.NewPartitionEnv(types.PartitionEnvConfig{
 		Painter:                raft.NewRaftStatePainter(colors...),
@@ -55,7 +57,7 @@ func RaftPartCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use: "raft-part",
 		Run: func(cmd *cobra.Command, args []string) {
-			Raft(episodes, horizon, saveFile)
+			RaftPart(episodes, horizon, saveFile)
 		},
 	}
 	cmd.PersistentFlags().IntVarP(&requests, "requests", "r", 1, "Number of requests to run with")

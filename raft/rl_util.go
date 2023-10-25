@@ -102,9 +102,23 @@ func (r *RaftGraphState) Hash() string {
 	return hex.EncodeToString(hash[:])
 }
 
+type coloredReplicaState struct {
+	Params map[string]interface{}
+}
+
+type coloredState struct {
+	NodeStates map[uint64]*coloredReplicaState
+}
+
+func (c *coloredState) Hash() string {
+	bs, _ := json.Marshal(c)
+	hash := sha256.Sum256(bs)
+	return hex.EncodeToString(hash[:])
+}
+
 // Analyze the traces to count for unique states (main coverage analyzer)
 // Store the resulting visit graph in the specified path/visit_graph_<exp_name>.json
-func RaftAnalyzer(savePath string) types.Analyzer {
+func RaftAnalyzer(savePath string, colors ...RaftColorFunc) types.Analyzer {
 	if _, err := os.Stat(savePath); err != nil {
 		os.Mkdir(savePath, os.ModePerm)
 	}
@@ -118,11 +132,19 @@ func RaftAnalyzer(savePath string) types.Analyzer {
 		for _, trace := range traces {
 			for i := 0; i < trace.Len(); i++ {
 				state, _, _, _ := trace.Get(i)
-				rState, _ := state.(RaftStateType)
-				rgState := &RaftGraphState{NodeStates: rState.GetNodeStates()}
-				rgStateHash := rgState.Hash()
-				if _, ok := dataSet.states[rgStateHash]; !ok {
-					dataSet.states[rgStateHash] = true
+				rState, _ := state.(*types.Partition)
+				cState := &coloredState{NodeStates: make(map[uint64]*coloredReplicaState)}
+				for node, s := range rState.ReplicaStates {
+					rcState := &coloredReplicaState{Params: make(map[string]interface{})}
+					for _, c := range colors {
+						key, val := c(s.(raft.Status))
+						rcState.Params[key] = val
+					}
+					cState.NodeStates[node] = rcState
+				}
+				cStateHash := cState.Hash()
+				if _, ok := dataSet.states[cStateHash]; !ok {
+					dataSet.states[cStateHash] = true
 					uniqueStates += 1
 				}
 			}

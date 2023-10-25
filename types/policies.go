@@ -36,11 +36,9 @@ type RmPolicy interface {
 // With a temperature
 type SoftMaxNegPolicy struct {
 	QTable      map[string]map[string]float64
-	alpha       float64
-	gamma       float64
-	temperature float64
-
-	smallest float64
+	Alpha       float64
+	Gamma       float64
+	Temperature float64
 
 	rand erand.Source
 }
@@ -49,12 +47,10 @@ type SoftMaxNegPolicy struct {
 func NewSoftMaxNegPolicy(alpha, gamma, temperature float64) *SoftMaxNegPolicy {
 	return &SoftMaxNegPolicy{
 		QTable:      make(map[string]map[string]float64),
-		alpha:       alpha,
-		gamma:       gamma,
-		temperature: temperature,
-
-		smallest: 0,
-		rand:     erand.NewSource(uint64(time.Now().UnixMilli())),
+		Alpha:       alpha,
+		Gamma:       gamma,
+		Temperature: temperature,
+		rand:        erand.NewSource(uint64(time.Now().UnixMilli())),
 	}
 }
 
@@ -142,12 +138,8 @@ func (s *SoftMaxNegPolicy) Update(step int, state State, action Action, nextStat
 		}
 	}
 	// the update with -1 reward
-	nextVal := (1-s.alpha)*curVal + s.alpha*(-1+s.gamma*max)
+	nextVal := (1-s.Alpha)*curVal + s.Alpha*(-1+s.Gamma*max)
 	s.QTable[stateHash][actionKey] = nextVal
-
-	if nextVal < s.smallest {
-		s.smallest = nextVal
-	}
 }
 
 // RandomPolicy to choose the next action purely randomly

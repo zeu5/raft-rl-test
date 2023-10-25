@@ -48,6 +48,16 @@ func ColorTerm() RaftColorFunc {
 	}
 }
 
+func ColorBoundedTerm(bound int) RaftColorFunc {
+	return func(s raft.Status) (string, interface{}) {
+		term := s.Term
+		if term > uint64(bound) {
+			term = uint64(bound)
+		}
+		return "boundedTerm", term
+	}
+}
+
 func ColorCommit() RaftColorFunc {
 	return func(s raft.Status) (string, interface{}) {
 		return "commit", s.Commit
@@ -160,7 +170,7 @@ func NewPartitionEnvironment(config RaftEnvironmentConfig) *RaftPartitionEnv {
 
 func (p *RaftPartitionEnv) Reset() types.PartitionedSystemState {
 	s := p.RaftEnvironment.Reset()
-	return s.(*RaftState)
+	return s.(RaftState)
 }
 
 func (p *RaftPartitionEnv) Tick() types.PartitionedSystemState {

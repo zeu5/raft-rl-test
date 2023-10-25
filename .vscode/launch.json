@@ -105,6 +105,24 @@
             ]
         },
         {
+            "name": "Run raft exploration",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "-e",
+                "10",
+                "--horizon",
+                "100",
+                "-r",
+                "3",
+                "raft-part",
+                "--runs",
+                "1"
+            ]
+        },
+        {
             "name": "Graph analysis",
             "type": "python",
             "request": "launch",
