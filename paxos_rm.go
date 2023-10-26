@@ -32,7 +32,7 @@ func PaxosRewardMachine(episodes, horizon int) {
 	// c := types.NewComparison(lpaxos.BugAnalyzer(lpaxos.SafetyBug()), lpaxos.BugComparator())
 	// c := types.NewComparison(policies.PredicatesAnalyzer(onlyMajorityDecided, inPhase, emptyLogLeader), policies.PredicatesComparator())
 	// c := types.NewComparison(lpaxos.LPaxosAnalyzer(saveFile), lpaxos.LPaxosComparator(saveFile))
-	c := types.NewComparison(policies.RewardMachineAnalyzer(checkRM), policies.RewardMachineCoverageComparator(), runs)
+	c := types.NewComparison(policies.RewardMachineAnalyzer(checkRM), policies.RewardMachineCoverageComparator(saveFile), runs)
 	c.AddExperiment(types.NewExperiment(
 		"Random-Part",
 		&types.AgentConfig{

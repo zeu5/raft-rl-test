@@ -7,7 +7,7 @@ import (
 	"github.com/zeu5/raft-rl-test/types"
 )
 
-func PaxosPart(episodes, horizon int, saveFile string) {
+func PaxosPart(episodes, horizon int, saveFile string, requests int) {
 	lPaxosConfig := lpaxos.LPaxosEnvConfig{
 		Replicas: 3,
 		Requests: requests,
@@ -63,14 +63,15 @@ func getLPaxosPartEnv(config lpaxos.LPaxosEnvConfig, part bool) types.Environmen
 }
 
 func PaxosPartCommand() *cobra.Command {
+	var r int
 	cmd := &cobra.Command{
-		Use:  "paxos-part",
+		Use:  "paxos",
 		Long: "Run paxos pure exploration with partitions as environment",
 		Run: func(cmd *cobra.Command, args []string) {
-			PaxosPart(episodes, horizon, saveFile)
+			PaxosPart(episodes, horizon, saveFile, r)
 		},
 	}
-	cmd.PersistentFlags().IntVarP(&requests, "requests", "r", 1, "Number of requests to run with")
+	cmd.PersistentFlags().IntVarP(&r, "requests", "r", 1, "Number of requests to run with")
 	cmd.PersistentFlags().BoolVarP(&timeouts, "timeouts", "t", false, "Run with timeouts or not")
 	return cmd
 }

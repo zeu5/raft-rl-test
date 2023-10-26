@@ -27,15 +27,17 @@ func RSLExploration() {
 		AdditionalCommands: make([]rsl.Command, 0),
 	}
 
-	c := types.NewComparison(rsl.CoverageAnalyzer(), rsl.CoverageComparator(saveFile), runs)
+	colors := []rsl.RSLColorFunc{rsl.ColorState(), rsl.ColorDecree(), rsl.ColorDecided(), rsl.ColorBoundedBallot(5)}
+
+	c := types.NewComparison(rsl.CoverageAnalyzer(colors...), rsl.CoverageComparator(saveFile), runs)
 	// Random exploration
 	c.AddExperiment(types.NewExperiment(
-		"random",
+		"Random",
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
 			Policy:      types.NewRandomPolicy(),
-			Environment: GetRSLEnvironment(config),
+			Environment: GetRSLEnvironment(config, colors),
 		},
 	))
 	// strictPolicy := policies.NewStrictPolicy(types.NewRandomPolicy())
@@ -53,12 +55,12 @@ func RSLExploration() {
 	// ))
 	// RL based exploration
 	c.AddExperiment(types.NewExperiment(
-		"NegReward-Part",
+		"NegReward",
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
-			Policy:      types.NewSoftMaxNegPolicy(0.1, 0.99, 1),
-			Environment: GetRSLEnvironment(config),
+			Policy:      policies.NewSoftMaxNegFreqPolicy(0.1, 0.99, 1),
+			Environment: GetRSLEnvironment(config, colors),
 		},
 	))
 	c.AddExperiment(types.NewExperiment(
@@ -67,15 +69,14 @@ func RSLExploration() {
 			Episodes:    episodes,
 			Horizon:     horizon,
 			Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
-			Environment: GetRSLEnvironment(config),
+			Environment: GetRSLEnvironment(config, colors),
 		},
 	))
 
 	c.Run()
 }
 
-func GetRSLEnvironment(c rsl.RSLEnvConfig) types.Environment {
-	colors := []rsl.RSLColorFunc{rsl.ColorState(), rsl.ColorDecree(), rsl.ColorDecided()}
+func GetRSLEnvironment(c rsl.RSLEnvConfig, colors []rsl.RSLColorFunc) types.Environment {
 	return types.NewPartitionEnv(types.PartitionEnvConfig{
 		Painter:                rsl.NewRSLPainter(colors...),
 		Env:                    rsl.NewRLSPartitionEnv(c),

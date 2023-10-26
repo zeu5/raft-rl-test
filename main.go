@@ -24,7 +24,6 @@ func main() {
 	// adding the subcommands here
 	rootCommand.AddCommand(RaftCommand())
 	rootCommand.AddCommand(RaftPartCommand())
-	rootCommand.AddCommand(PaxosCommand())
 	rootCommand.AddCommand(PaxosPartCommand())
 	rootCommand.AddCommand(PaxosRewardCommand())
 	rootCommand.AddCommand(PaxosRewardMachineCommand())

@@ -244,6 +244,16 @@ func ColorState() RSLColorFunc {
 	}
 }
 
+func ColorBoundedBallot(bound int) RSLColorFunc {
+	return func(ls LocalState) (string, interface{}) {
+		b := ls.MaxAcceptedProposal.Ballot.Num
+		if b > bound {
+			b = bound
+		}
+		return "boundedBallot", b
+	}
+}
+
 func ColorBallot() RSLColorFunc {
 	return func(ls LocalState) (string, interface{}) {
 		return "ballot", ls.MaxAcceptedProposal.Ballot.Num

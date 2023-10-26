@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/spf13/cobra"
 	"github.com/zeu5/raft-rl-test/lpaxos"
 	"github.com/zeu5/raft-rl-test/policies"
 	"github.com/zeu5/raft-rl-test/types"
@@ -77,19 +76,4 @@ func getLPaxosEnv(config lpaxos.LPaxosEnvConfig, abs string) types.Environment {
 		abstracter = lpaxos.IgnoreLast()
 	}
 	return lpaxos.NewLPaxosAbsEnv(config, abstracter)
-}
-
-// PaxosCommand is the subcommand to run coverage benchmarks for the paxos example
-// Refer to "Paxos" function for the exact algorithms to add
-func PaxosCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use: "paxos",
-		Run: func(cmd *cobra.Command, args []string) {
-			Paxos(episodes, horizon, saveFile)
-		},
-	}
-	cmd.PersistentFlags().StringVarP(&abstracter, "abstractor", "a", "", "Abstraction to use")
-	cmd.PersistentFlags().IntVarP(&requests, "requests", "r", 1, "Number of requests to run with")
-	cmd.PersistentFlags().BoolVarP(&timeouts, "timeouts", "t", false, "Run with timeouts or not")
-	return cmd
 }

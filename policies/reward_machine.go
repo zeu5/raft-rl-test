@@ -68,6 +68,10 @@ func (rm *RewardMachine) WithExplorationPolicy(policy types.RmPolicy) *RewardMac
 	return rm
 }
 
+func (rm *RewardMachine) GetFinalPredicate() types.RewardFuncSingle {
+	return rm.predicates[FinalState]
+}
+
 type RewardMachinePolicy struct {
 	curRMState    string
 	curRmStatePos int

@@ -15,36 +15,46 @@ import (
 	"gonum.org/v1/plot/vg"
 )
 
-type rslPartState struct {
-	nodeStates map[uint64]LocalState
+type rslColoredState struct {
+	Params map[string]interface{}
 }
 
-func (r *rslPartState) Hash() string {
+type rslState struct {
+	nodeStates map[uint64]*rslColoredState
+}
+
+func (r *rslState) Hash() string {
 	bs, _ := json.Marshal(r.nodeStates)
 	hash := sha256.Sum256(bs)
 	return hex.EncodeToString(hash[:])
 }
 
-func newRSLPartState(s types.State) *rslPartState {
+func newRSLPartState(s types.State, colors ...RSLColorFunc) *rslState {
 	p, ok := s.(*types.Partition)
 	if ok {
-		r := &rslPartState{nodeStates: make(map[uint64]LocalState)}
+		r := &rslState{nodeStates: make(map[uint64]*rslColoredState)}
 		for id, s := range p.ReplicaStates {
-			r.nodeStates[id] = s.(LocalState).Copy()
+			color := &rslColoredState{Params: make(map[string]interface{})}
+			localState := s.(LocalState).Copy()
+			for _, c := range colors {
+				k, v := c(localState)
+				color.Params[k] = v
+			}
+			r.nodeStates[id] = color
 		}
 		return r
 	}
-	return &rslPartState{nodeStates: make(map[uint64]LocalState)}
+	return &rslState{nodeStates: make(map[uint64]*rslColoredState)}
 }
 
-func CoverageAnalyzer() types.Analyzer {
+func CoverageAnalyzer(colors ...RSLColorFunc) types.Analyzer {
 	return func(run int, s string, t []*types.Trace) types.DataSet {
 		c := make([]int, 0)
 		states := make(map[string]bool)
 		for _, trace := range t {
 			for i := 0; i < trace.Len(); i++ {
 				state, _, _, _ := trace.Get(i)
-				rslState := newRSLPartState(state)
+				rslState := newRSLPartState(state, colors...)
 				rslStateHash := rslState.Hash()
 				if _, ok := states[rslStateHash]; !ok {
 					states[rslStateHash] = true
@@ -67,8 +77,12 @@ func CoverageComparator(plotPath string) types.Comparator {
 		p.X.Label.Text = "Iteration"
 		p.Y.Label.Text = "States covered"
 
+		coverageData := make(map[string][]int)
+
 		for i := 0; i < len(s); i++ {
 			dataset := ds[i].([]int)
+			coverageData[s[i]] = make([]int, len(dataset))
+			copy(coverageData[s[i]], dataset)
 			points := make(plotter.XYs, len(dataset))
 			for j, v := range dataset {
 				points[j] = plotter.XY{
@@ -86,5 +100,10 @@ func CoverageComparator(plotPath string) types.Comparator {
 		}
 
 		p.Save(8*vg.Inch, 8*vg.Inch, path.Join(plotPath, strconv.Itoa(run)+"_coverage.png"))
+
+		bs, err := json.Marshal(coverageData)
+		if err == nil {
+			os.WriteFile(path.Join(plotPath, strconv.Itoa(run)+"_data.json"), bs, 0644)
+		}
 	}
 }
