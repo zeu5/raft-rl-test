@@ -15,24 +15,26 @@ func PaxosRewardMachine(episodes, horizon int) {
 		Timeouts: timeouts,
 	}
 
+	// define predicates
 	decided := lpaxos.Decided()
 	inPhase := lpaxos.InPhase(3)
 	// inStep := lpaxos.InStep(lpaxos.StepPromise)
 	onlyMajorityDecided := lpaxos.OnlyMajorityDecidedOne()
 	emptyLogLeader := lpaxos.EmptyLogLeader().And(lpaxos.InPhase(4)).And(decided)
 
-	checkRM := policies.NewRewardMachine(emptyLogLeader)
-	checkRM.AddState(onlyMajorityDecided, "OnlyMajorityDecided")
-	checkRM.AddState(inPhase.And(onlyMajorityDecided), "InPhase3")
+	// build a machine with sequence of predicates
+	checkRM := policies.NewRewardMachine(emptyLogLeader)           // final predicate - target space
+	checkRM.AddState(onlyMajorityDecided, "OnlyMajorityDecided")   // 1st step
+	checkRM.AddState(inPhase.And(onlyMajorityDecided), "InPhase3") // 2nd ...
 	checkRM.AddState(lpaxos.InPhase(4).And(decided), "Decided")
 
 	guideRM := policies.NewRewardMachine(onlyMajorityDecided)
 	// guideRM.AddState(onlyMajorityDecided, "OnlyMajorityDecided")
 
-	// c := types.NewComparison(lpaxos.BugAnalyzer(lpaxos.SafetyBug()), lpaxos.BugComparator())
+	c := types.NewComparison(types.BugAnalyzer(types.BugDesc{Name: "Safety", Check: lpaxos.SafetyBug()}), types.BugComparator(saveFile), runs)
 	// c := types.NewComparison(policies.PredicatesAnalyzer(onlyMajorityDecided, inPhase, emptyLogLeader), policies.PredicatesComparator())
 	// c := types.NewComparison(lpaxos.LPaxosAnalyzer(saveFile), lpaxos.LPaxosComparator(saveFile))
-	c := types.NewComparison(policies.RewardMachineAnalyzer(checkRM), policies.RewardMachineCoverageComparator(saveFile), runs)
+	// c := types.NewComparison(policies.RewardMachineAnalyzer(checkRM), policies.RewardMachineCoverageComparator(saveFile), runs)
 	c.AddExperiment(types.NewExperiment(
 		"Random-Part",
 		&types.AgentConfig{

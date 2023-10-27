@@ -226,6 +226,7 @@ func (p *RaftPartitionEnv) DeliverMessage(m types.Message) types.PartitionedSyst
 	newState := RaftState{
 		NodeStates:   make(map[uint64]raft.Status),
 		WithTimeouts: p.config.Timeouts,
+		Logs:         make(map[uint64][]pb.Entry),
 	}
 	for id, node := range p.nodes {
 		if node.HasReady() {
@@ -239,7 +240,13 @@ func (p *RaftPartitionEnv) DeliverMessage(m types.Message) types.PartitionedSyst
 			}
 			node.Advance(ready)
 		}
-		newState.NodeStates[id] = node.Status()
+		status := node.Status()
+		newState.Logs[id] = make([]pb.Entry, 0)
+		ents, err := p.storages[id].Entries(0, status.Commit, status.Commit)
+		if err == nil {
+			newState.Logs[id] = ents
+		}
+		newState.NodeStates[id] = status
 	}
 	newState.Messages = copyMessages(p.messages)
 	p.curState = newState

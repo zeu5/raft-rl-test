@@ -108,16 +108,16 @@ func (c *Comparison) AddExperiment(e *Experiment) {
 // Run each experiment sequentially
 // TODO: Could be parallelized
 func (c *Comparison) Run() {
-	for run := 0; run < c.runs; run++ {
+	for run := 0; run < c.runs; run++ { // number of runs
 		fmt.Printf("Run %d\n", run+1)
-		datasets := make([]DataSet, len(c.Experiments))
+		datasets := make([]DataSet, len(c.Experiments)) // array with initial capacity - arrayList
 		names := make([]string, len(c.Experiments))
-		for i, e := range c.Experiments {
-			e.Run()
-			datasets[i] = c.analyzer(run, e.name, e.Result)
-			names[i] = e.name
-			e.Reset()
+		for i, e := range c.Experiments { // index - experiment  in the list of experiments
+			e.Run()                                         // running the algorithm, stores the results
+			datasets[i] = c.analyzer(run, e.name, e.Result) // call the analyzer on the experiment results
+			names[i] = e.name                               // policy/experiment name
+			e.Reset()                                       //
 		}
-		c.comparator(run, names, datasets)
+		c.comparator(run, names, datasets) // make the plots
 	}
 }

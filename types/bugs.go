@@ -1,0 +1,49 @@
+package types
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path"
+	"strconv"
+)
+
+type BugDesc struct {
+	Name  string
+	Check func(*Trace) bool
+}
+
+// checks all the bugs on the traces
+func BugAnalyzer(bugs ...BugDesc) Analyzer {
+	return func(run int, s string, traces []*Trace) DataSet {
+		occurrences := make(map[string]int)
+		for i, t := range traces {
+			for _, b := range bugs {
+				_, ok := occurrences[b.Name]
+				if !ok && b.Check(t) {
+					occurrences[b.Name] = i
+				}
+			}
+		}
+		return occurrences
+	}
+}
+
+func BugComparator(savePath string) Comparator {
+	return func(run int, s []string, ds []DataSet) {
+		data := make(map[string]map[string]int)
+		for i, exp := range s {
+			bugOccurrences := ds[i].(map[string]int)
+			fmt.Printf("For run:%d, experiment: %s\n", run, exp)
+			for b, i := range bugOccurrences {
+				fmt.Printf("\tBug: %s, First iteration: %d\n", b, i)
+			}
+			data[exp] = bugOccurrences
+		}
+
+		bs, err := json.Marshal(data)
+		if err == nil {
+			os.WriteFile(path.Join(savePath, strconv.Itoa(run)+"_bug.json"), bs, 0644)
+		}
+	}
+}

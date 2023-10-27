@@ -22,14 +22,15 @@ import (
 
 // This file defines the analyzer and comparator for the raft experiments
 
-// The dataset contains a visit graph, unique states observed per iteration
+// The dataset contains unique states observed per iteration
 // and the path to save the visit graph at
 type RaftDataSet struct {
 	savePath     string
-	states       map[string]bool
-	UniqueStates []int
+	states       map[string]bool // use only keys... it's a set. hash of states are keys - hashmap key: string, val: bool
+	UniqueStates []int           // for every iteration, how many unique states seen - len() is the number of iterations (episodes)
 }
 
+// stores the RaftDataSet in a file with json format
 func (d *RaftDataSet) Record() {
 	bs, err := json.Marshal(d)
 	if err != nil {
@@ -46,71 +47,18 @@ func (d *RaftDataSet) Record() {
 
 }
 
-type RaftGraphState struct {
-	NodeStates map[uint64]raft.Status
-}
-
-// Deterministic hash for the visit graph
-func (r *RaftGraphState) MarshalJSON() ([]byte, error) {
-	marshalStatus := func(s raft.Status) string {
-		j := fmt.Sprintf(`{"id":"%x","term":%d,"vote":"%x","commit":%d,"lead":"%x","raftState":%q,"applied":%d,"progress":{`,
-			s.ID, s.Term, s.Vote, s.Commit, s.Lead, s.RaftState, s.Applied)
-
-		if len(s.Progress) == 0 {
-			j += "},"
-		} else {
-			keys := make([]int, 0)
-			for k := range s.Progress {
-				keys = append(keys, int(k))
-			}
-			sort.Ints(keys)
-			for _, k := range keys {
-				v := s.Progress[uint64(k)]
-				subj := fmt.Sprintf(`"%x":{"match":%d,"next":%d,"state":%q},`, k, v.Match, v.Next, v.State)
-				j += subj
-			}
-			// remove the trailing ","
-			j = j[:len(j)-1] + "},"
-		}
-
-		j += fmt.Sprintf(`"leadtransferee":"%x"}`, s.LeadTransferee)
-		return j
-	}
-
-	res := `{"NodeStates":{`
-	keys := make([]int, 0)
-	for k := range r.NodeStates {
-		keys = append(keys, int(k))
-	}
-	sort.Ints(keys)
-	for _, k := range keys {
-		subS := fmt.Sprintf(`"%d":%s,`, k, marshalStatus(r.NodeStates[uint64(k)]))
-		res += subS
-	}
-	res = res[:len(res)-1] + "}}"
-	return []byte(res), nil
-}
-
-func (r *RaftGraphState) String() string {
-	bs, _ := json.Marshal(r)
-	return string(bs)
-}
-
-func (r *RaftGraphState) Hash() string {
-	bs, _ := json.Marshal(r)
-	hash := sha256.Sum256(bs)
-	return hex.EncodeToString(hash[:])
-}
-
 type coloredReplicaState struct {
-	Params map[string]interface{}
+	Params map[string]interface{} // map string : anyType - this is the abstraction representation.
+	// strings are color names and interface{} is the value.
+	// The final state abstraction is the concatenation of these.
 }
 
-type coloredState struct {
+type coloredState struct { // map from specific replica ID to its abstracted state
 	NodeStates map[uint64]*coloredReplicaState
 }
 
-func (c *coloredState) Hash() string {
+// hashes the whole system abstracted state
+func (c *coloredState) Hash() string { // takes a pointer
 	bs, _ := json.Marshal(c)
 	hash := sha256.Sum256(bs)
 	return hex.EncodeToString(hash[:])
@@ -118,37 +66,40 @@ func (c *coloredState) Hash() string {
 
 // Analyze the traces to count for unique states (main coverage analyzer)
 // Store the resulting visit graph in the specified path/visit_graph_<exp_name>.json
+// colors ...RaftColorFunc - any number of RaftColorFunc arguments, also zero
 func RaftAnalyzer(savePath string, colors ...RaftColorFunc) types.Analyzer {
-	if _, err := os.Stat(savePath); err != nil {
+	if _, err := os.Stat(savePath); err != nil { // make folder if not exist
 		os.Mkdir(savePath, os.ModePerm)
 	}
+	// returns a function
 	return func(run int, name string, traces []*types.Trace) types.DataSet {
-		dataSet := &RaftDataSet{
+		dataSet := &RaftDataSet{ // data about one run of one policy/experiment
 			savePath:     path.Join(savePath, strconv.Itoa(run)+"_"+name+".json"),
-			states:       make(map[string]bool),
-			UniqueStates: make([]int, 0),
+			states:       make(map[string]bool), // set of states
+			UniqueStates: make([]int, 0),        // list with cumulative amount of unique states, [i] is after episode i
 		}
-		uniqueStates := 0
-		for _, trace := range traces {
+		uniqueStates := 0              // this grows throughout the whole run
+		for _, trace := range traces { // for index, elem is equiv to foreach, can ignore index
 			for i := 0; i < trace.Len(); i++ {
-				state, _, _, _ := trace.Get(i)
-				rState, _ := state.(*types.Partition)
-				cState := &coloredState{NodeStates: make(map[uint64]*coloredReplicaState)}
-				for node, s := range rState.ReplicaStates {
+				state, _, _, _ := trace.Get(i)                                             // state, action, next_state, reward
+				rState, _ := state.(*types.Partition)                                      // .(*types.Partition) type cast into a concrete type - * pointer type - second arg is for safety OK (bool)
+				cState := &coloredState{NodeStates: make(map[uint64]*coloredReplicaState)} // & takes reference... constructor of coloredState struct
+				for node, s := range rState.ReplicaStates {                                // for each node, take abstracted state
 					rcState := &coloredReplicaState{Params: make(map[string]interface{})}
-					for _, c := range colors {
+					for _, c := range colors { // fill abstract state for a node
 						key, val := c(s.(raft.Status))
 						rcState.Params[key] = val
 					}
-					cState.NodeStates[node] = rcState
+					cState.NodeStates[node] = rcState // put in overall state
 				}
 				cStateHash := cState.Hash()
-				if _, ok := dataSet.states[cStateHash]; !ok {
+				if _, ok := dataSet.states[cStateHash]; !ok { // safe way to query hashmap - if key exists, value is stored in first variable of _,ok
+					// executed if key is not in hashmap : !ok
 					dataSet.states[cStateHash] = true
 					uniqueStates += 1
 				}
 			}
-			dataSet.UniqueStates = append(dataSet.UniqueStates, uniqueStates)
+			dataSet.UniqueStates = append(dataSet.UniqueStates, uniqueStates) // append number of unique states at this episode
 		}
 		dataSet.Record()
 		return dataSet
@@ -238,3 +189,59 @@ func RaftPlotComparator(figPath string) types.Comparator {
 }
 
 var _ types.Comparator = RaftComparator
+
+type RaftGraphState struct { // useless right now
+	NodeStates map[uint64]raft.Status
+}
+
+// Deterministic hash for the visit graph
+func (r *RaftGraphState) MarshalJSON() ([]byte, error) {
+	marshalStatus := func(s raft.Status) string {
+		j := fmt.Sprintf(`{"id":"%x","term":%d,"vote":"%x","commit":%d,"lead":"%x","raftState":%q,"applied":%d,"progress":{`,
+			s.ID, s.Term, s.Vote, s.Commit, s.Lead, s.RaftState, s.Applied)
+
+		if len(s.Progress) == 0 {
+			j += "},"
+		} else {
+			keys := make([]int, 0)
+			for k := range s.Progress {
+				keys = append(keys, int(k))
+			}
+			sort.Ints(keys)
+			for _, k := range keys {
+				v := s.Progress[uint64(k)]
+				subj := fmt.Sprintf(`"%x":{"match":%d,"next":%d,"state":%q},`, k, v.Match, v.Next, v.State)
+				j += subj
+			}
+			// remove the trailing ","
+			j = j[:len(j)-1] + "},"
+		}
+
+		j += fmt.Sprintf(`"leadtransferee":"%x"}`, s.LeadTransferee)
+		return j
+	}
+
+	res := `{"NodeStates":{`
+	keys := make([]int, 0)
+	for k := range r.NodeStates {
+		keys = append(keys, int(k))
+	}
+	sort.Ints(keys)
+	for _, k := range keys {
+		subS := fmt.Sprintf(`"%d":%s,`, k, marshalStatus(r.NodeStates[uint64(k)]))
+		res += subS
+	}
+	res = res[:len(res)-1] + "}}"
+	return []byte(res), nil
+}
+
+func (r *RaftGraphState) String() string {
+	bs, _ := json.Marshal(r)
+	return string(bs)
+}
+
+func (r *RaftGraphState) Hash() string {
+	bs, _ := json.Marshal(r)
+	hash := sha256.Sum256(bs)
+	return hex.EncodeToString(hash[:])
+}

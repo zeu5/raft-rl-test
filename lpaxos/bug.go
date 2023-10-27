@@ -1,11 +1,10 @@
 package lpaxos
 
 import (
-	"fmt"
-
 	"github.com/zeu5/raft-rl-test/types"
 )
 
+// this is a function that checks for a certain type of bug in a trace
 func SafetyBug() func(*types.Trace) bool {
 	return func(t *types.Trace) bool {
 		processStates := make(map[uint64]LNodeState)
@@ -31,6 +30,7 @@ func SafetyBug() func(*types.Trace) bool {
 	}
 }
 
+// other functions / auxiliary
 func min(a, b int) int {
 	if a > b {
 		return b
@@ -60,25 +60,4 @@ func isLogPrefix(l1, l2 []Entry) bool {
 		}
 	}
 	return true
-}
-
-func BugAnalyzer(bug func(*types.Trace) bool) types.Analyzer {
-	return func(run int, s string, traces []*types.Trace) types.DataSet {
-		occurrences := 0
-		for _, t := range traces {
-			if bug(t) {
-				occurrences += 1
-			}
-		}
-		return occurrences
-	}
-}
-
-func BugComparator() types.Comparator {
-	return func(run int, s []string, ds []types.DataSet) {
-		for i, exp := range s {
-			bugOccurrences := ds[i].(int)
-			fmt.Printf("For run:%d, experiment: %s, bug occurrences: %d\n", run, exp, bugOccurrences)
-		}
-	}
 }

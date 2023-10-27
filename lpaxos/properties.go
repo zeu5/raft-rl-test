@@ -2,6 +2,8 @@ package lpaxos
 
 import "github.com/zeu5/raft-rl-test/types"
 
+// defining predicates over states
+
 func InStep(step Step) types.RewardFuncSingle {
 	return func(s types.State) bool {
 		pS, ok := s.(*types.Partition)

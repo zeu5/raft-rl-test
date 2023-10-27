@@ -30,6 +30,7 @@ type RaftState struct {
 	NodeStates map[uint64]raft.Status
 	// The messages in transit
 	Messages map[string]pb.Message
+	Logs     map[uint64][]pb.Entry
 	// Boolean to indicate if the actions include dropping messages
 	WithTimeouts bool
 }
@@ -218,10 +219,12 @@ func (r *RaftEnvironment) makeNodes() {
 	initState := RaftState{
 		NodeStates:   make(map[uint64]raft.Status),
 		Messages:     copyMessages(r.messages),
+		Logs:         make(map[uint64][]pb.Entry),
 		WithTimeouts: r.config.Timeouts,
 	}
 	for id, node := range r.nodes {
 		initState.NodeStates[id] = node.Status()
+		initState.Logs[id] = make([]pb.Entry, 0)
 	}
 	r.curState = initState
 }

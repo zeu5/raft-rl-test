@@ -1,5 +1,7 @@
 package main
 
+// experiment file
+
 import (
 	"github.com/spf13/cobra"
 	"github.com/zeu5/raft-rl-test/policies"
@@ -8,16 +10,23 @@ import (
 )
 
 func RaftPart(episodes, horizon int, saveFile string) {
+	// config of the running system
 	raftConfig := raft.RaftEnvironmentConfig{
 		Replicas:      3,
-		ElectionTick:  10,
-		HeartbeatTick: 3,
+		ElectionTick:  10, // lower bound for a process to try to go to new term (starting an election) - double of this is upperbound
+		HeartbeatTick: 3,  // frequency of heartbeats
 		Timeouts:      timeouts,
 		Requests:      requests,
 	}
 
+	// abstraction for both plot and RL
+	// colors is one abstraction definition
 	colors := []raft.RaftColorFunc{raft.ColorState(), raft.ColorCommit(), raft.ColorLeader(), raft.ColorVote(), raft.ColorBoundedTerm(5)}
 
+	// c is general experiment
+	// colors ... , expanded list, can omit the argument
+	// Analyzer takes the path to save data and colors... is the abstraction used to plot => makes the datasets
+	// PlotComparator => makes plots from data
 	c := types.NewComparison(raft.RaftAnalyzer(saveFile, colors...), raft.RaftPlotComparator(saveFile), runs)
 	c.AddExperiment(types.NewExperiment("RL", &types.AgentConfig{
 		Episodes:    episodes,
@@ -44,11 +53,11 @@ func RaftPart(episodes, horizon int, saveFile string) {
 func getRaftPartEnv(config raft.RaftEnvironmentConfig, colors []raft.RaftColorFunc) types.Environment {
 
 	return types.NewPartitionEnv(types.PartitionEnvConfig{
-		Painter:                raft.NewRaftStatePainter(colors...),
-		Env:                    raft.NewPartitionEnvironment(config),
-		TicketBetweenPartition: 3,
-		MaxMessagesPerTick:     3,
-		StaySameStateUpto:      2,
+		Painter:                raft.NewRaftStatePainter(colors...),  // pass the abstraction to env
+		Env:                    raft.NewPartitionEnvironment(config), // actual environment
+		TicketBetweenPartition: 3,                                    // ticks between actions
+		MaxMessagesPerTick:     3,                                    // upper bound of random num of delivered messages
+		StaySameStateUpto:      2,                                    // counter to distinguish consecutive states
 		NumReplicas:            config.Replicas,
 	})
 }
