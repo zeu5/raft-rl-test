@@ -1,6 +1,9 @@
 package main
 
 import (
+	"errors"
+	"fmt"
+
 	"github.com/spf13/cobra"
 	"github.com/zeu5/raft-rl-test/policies"
 	"github.com/zeu5/raft-rl-test/rsl"
@@ -10,6 +13,8 @@ import (
 func getRewardMachine(name string) (*policies.RewardMachine, bool) {
 	var machine *policies.RewardMachine = nil
 	switch name {
+	case "InStatePrimary":
+		machine = policies.NewRewardMachine(rsl.InState(rsl.StateStablePrimary))
 	case "SinglePrimary":
 		machine = policies.NewRewardMachine(rsl.NodePrimary(1))
 	case "NumDecided":
@@ -36,7 +41,10 @@ func getRewardMachine(name string) (*policies.RewardMachine, bool) {
 	return machine, machine != nil
 }
 
-func RSLRewardMachine(rewardMachine string) {
+func RSLRewardMachine(rewardMachine string) error {
+	if rewardMachine == "" {
+		return errors.New("please specify a reward machine")
+	}
 	config := rsl.RSLEnvConfig{
 		Nodes: 3,
 		NodeConfig: rsl.NodeConfig{
@@ -54,36 +62,14 @@ func RSLRewardMachine(rewardMachine string) {
 		AdditionalCommands: make([]rsl.Command, 0),
 	}
 
-	// _, ok := getRewardMachine(rewardMachine)
-	// if !ok {
-	// 	fmt.Printf("Cannot find reward machine: %s\n", rewardMachine)
-	// 	return
-	// }
-
-	// m1 := policies.NewRewardMachine(rsl.NodePrimary(1))
-
-	// m2 := policies.NewRewardMachine(rsl.NodePrimary(2))
-	// m2.AddState(rsl.NodePrimary(1), "OnePrimary")
-
-	// m3 := policies.NewRewardMachine(rsl.NodeNumDecided(1, 2).And(rsl.NodePrimary(1)))
-
-	// m4 := policies.NewRewardMachine(rsl.NodeNumDecided(1, 2))
-	// m4.AddState(rsl.NodePrimary(1).And(rsl.NumDecided(0)), "NodeOnePrimary")
-
-	// m5 := policies.NewRewardMachine(rsl.InBallot(2))
-
-	// m6 := policies.NewRewardMachine(rsl.NodeInBallot(1,2))
-
-	// m7 := policies.NewRewardMachine(rsl.InPreparedBallot(2))
-
-	// m8 := policies.NewRewardMachine(rsl.NodeInPreparedBallot(1, 2))
-
-	guideRM := policies.NewRewardMachine(rsl.InState(rsl.StateStablePrimary))
-	monitorRM := policies.NewRewardMachine(rsl.Decided())
+	rm, ok := getRewardMachine(rewardMachine)
+	if !ok {
+		return fmt.Errorf("cannot find reward machine: %s", rewardMachine)
+	}
 
 	colors := []rsl.RSLColorFunc{rsl.ColorState(), rsl.ColorDecree(), rsl.ColorDecided(), rsl.ColorBoundedBallot(5)}
 
-	c := types.NewComparison(policies.RewardMachineAnalyzer(monitorRM), policies.RewardMachineCoverageComparator(saveFile), runs)
+	c := types.NewComparison(policies.RewardMachineAnalyzer(rm), policies.RewardMachineCoverageComparator(saveFile), runs)
 	c.AddExperiment(types.NewExperiment(
 		"random",
 		&types.AgentConfig{
@@ -119,23 +105,23 @@ func RSLRewardMachine(rewardMachine string) {
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
-			Policy:      policies.NewRewardMachinePolicy(guideRM),
+			Policy:      policies.NewRewardMachinePolicy(rm),
 			Environment: GetRSLEnvironment(config, colors),
 		},
 	))
 
 	c.Run()
+	return nil
 }
 
 func RSLRewardMachineCommand() *cobra.Command {
-	var rewardMachine string
 	cmd := &cobra.Command{
-		Use: "rsl-rm",
-		Run: func(cmd *cobra.Command, args []string) {
-			RSLRewardMachine(rewardMachine)
+		Use:  "rsl-rm reward_machine",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return RSLRewardMachine(args[0])
 		},
 	}
 	cmd.PersistentFlags().IntVarP(&requests, "requests", "r", 1, "Number of requests to run with")
-	cmd.PersistentFlags().StringVar(&rewardMachine, "reward-machine", "", "The reward machine used to guide and record")
 	return cmd
 }

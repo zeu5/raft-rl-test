@@ -11,9 +11,10 @@ import (
 )
 
 type RewardMachineDataset struct {
-	RMStateVisits        map[string]int
-	FinalPredicateStates map[string]bool
-	RepeatAccuracy       float64
+	RMStateVisits                  map[string]int
+	FinalPredicateStates           map[string]bool
+	RepeatAccuracy                 float64
+	FirstIterationToFinalPredicate int
 }
 
 // Takes in a sequence of predicates to analyze performance over
@@ -23,17 +24,18 @@ type RewardMachineDataset struct {
 func RewardMachineAnalyzer(rm *RewardMachine) types.Analyzer {
 	return func(run int, s string, traces []*types.Trace) types.DataSet {
 		ds := &RewardMachineDataset{
-			RMStateVisits:        make(map[string]int),
-			FinalPredicateStates: make(map[string]bool),
-			RepeatAccuracy:       0,
+			RMStateVisits:                  make(map[string]int),
+			FinalPredicateStates:           make(map[string]bool),
+			RepeatAccuracy:                 0,
+			FirstIterationToFinalPredicate: -1,
 		}
 
 		finalPredicate := rm.GetFinalPredicate()
-		finalPredicateReached := false
-		finalPredicateFirstReached := -1
 		numTracesFinalReached := 0
 
 		for traceNo, t := range traces {
+			finalPredicateReached := false
+
 			traceRMStatesVisited := make(map[string]bool)
 			curRmStatePos := 0
 			startState, _, _, _ := t.Get(0)
@@ -44,7 +46,6 @@ func RewardMachineAnalyzer(rm *RewardMachine) types.Analyzer {
 					curRmStatePos = j
 					if rmState == FinalState {
 						finalPredicateReached = true
-						finalPredicateFirstReached = traceNo
 					}
 					break
 				}
@@ -52,14 +53,6 @@ func RewardMachineAnalyzer(rm *RewardMachine) types.Analyzer {
 			for i := 0; i < t.Len(); i++ {
 				_, _, nexState, _ := t.Get(i)
 				rmState := rm.states[curRmStatePos]
-				if finalPredicate(nexState) {
-					finalPredicateReached = true
-					finalPredicateFirstReached = traceNo
-					nextStateHash := nexState.Hash()
-					if _, ok := ds.FinalPredicateStates[nextStateHash]; !ok {
-						ds.FinalPredicateStates[nextStateHash] = true
-					}
-				}
 				if _, ok := traceRMStatesVisited[rmState]; !ok {
 					traceRMStatesVisited[rmState] = true
 				}
@@ -67,8 +60,17 @@ func RewardMachineAnalyzer(rm *RewardMachine) types.Analyzer {
 					rmState := rm.states[j]
 					predicate, ok := rm.predicates[rmState]
 					if ok && predicate(nexState) {
+						if rmState == FinalState {
+							finalPredicateReached = true
+						}
 						curRmStatePos = j
 						break
+					}
+				}
+				if finalPredicateReached && finalPredicate(nexState) {
+					nextStateHash := nexState.Hash()
+					if _, ok := ds.FinalPredicateStates[nextStateHash]; !ok {
+						ds.FinalPredicateStates[nextStateHash] = true
 					}
 				}
 			}
@@ -77,14 +79,18 @@ func RewardMachineAnalyzer(rm *RewardMachine) types.Analyzer {
 					ds.RMStateVisits[state] = 0
 				}
 				ds.RMStateVisits[state] += 1
-				if state == FinalState && finalPredicateReached {
-					numTracesFinalReached += 1
+			}
+
+			if finalPredicateReached {
+				if ds.FirstIterationToFinalPredicate == -1 {
+					ds.FirstIterationToFinalPredicate = traceNo
 				}
+				numTracesFinalReached += 1
 			}
 		}
 
-		if finalPredicateReached {
-			afterFirstReached := len(traces) - finalPredicateFirstReached
+		if ds.FirstIterationToFinalPredicate != -1 {
+			afterFirstReached := len(traces) - ds.FirstIterationToFinalPredicate
 			ds.RepeatAccuracy = float64(numTracesFinalReached) / float64(afterFirstReached)
 		}
 
@@ -93,6 +99,9 @@ func RewardMachineAnalyzer(rm *RewardMachine) types.Analyzer {
 }
 
 func RewardMachineCoverageComparator(savePath string) types.Comparator {
+	if _, err := os.Stat(savePath); err != nil {
+		os.Mkdir(savePath, os.ModePerm)
+	}
 	return func(run int, s []string, ds []types.DataSet) {
 		for i := 0; i < len(ds); i++ {
 			fmt.Printf("For run: %d, experiment: %s\n", run, s[i])
@@ -101,6 +110,7 @@ func RewardMachineCoverageComparator(savePath string) types.Comparator {
 				fmt.Printf("\tRM State %s, Visits: %d\n", state, count)
 			}
 			fmt.Printf("\tFinal predicate states: %d\n", len(rmDS.FinalPredicateStates))
+			fmt.Printf("\tFirst iteration to Final predicate: %d\n", rmDS.FirstIterationToFinalPredicate)
 			fmt.Printf("\tTraces repeat accuracy after reaching final states: %f\n", rmDS.RepeatAccuracy)
 		}
 		data := make(map[string]interface{})
@@ -109,6 +119,8 @@ func RewardMachineCoverageComparator(savePath string) types.Comparator {
 			d := make(map[string]interface{})
 			d["rmStateVisits"] = rmDS.RMStateVisits
 			d["finalPredicateStates"] = len(rmDS.FinalPredicateStates)
+			d["repeatAccuracy"] = rmDS.RepeatAccuracy
+			d["firstiterationToFinalPredicate"] = rmDS.FirstIterationToFinalPredicate
 			data[b] = d
 		}
 		bs, err := json.Marshal(data)

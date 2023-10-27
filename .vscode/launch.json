@@ -101,7 +101,8 @@
                 "100",
                 "-r",
                 "3",
-                "rsl-rm"
+                "rsl-rm",
+                "SinglePrimary",
             ]
         },
         {
