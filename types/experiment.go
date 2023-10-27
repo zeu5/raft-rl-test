@@ -85,19 +85,24 @@ type Comparator func(int, []string, []DataSet)
 // The analyzed datasets are then compared
 type Comparison struct {
 	Experiments []*Experiment
-	analyzer    Analyzer
-	comparator  Comparator
+	analyzers   map[string]Analyzer
+	comparators map[string]Comparator
 	runs        int
 }
 
 // NewComparison creates a comparison instance
-func NewComparison(analyzer Analyzer, comparator Comparator, runs int) *Comparison {
+func NewComparison(runs int) *Comparison {
 	return &Comparison{
 		Experiments: make([]*Experiment, 0),
-		analyzer:    analyzer,
-		comparator:  comparator,
+		analyzers:   make(map[string]Analyzer),
+		comparators: make(map[string]Comparator),
 		runs:        runs,
 	}
+}
+
+func (c *Comparison) AddAnalysis(name string, analyzer Analyzer, comparator Comparator) {
+	c.analyzers[name] = analyzer
+	c.comparators[name] = comparator
 }
 
 // Add experiments to compare
@@ -110,14 +115,23 @@ func (c *Comparison) AddExperiment(e *Experiment) {
 func (c *Comparison) Run() {
 	for run := 0; run < c.runs; run++ { // number of runs
 		fmt.Printf("Run %d\n", run+1)
-		datasets := make([]DataSet, len(c.Experiments)) // array with initial capacity - arrayList
+		datasets := make(map[string][]DataSet) // array with initial capacity - arrayList
+
+		for name := range c.analyzers {
+			datasets[name] = make([]DataSet, len(c.Experiments))
+		}
+
 		names := make([]string, len(c.Experiments))
 		for i, e := range c.Experiments { // index - experiment  in the list of experiments
-			e.Run()                                         // running the algorithm, stores the results
-			datasets[i] = c.analyzer(run, e.name, e.Result) // call the analyzer on the experiment results
-			names[i] = e.name                               // policy/experiment name
-			e.Reset()                                       //
+			e.Run() // running the algorithm, stores the results
+			for name, a := range c.analyzers {
+				datasets[name][i] = a(run, e.name, e.Result) // call the analyzer on the experiment results
+			}
+			names[i] = e.name // policy/experiment name
+			e.Reset()         //
 		}
-		c.comparator(run, names, datasets) // make the plots
+		for name, comp := range c.comparators {
+			comp(run, names, datasets[name]) // make the plots
+		}
 	}
 }

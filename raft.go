@@ -19,7 +19,8 @@ func Raft(episodes, horizon int, saveFile string) {
 		Timeouts:      timeouts,
 		Requests:      requests,
 	}
-	c := types.NewComparison(raft.RaftAnalyzer(saveFile), raft.RaftPlotComparator(saveFile), runs)
+	c := types.NewComparison(runs)
+	c.AddAnalysis("Plot", raft.RaftAnalyzer(saveFile), raft.RaftPlotComparator(saveFile))
 	c.AddExperiment(types.NewExperiment("RL", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,

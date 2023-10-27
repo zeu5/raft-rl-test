@@ -9,7 +9,8 @@ import (
 
 func GridReward(episodes, horizon int, saveFile string, height, width, grids int, runs int) {
 
-	c := types.NewComparison(grid.GridAnalyzer, grid.GridDepthComparator(), runs)
+	c := types.NewComparison(runs)
+	c.AddAnalysis("GridPlot", grid.GridAnalyzer, grid.GridDepthComparator())
 
 	c.AddExperiment(types.NewExperiment(
 		"Random-Part",

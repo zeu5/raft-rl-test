@@ -27,7 +27,8 @@ func RaftPart(episodes, horizon int, saveFile string) {
 	// colors ... , expanded list, can omit the argument
 	// Analyzer takes the path to save data and colors... is the abstraction used to plot => makes the datasets
 	// PlotComparator => makes plots from data
-	c := types.NewComparison(raft.RaftAnalyzer(saveFile, colors...), raft.RaftPlotComparator(saveFile), runs)
+	c := types.NewComparison(runs)
+	c.AddAnalysis("Plot", raft.RaftAnalyzer(saveFile, colors...), raft.RaftPlotComparator(saveFile))
 	c.AddExperiment(types.NewExperiment("RL", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,

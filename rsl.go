@@ -29,7 +29,8 @@ func RSLExploration() {
 
 	colors := []rsl.RSLColorFunc{rsl.ColorState(), rsl.ColorDecree(), rsl.ColorDecided(), rsl.ColorBoundedBallot(5)}
 
-	c := types.NewComparison(rsl.CoverageAnalyzer(colors...), rsl.CoverageComparator(saveFile), runs)
+	c := types.NewComparison(runs)
+	c.AddAnalysis("Plot", rsl.CoverageAnalyzer(colors...), rsl.CoverageComparator(saveFile))
 	// Random exploration
 	c.AddExperiment(types.NewExperiment(
 		"Random",

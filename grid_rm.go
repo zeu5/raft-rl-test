@@ -64,7 +64,8 @@ func GridRewardMachine(episodes, horizon int, height, width, grids int, runs int
 	rm.AddState(grid.GridAndPos_23_40(), "Grid23_40")
 	rm.AddState(grid.GridAndPos_23_50(), "Grid23_50")
 
-	c := types.NewComparison(grid.GridAnalyzer, grid.GridDepthComparator(), runs)
+	c := types.NewComparison(runs)
+	c.AddAnalysis("GridPlot", grid.GridAnalyzer, grid.GridDepthComparator())
 
 	c.AddExperiment(types.NewExperiment(
 		"Random",
