@@ -190,6 +190,7 @@ func RaftPlotComparator(figPath string) types.Comparator {
 
 var _ types.Comparator = RaftComparator
 
+// NOT USEFUL
 type RaftGraphState struct { // useless right now
 	NodeStates map[uint64]raft.Status
 }

@@ -28,7 +28,11 @@ func RaftPart(episodes, horizon int, saveFile string) {
 	// Analyzer takes the path to save data and colors... is the abstraction used to plot => makes the datasets
 	// PlotComparator => makes plots from data
 	c := types.NewComparison(runs)
+
+	// here you add different traces analysis and comparators -- to process traces into a dataset (analyzer) and output the results (comparator)
 	c.AddAnalysis("Plot", raft.RaftAnalyzer(saveFile, colors...), raft.RaftPlotComparator(saveFile))
+
+	// here you add different policies with their parameters
 	c.AddExperiment(types.NewExperiment("RL", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
