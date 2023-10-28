@@ -124,6 +124,16 @@
             ]
         },
         {
+            "name": "Run redis test cli",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "redis-cli",
+            ]
+        },
+        {
             "name": "Graph analysis",
             "type": "python",
             "request": "launch",

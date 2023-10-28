@@ -22,6 +22,7 @@ func main() {
 	rootCommand.PersistentFlags().StringVarP(&saveFile, "save", "s", "results", "Save the result data in the specified folder")
 	rootCommand.PersistentFlags().IntVar(&runs, "runs", 1, "Number of experiment runs")
 	// adding the subcommands here
+	rootCommand.AddCommand(RedisTestCommand())
 	rootCommand.AddCommand(RaftCommand())
 	rootCommand.AddCommand(RaftPartCommand())
 	rootCommand.AddCommand(PaxosPartCommand())
