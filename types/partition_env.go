@@ -183,7 +183,7 @@ func copyPartition(p *Partition) *Partition {
 	for i, s := range p.ReplicaColors {
 		n.ReplicaColors[i] = s.Copy()
 	}
-	for i, s := range p.ReplicaStates {
+	for i, s := range p.ReplicaStates { // if it's a map should we copy?
 		n.ReplicaStates[i] = s
 	}
 	for i, p := range p.PartitionMap {
@@ -240,7 +240,7 @@ func NewPartitionEnv(c PartitionEnvConfig) *PartitionEnv {
 }
 
 func (p *PartitionEnv) reset() {
-	s := p.underlyingEnv.Reset()
+	s := p.underlyingEnv.Reset() // takes the state given by the reset function of the underlying environment
 	colors := make([]Color, p.NumReplicas)
 	curPartition := &Partition{
 		ReplicaColors: make(map[uint64]Color),
@@ -327,55 +327,60 @@ func (p *PartitionEnv) Step(a Action) State {
 	}
 
 	// 2. Perform ticks, delivering messages in between
-	var s PartitionedSystemState = nil
-	for i := 0; i < p.ticksBetweenPartitions; i++ {
+	var s PartitionedSystemState = nil              // is this the new state?
+	for i := 0; i < p.ticksBetweenPartitions; i++ { // for the specified number of ticks between two partitions (action of the agent)
 
 		messages := make([]Message, 0)
 		if s == nil {
-			for _, m := range p.messages {
+			for _, m := range p.messages { // in the beginning s is nil, use p.messages (stored from previous partition state)
 				messages = append(messages, m)
 			}
 		} else {
-			for _, m := range s.PendingMessages() {
+			for _, m := range s.PendingMessages() { // these are produced in s at every tick?
 				messages = append(messages, m)
 			}
 		}
 
-		if len(messages) > 0 {
-			p.rand.Shuffle(len(messages), func(i, j int) {
+		if len(messages) > 0 { // if there are messages to deliver
+			p.rand.Shuffle(len(messages), func(i, j int) { // randomize order of messages?
 				messages[i], messages[j] = messages[j], messages[i]
 			})
 
-			mToDeliver := p.rand.Intn(p.maxMessagesPerTick)
+			mToDeliver := p.rand.Intn(p.maxMessagesPerTick) // randomly choose how many messages to deliver, up to specified bound
 			for j := 0; j < mToDeliver; j++ {
 				if len(messages) > 0 {
-					next := messages[0]
+					next := messages[0] // take the first message
 					messages = messages[1:]
+					// check if partitioning allows delivery
 					fromP, fromOk := newPartitionMap[next.From()]
 					toP, toOk := newPartitionMap[next.To()]
-					if !fromOk || !toOk || fromP == toP {
+					if !fromOk || !toOk || fromP == toP { // deliver it
 						p.underlyingEnv.DeliverMessage(next)
-					} else {
+					} else { // drop it
 						p.underlyingEnv.DropMessage(next)
 					}
 				}
 			}
 		}
-		s = p.underlyingEnv.Tick()
+		s = p.underlyingEnv.Tick() // make the tick pass on the environment
 	}
 
 	// 3. Update states, partitions and return
 	p.messages = make(map[string]Message)
-	for k, m := range s.PendingMessages() {
+	for k, m := range s.PendingMessages() { // save pending messages for next state
 		p.messages[k] = m
 	}
+
+	// for each replica, get its state from s (underlying env) and store it as it is (rs) + store its abstraction (color)
 	for i := 0; i < p.NumReplicas; i++ {
 		id := uint64(i + 1)
 		rs := s.GetReplicaState(id)
 		color := p.painter.Color(rs)
-		nextState.ReplicaColors[id] = color
-		nextState.ReplicaStates[id] = rs
+		nextState.ReplicaColors[id] = color // abstraction
+		nextState.ReplicaStates[id] = rs    // actual replica state
 	}
+
+	// apply partitioning
 	nextStatePartition := make([][]Color, len(newPartition))
 	for i, p := range newPartition {
 		partition := make([]Color, len(p))

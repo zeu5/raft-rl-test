@@ -36,8 +36,16 @@ type RaftState struct {
 }
 
 // Implements the PartitionedSystemState
-func (r RaftState) GetReplicaState(rep uint64) types.ReplicaState {
+func (r RaftState) GetReplicaStateOld(rep uint64) types.ReplicaState {
 	return r.NodeStates[rep]
+}
+
+// Implements the PartitionedSystemState
+func (r RaftState) GetReplicaState(rep uint64) types.ReplicaState {
+	replicaState := make(map[string]interface{})
+	replicaState["state"] = r.NodeStates[rep] // add replica state as raft.Status
+	replicaState["log"] = r.Logs[rep]         // add replica log as []pb.Entry
+	return replicaState
 }
 
 // Implements the PartitionedSystemState
@@ -245,6 +253,7 @@ func (r *RaftEnvironment) Reset() types.State {
 	return r.curState
 }
 
+// this is probably not called by the partition environment...
 func (r *RaftEnvironment) Step(action types.Action) types.State {
 	raftAction := action.(*RaftAction)
 	switch raftAction.Type {
@@ -384,6 +393,24 @@ func copyMessages(messages map[string]pb.Message) map[string]pb.Message {
 			}
 		}
 		c[k] = newMessage
+	}
+	return c
+}
+
+// copy the logs hashmap (list of pb.Entry structs in the raft code)
+func copyLogs(logs map[uint64][]pb.Entry) map[uint64][]pb.Entry {
+	c := make(map[uint64][]pb.Entry)
+	for k, log := range logs {
+		newLog := make([]pb.Entry, len(log))
+		for i, entry := range log {
+			newLog[i] = pb.Entry{
+				Term:  entry.Term,
+				Index: entry.Index,
+				Type:  entry.Type,
+				Data:  entry.Data,
+			}
+		}
+		c[k] = newLog
 	}
 	return c
 }

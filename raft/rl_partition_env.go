@@ -10,7 +10,7 @@ import (
 	pb "go.etcd.io/raft/v3/raftpb"
 )
 
-var _ types.ReplicaState = raft.Status{}
+// var _ types.ReplicaState = raft.Status{}
 
 type RaftPartitionColor struct {
 	Params map[string]interface{}
@@ -34,24 +34,57 @@ func (r *RaftPartitionColor) Copy() types.Color {
 	return new
 }
 
+// various functions to take info from raft.Status to 'colors' of the abstracted state
 type RaftColorFunc func(raft.Status) (string, interface{})
 
+// return the state of the node, should be one of these:
+//
+//	var stmap = [...]string{
+//		"StateFollower",
+//		"StateCandidate",
+//		"StateLeader",
+//		"StatePreCandidate",
+//	}
 func ColorState() RaftColorFunc {
 	return func(s raft.Status) (string, interface{}) {
 		return "state", s.RaftState.String()
 	}
 }
 
+// return the current term of the node, should be just a number
 func ColorTerm() RaftColorFunc {
 	return func(s raft.Status) (string, interface{}) {
 		return "term", s.Term
 	}
 }
 
+// return the current term of the node, provides a bound that is the maximum considered term
 func ColorBoundedTerm(bound int) RaftColorFunc {
 	return func(s raft.Status) (string, interface{}) {
 		term := s.Term
 		if term > uint64(bound) {
+			term = uint64(bound)
+		}
+		return "boundedTerm", term
+	}
+}
+
+// return the relative current term of the node, 1 is the current minimum term number, the others are computed as difference from this
+func ColorRelativeTerm(minimum int) RaftColorFunc {
+	return func(s raft.Status) (string, interface{}) {
+		term := s.Term                    // get the value from process Status
+		term = term - uint64(minimum) + 1 // compute difference
+		return "boundedTerm", term
+	}
+}
+
+// return the relative current term of the node, 1 is the current minimum term number, the others are computed as difference from this
+// bound provides the maximum considered term gap
+func ColorRelativeBoundedTerm(minimum int, bound int) RaftColorFunc {
+	return func(s raft.Status) (string, interface{}) {
+		term := s.Term                    // get the value from process Status
+		term = term - uint64(minimum) + 1 // compute difference
+		if term > uint64(bound) {         // set to bound if higher gap
 			term = uint64(bound)
 		}
 		return "boundedTerm", term
@@ -92,8 +125,10 @@ func NewRaftStatePainter(paramFuncs ...RaftColorFunc) *RaftStatePainter {
 	}
 }
 
+// apply abstraction on a ReplicaState
 func (p *RaftStatePainter) Color(s types.ReplicaState) types.Color {
-	rs := s.(raft.Status)
+	rsState := s.(map[string]interface{}) // cast into a map
+	rs := rsState["state"].(raft.Status)  // cast the "state" component into raft.Status
 	c := &RaftPartitionColor{
 		Params: make(map[string]interface{}),
 	}
@@ -173,6 +208,10 @@ func (p *RaftPartitionEnv) Reset() types.PartitionedSystemState {
 	return s.(RaftState)
 }
 
+// partition environment in types.partition_env.go will call these two functions multiple times inbetween partition actions
+// it seems they are not using the step function of the underlying environment, they interact directly with the raft code...
+
+// make one tick pass in the system and returns the subsequent env state
 func (p *RaftPartitionEnv) Tick() types.PartitionedSystemState {
 	for _, node := range p.nodes {
 		node.Tick()
@@ -180,6 +219,7 @@ func (p *RaftPartitionEnv) Tick() types.PartitionedSystemState {
 	newState := RaftState{
 		NodeStates:   make(map[uint64]raft.Status),
 		WithTimeouts: p.config.Timeouts,
+		Logs:         make(map[uint64][]pb.Entry), // guess this should be added also here?
 	}
 	for id, node := range p.nodes {
 		if node.HasReady() {
@@ -193,13 +233,23 @@ func (p *RaftPartitionEnv) Tick() types.PartitionedSystemState {
 			}
 			node.Advance(ready)
 		}
-		newState.NodeStates[id] = node.Status()
+		status := node.Status()
+
+		// populate replica log
+		newState.Logs[id] = make([]pb.Entry, 0)
+		ents, err := p.storages[id].Entries(0, status.Commit, status.Commit)
+		if err == nil {
+			newState.Logs[id] = ents
+		}
+
+		newState.NodeStates[id] = status
 	}
 	newState.Messages = copyMessages(p.messages)
 	p.curState = newState
 	return newState
 }
 
+// deliver the specified message in the system and returns the subsequent state, no tick pass?
 func (p *RaftPartitionEnv) DeliverMessage(m types.Message) types.PartitionedSystemState {
 	rm := m.(RaftMessageWrapper)
 	if rm.Type == pb.MsgProp {
@@ -253,10 +303,12 @@ func (p *RaftPartitionEnv) DeliverMessage(m types.Message) types.PartitionedSyst
 	return newState
 }
 
+// drops the specified message in the system, no tick pass
 func (p *RaftPartitionEnv) DropMessage(m types.Message) types.PartitionedSystemState {
 	newState := RaftState{
 		NodeStates:   copyNodeStates(p.curState.NodeStates),
 		Messages:     copyMessages(p.curState.Messages),
+		Logs:         copyLogs(p.curState.Logs), // copy the logs for the new state
 		WithTimeouts: p.config.Timeouts,
 	}
 	delete(newState.Messages, m.Hash())
