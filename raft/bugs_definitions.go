@@ -1,6 +1,8 @@
 package raft
 
 import (
+	"bytes"
+
 	"github.com/zeu5/raft-rl-test/types"
 	"go.etcd.io/raft/v3"
 	pb "go.etcd.io/raft/v3/raftpb"
@@ -66,7 +68,7 @@ func ModifiedLog() func(*types.Trace) bool {
 					}
 
 					for j := 0; j < len(replicasLogs[replica_id]); j++ { // for the size of the old log (ignore newly appended entries)
-						if curLog[j].String() != replicasLogs[replica_id][j].String() { // check if they are equal
+						if !eq_entry(curLog[j], replicasLogs[replica_id][j]) { // check if they are equal
 							return true // BUG FOUND
 						}
 					}
@@ -99,7 +101,7 @@ func InconsistentLogs() func(*types.Trace) bool {
 						minSize := min(len(logsList[j1]), len(logsList[j2])) // take the minimum length among the two logs
 
 						for k := 0; k < minSize; k++ { // for each entry
-							if logsList[j1][k].String() != logsList[j2][k].String() { // check if they are equal
+							if !eq_entry(logsList[j1][k], logsList[j2][k]) { // check if they are equal
 								return true // BUG FOUND
 							}
 						}
@@ -143,4 +145,8 @@ func min(a, b int) int {
 		return b
 	}
 	return a
+}
+
+func eq_entry(a, b pb.Entry) bool {
+	return bytes.Equal(a.Data, b.Data) && a.Index == b.Index && a.Term == b.Term && a.Type == b.Type
 }
