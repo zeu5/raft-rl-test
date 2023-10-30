@@ -14,7 +14,7 @@ type BugDesc struct {
 }
 
 // checks all the bugs on the traces
-func BugAnalyzer(bugs ...BugDesc) Analyzer {
+func BugAnalyzer(savePath string, bugs ...BugDesc) Analyzer {
 	return func(run int, s string, traces []*Trace) DataSet {
 		occurrences := make(map[string]int)
 		for i, t := range traces {
@@ -22,6 +22,8 @@ func BugAnalyzer(bugs ...BugDesc) Analyzer {
 				_, ok := occurrences[b.Name]
 				if !ok && b.Check(t) {
 					occurrences[b.Name] = i
+					bugPath := path.Join(savePath, strconv.Itoa(run)+"_"+s+"_"+b.Name+"_"+strconv.Itoa(i)+"_bug.json")
+					t.Record(bugPath)
 				}
 			}
 		}

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"path"
+
 	"github.com/spf13/cobra"
 	"github.com/zeu5/raft-rl-test/lpaxos"
 	"github.com/zeu5/raft-rl-test/policies"
@@ -32,7 +34,10 @@ func PaxosRewardMachine(episodes, horizon int) {
 	// guideRM.AddState(onlyMajorityDecided, "OnlyMajorityDecided")
 
 	c := types.NewComparison(runs)
-	c.AddAnalysis("Bugs", types.BugAnalyzer(types.BugDesc{Name: "Safety", Check: lpaxos.SafetyBug()}), types.BugComparator(saveFile))
+	c.AddAnalysis("Bugs", types.BugAnalyzer(
+		path.Join(saveFile, "bugs"),
+		types.BugDesc{Name: "Safety", Check: lpaxos.SafetyBug()},
+	), types.BugComparator(saveFile))
 	// c := types.NewComparison(policies.PredicatesAnalyzer(onlyMajorityDecided, inPhase, emptyLogLeader), policies.PredicatesComparator())
 	// c := types.NewComparison(lpaxos.LPaxosAnalyzer(saveFile), lpaxos.LPaxosComparator(saveFile))
 	// c := types.NewComparison(policies.RewardMachineAnalyzer(checkRM), policies.RewardMachineCoverageComparator(saveFile), runs)

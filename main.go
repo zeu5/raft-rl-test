@@ -23,6 +23,7 @@ func main() {
 	rootCommand.PersistentFlags().IntVar(&runs, "runs", 1, "Number of experiment runs")
 	// adding the subcommands here
 	rootCommand.AddCommand(RedisTestCommand())
+	rootCommand.AddCommand(RedisRaftCommand())
 	rootCommand.AddCommand(RaftCommand())
 	rootCommand.AddCommand(RaftPartCommand())
 	rootCommand.AddCommand(PaxosPartCommand())

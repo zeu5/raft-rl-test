@@ -16,12 +16,18 @@ import (
 )
 
 type RedisNodeState struct {
-	Params map[string]interface{}
+	Params  map[string]string
+	State   string
+	Term    int
+	Commit  int
+	Applied int
+	Vote    int
+	Lead    int
 }
 
 func (r *RedisNodeState) Copy() *RedisNodeState {
 	new := &RedisNodeState{
-		Params: make(map[string]interface{}),
+		Params: make(map[string]string),
 	}
 	for k, v := range r.Params {
 		new.Params[k] = v
@@ -30,7 +36,7 @@ func (r *RedisNodeState) Copy() *RedisNodeState {
 }
 
 func EmptyRedisNodeState() *RedisNodeState {
-	return &RedisNodeState{Params: make(map[string]interface{})}
+	return &RedisNodeState{Params: make(map[string]string)}
 }
 
 type RedisNodeConfig struct {

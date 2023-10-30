@@ -1,0 +1,138 @@
+package redisraft
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+
+	"github.com/zeu5/raft-rl-test/types"
+)
+
+type RaftPartitionColor struct {
+	Params map[string]interface{}
+}
+
+var _ types.Color = &RaftPartitionColor{}
+
+func (r *RaftPartitionColor) Hash() string {
+	bs, _ := json.Marshal(r.Params)
+	hash := sha256.Sum256(bs)
+	return hex.EncodeToString(hash[:])
+}
+
+func (r *RaftPartitionColor) Copy() types.Color {
+	new := &RaftPartitionColor{
+		Params: make(map[string]interface{}),
+	}
+	for k, v := range r.Params {
+		new.Params[k] = v
+	}
+	return new
+}
+
+// various functions to take info from RedisNodeState to 'colors' of the abstracted state
+type RedisRaftColorFunc func(*RedisNodeState) (string, interface{})
+
+// return the state of the node, should be one of these:
+//
+//	var stmap = [...]string{
+//		"StateFollower",
+//		"StateCandidate",
+//		"StateLeader",
+//		"StatePreCandidate",
+//	}
+func ColorState() RedisRaftColorFunc {
+	return func(s *RedisNodeState) (string, interface{}) {
+		return "state", s.State
+	}
+}
+
+// return the current term of the node, should be just a number
+func ColorTerm() RedisRaftColorFunc {
+	return func(s *RedisNodeState) (string, interface{}) {
+		return "term", s.Term
+	}
+}
+
+// return the current term of the node, provides a bound that is the maximum considered term
+func ColorBoundedTerm(bound int) RedisRaftColorFunc {
+	return func(s *RedisNodeState) (string, interface{}) {
+		term := s.Term
+		if term > bound {
+			term = bound
+		}
+		return "boundedTerm", term
+	}
+}
+
+// return the relative current term of the node, 1 is the current minimum term number, the others are computed as difference from this
+func ColorRelativeTerm(minimum int) RedisRaftColorFunc {
+	return func(s *RedisNodeState) (string, interface{}) {
+		term := s.Term            // get the value from process Status
+		term = term - minimum + 1 // compute difference
+		return "boundedTerm", term
+	}
+}
+
+// return the relative current term of the node, 1 is the current minimum term number, the others are computed as difference from this
+// bound provides the maximum considered term gap
+func ColorRelativeBoundedTerm(minimum int, bound int) RedisRaftColorFunc {
+	return func(s *RedisNodeState) (string, interface{}) {
+		term := s.Term            // get the value from process Status
+		term = term - minimum + 1 // compute difference
+		if term > bound {         // set to bound if higher gap
+			term = bound
+		}
+		return "boundedTerm", term
+	}
+}
+
+func ColorCommit() RedisRaftColorFunc {
+	return func(s *RedisNodeState) (string, interface{}) {
+		return "commit", s.Commit
+	}
+}
+
+func ColorApplied() RedisRaftColorFunc {
+	return func(s *RedisNodeState) (string, interface{}) {
+		return "applied", s.Applied
+	}
+}
+
+func ColorVote() RedisRaftColorFunc {
+	return func(s *RedisNodeState) (string, interface{}) {
+		return "vote", s.Vote
+	}
+}
+
+func ColorLeader() RedisRaftColorFunc {
+	return func(s *RedisNodeState) (string, interface{}) {
+		return "leader", s.Lead
+	}
+}
+
+type RedisRaftStatePainter struct {
+	paramFuncs []RedisRaftColorFunc
+}
+
+func NewRedisRaftStatePainter(paramFuncs ...RedisRaftColorFunc) *RedisRaftStatePainter {
+	return &RedisRaftStatePainter{
+		paramFuncs: paramFuncs,
+	}
+}
+
+// apply abstraction on a ReplicaState
+func (p *RedisRaftStatePainter) Color(s types.ReplicaState) types.Color {
+	rs := s.(*RedisNodeState) // cast the "state" component into RedisNodeState
+	c := &RaftPartitionColor{
+		Params: make(map[string]interface{}),
+	}
+
+	for _, p := range p.paramFuncs {
+		k, v := p(rs)
+		c.Params[k] = v
+	}
+	return c
+}
+
+var _ types.Painter = &RedisRaftStatePainter{}

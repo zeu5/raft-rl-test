@@ -1,5 +1,10 @@
 package types
 
+import (
+	"encoding/json"
+	"os"
+)
+
 // Trace of an episode as triplets (state, action, nextState)
 type Trace struct {
 	states     []State
@@ -75,4 +80,18 @@ func (t *Trace) GetPrefix(i int) (*Trace, bool) {
 		nextStates: t.nextStates[0:i],
 		rewards:    t.rewards[0:i],
 	}, true
+}
+
+func (t *Trace) Record(p string) {
+	out := make(map[string]interface{})
+	out["states"] = t.states
+	out["actions"] = t.actions
+	out["next_states"] = t.nextStates
+	out["rewards"] = t.rewards
+
+	bs, err := json.Marshal(out)
+	if err != nil {
+		return
+	}
+	os.WriteFile(p, bs, 0644)
 }
