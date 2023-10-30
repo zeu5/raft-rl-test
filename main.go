@@ -26,6 +26,7 @@ func main() {
 	rootCommand.AddCommand(RedisRaftCommand())
 	rootCommand.AddCommand(RaftCommand())
 	rootCommand.AddCommand(RaftPartCommand())
+	rootCommand.AddCommand(EtcdRaftBugsCommand())
 	rootCommand.AddCommand(PaxosPartCommand())
 	rootCommand.AddCommand(PaxosRewardCommand())
 	rootCommand.AddCommand(PaxosRewardMachineCommand())
