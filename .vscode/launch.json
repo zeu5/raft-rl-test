@@ -73,6 +73,20 @@
             ]
         },
         {
+            "name": "Run etcd-raft-bugs",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "-e",
+                "30",
+                "--horizon",
+                "100",
+                "etcd-raft-bugs"
+            ]
+        },
+        {
             "name": "Run rsl exploration",
             "type": "go",
             "request": "launch",

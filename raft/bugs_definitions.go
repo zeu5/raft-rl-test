@@ -113,7 +113,7 @@ func InconsistentLogs() func(*types.Trace) bool {
 	}
 }
 
-// Check if there are more than one leader at the same time
+// Check if there are more than one leader in the same term
 func MultipleLeaders() func(*types.Trace) bool {
 	return func(t *types.Trace) bool {
 		// processStates := make(map[uint64]RaftState)
@@ -122,15 +122,20 @@ func MultipleLeaders() func(*types.Trace) bool {
 			s, _, _, _ := t.Get(i)         // take state s
 			pS, ok := s.(*types.Partition) // cast into partition
 			if ok {
-				var leaders = 0                          // init leaders count
+				leaders := make(map[int]int)             // map for leaders number, term : count
 				for _, state := range pS.ReplicaStates { // for each replica state
 					repState := state.(map[string]interface{})
-					curState := repState["state"].(raft.Status) // cast into raft.Status
-					if curState.BasicStatus.SoftState.RaftState.String() == "StateLeader" {
-						leaders += 1 // if the current softState of the replica is "StateLeader", increase leaders count by one
-					}
-					if leaders > 1 { // if more than one leader => BUG FOUND
-						return true
+					curState := repState["state"].(raft.Status)                             // cast into raft.Status
+					if curState.BasicStatus.SoftState.RaftState.String() == "StateLeader" { // if the current softState of the replica is "StateLeader"
+						curTerm := curState.BasicStatus.HardState.Term // take term
+						val := 0
+						if v, ok := leaders[int(curTerm)]; !ok { // read leaders count for the term
+							val = v
+						}
+						leaders[int(curTerm)] = val + 1 // increase it by one
+						if leaders[int(curTerm)] > 1 {  // if more than one leader => BUG FOUND
+							return true
+						}
 					}
 				}
 			}
