@@ -12,7 +12,7 @@ import (
 func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	// config of the running system
 	raftConfig := raft.RaftEnvironmentConfig{
-		Replicas:      3,
+		Replicas:      5,
 		ElectionTick:  10, // lower bound for a process to try to go to new term (starting an election) - double of this is upperbound
 		HeartbeatTick: 3,  // frequency of heartbeats
 		Timeouts:      timeouts,
@@ -102,6 +102,6 @@ func EtcdRaftBugsCommand() *cobra.Command {
 			EtcdRaftBugs(episodes, horizon, saveFile)
 		},
 	}
-	cmd.PersistentFlags().IntVarP(&requests, "requests", "r", 2, "Number of requests to run with")
+	cmd.PersistentFlags().IntVarP(&requests, "requests", "r", 4, "Number of requests to run with")
 	return cmd
 }
