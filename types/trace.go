@@ -95,3 +95,18 @@ func (t *Trace) Record(p string) {
 	}
 	os.WriteFile(p, bs, 0644)
 }
+
+// func (t *Trace) RecordReadable(p string) {
+// 	init := "### TRACE START ###\n"
+
+// 	body := ""
+// 	for i, state := range t.states {
+// 		body = fmt.Sprintf("%s\n ---state %d--- \n", body, i)
+// 		pState := state.(*Partition)
+// 		replicaStates :=
+
+// 	}
+
+// 	end := "### TRACE END ###\n"
+// 	os.WriteFile(p, bs, 0644)
+// }

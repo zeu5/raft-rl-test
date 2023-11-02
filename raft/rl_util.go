@@ -14,6 +14,7 @@ import (
 
 	"github.com/zeu5/raft-rl-test/types"
 	"go.etcd.io/raft/v3"
+	pb "go.etcd.io/raft/v3/raftpb"
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
 	"gonum.org/v1/plot/plotutil"
@@ -245,4 +246,33 @@ func (r *RaftGraphState) Hash() string {
 	bs, _ := json.Marshal(r)
 	hash := sha256.Sum256(bs)
 	return hex.EncodeToString(hash[:])
+}
+
+// takes a state of the system and returns a list of readable states, one for each replica
+func ReadableState(p types.Partition) []string {
+	result := make([]string, len(p.ReplicaStates))
+	for id, state := range p.ReplicaStates { // for each replica state
+		result = append(result, ReadableReplicaState(state, id))
+	}
+
+	return result
+}
+
+// formats a replica state in a human-readable form
+func ReadableReplicaState(state types.ReplicaState, id uint64) string {
+	repState := state.(map[string]interface{})
+
+	repRaftState := repState["state"].(raft.Status)
+	repLog := repState["log"].([]pb.Entry)
+	strLog := ""
+	for _, entry := range repLog {
+		strLog = fmt.Sprintf("%s, %s", strLog, entry.String())
+	}
+
+	softState := repRaftState.BasicStatus.SoftState.RaftState.String()
+	Term := repRaftState.BasicStatus.HardState.Term
+
+	s := fmt.Sprintf("ID: %d | T:%d | S:%s | L:[%s] ", id, Term, softState, strLog)
+
+	return s
 }
