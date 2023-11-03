@@ -7,3 +7,5 @@ raft-rl-test
 results*
 __pycache__
 result_*
+
+iter_run.sh

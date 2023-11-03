@@ -144,6 +144,27 @@ func MultipleLeaders() func(*types.Trace) bool {
 	}
 }
 
+// MADE TO CHECK TRACE RECORDING -- checks if the log size of any replica is not empty
+func DummyBug() func(*types.Trace) bool {
+	return func(t *types.Trace) bool {
+		for i := 0; i < t.Len(); i++ { // foreach (state, action, new_state, reward) in the trace
+			s, _, _, _ := t.Get(i) // take state s
+			pS, ok := s.(*types.Partition)
+			if ok {
+				for _, elem := range pS.ReplicaStates {
+					repState := elem.(map[string]interface{}) // cast into map
+					curLog := repState["log"].([]pb.Entry)    // cast "log" into list of pb.Entry
+
+					if len(curLog) > 4 { // check if log size decreased
+						return true // BUG FOUND
+					}
+				}
+			}
+		}
+		return false
+	}
+}
+
 // other functions / auxiliary
 func min(a, b int) int {
 	if a > b {

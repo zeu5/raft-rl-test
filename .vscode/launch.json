@@ -80,7 +80,7 @@
             "program": "${workspaceFolder}",
             "args": [
                 "-e",
-                "30",
+                "200",
                 "--horizon",
                 "100",
                 "etcd-raft-bugs"

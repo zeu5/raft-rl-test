@@ -12,7 +12,7 @@ import (
 func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	// config of the running system
 	raftConfig := raft.RaftEnvironmentConfig{
-		Replicas:      5,
+		Replicas:      3,
 		ElectionTick:  10, // lower bound for a process to try to go to new term (starting an election) - double of this is upperbound
 		HeartbeatTick: 3,  // frequency of heartbeats
 		Timeouts:      timeouts,
@@ -52,6 +52,7 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 		types.BugDesc{Name: "ReducedLog", Check: raft.ReducedLog()},
 		types.BugDesc{Name: "ModifiedLog", Check: raft.ModifiedLog()},
 		types.BugDesc{Name: "InconsistentLogs", Check: raft.InconsistentLogs()},
+		// types.BugDesc{Name: "DummyBug", Check: raft.DummyBug()},
 	), types.BugComparator(saveFile))
 
 	// here you add different policies with their parameters
@@ -70,7 +71,7 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	c.AddExperiment(types.NewExperiment("BonusMaxRL", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
-		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
+		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.05),
 		Environment: getRaftPartEnv(raftConfig, colors),
 	}))
 	c.AddExperiment(types.NewExperiment("PredHierarchy_1", &types.AgentConfig{
@@ -102,6 +103,6 @@ func EtcdRaftBugsCommand() *cobra.Command {
 			EtcdRaftBugs(episodes, horizon, saveFile)
 		},
 	}
-	cmd.PersistentFlags().IntVarP(&requests, "requests", "r", 4, "Number of requests to run with")
+	cmd.PersistentFlags().IntVarP(&requests, "requests", "r", 2, "Number of requests to run with")
 	return cmd
 }

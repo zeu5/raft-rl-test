@@ -227,7 +227,9 @@ func (p *RaftPartitionEnv) Tick() types.PartitionedSystemState {
 			if !raft.IsEmptySnap(ready.Snapshot) {
 				p.storages[id].ApplySnapshot(ready.Snapshot)
 			}
-			p.storages[id].Append(ready.Entries)
+			if len(ready.Entries) > 0 {
+				p.storages[id].Append(ready.Entries)
+			}
 			for _, message := range ready.Messages {
 				p.messages[msgKey(message)] = message
 			}
@@ -237,7 +239,7 @@ func (p *RaftPartitionEnv) Tick() types.PartitionedSystemState {
 
 		// populate replica log
 		newState.Logs[id] = make([]pb.Entry, 0)
-		ents, err := p.storages[id].Entries(0, status.Commit, status.Commit)
+		ents, err := p.storages[id].Entries(1, status.Commit+1, 1024*1024) // hardcoded value from link_env.go
 		if err == nil {
 			newState.Logs[id] = ents
 		}
@@ -284,7 +286,9 @@ func (p *RaftPartitionEnv) DeliverMessage(m types.Message) types.PartitionedSyst
 			if !raft.IsEmptySnap(ready.Snapshot) {
 				p.storages[id].ApplySnapshot(ready.Snapshot)
 			}
-			p.storages[id].Append(ready.Entries)
+			if len(ready.Entries) > 0 {
+				p.storages[id].Append(ready.Entries)
+			}
 			for _, message := range ready.Messages {
 				p.messages[msgKey(message)] = message
 			}
@@ -292,7 +296,7 @@ func (p *RaftPartitionEnv) DeliverMessage(m types.Message) types.PartitionedSyst
 		}
 		status := node.Status()
 		newState.Logs[id] = make([]pb.Entry, 0)
-		ents, err := p.storages[id].Entries(0, status.Commit, status.Commit)
+		ents, err := p.storages[id].Entries(1, status.Commit+1, 1024*1024) // hardcoded value from link_env.go
 		if err == nil {
 			newState.Logs[id] = ents
 		}

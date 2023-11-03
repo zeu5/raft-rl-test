@@ -15,6 +15,10 @@ type BugDesc struct {
 
 // checks all the bugs on the traces
 func BugAnalyzer(savePath string, bugs ...BugDesc) Analyzer {
+	if _, ok := os.Stat(savePath); ok == nil {
+		os.RemoveAll(savePath)
+	}
+	os.MkdirAll(savePath, 0777)
 	return func(run int, s string, traces []*Trace) DataSet {
 		occurrences := make(map[string]int)
 		for i, t := range traces {
