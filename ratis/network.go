@@ -1,0 +1,235 @@
+package ratis
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"net/http"
+	"strconv"
+	"sync"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/zeu5/raft-rl-test/types"
+)
+
+type Message struct {
+	Fr            string                 `json:"from"`
+	T             string                 `json:"to"`
+	Data          string                 `json:"data"`
+	Type          string                 `json:"type"`
+	ID            string                 `json:"id"`
+	ParsedMessage map[string]interface{} `json:"-"`
+}
+
+func (m Message) To() uint64 {
+	to, _ := strconv.Atoi(m.T)
+	return uint64(to)
+}
+
+func (m Message) From() uint64 {
+	from, _ := strconv.Atoi(m.Fr)
+	return uint64(from)
+}
+
+func (m Message) Copy() Message {
+	n := Message{
+		Fr:            m.Fr,
+		T:             m.T,
+		Data:          m.Data,
+		Type:          m.Type,
+		ID:            m.ID,
+		ParsedMessage: make(map[string]interface{}),
+	}
+	if m.ParsedMessage != nil {
+		for k, v := range m.ParsedMessage {
+			n.ParsedMessage[k] = v
+		}
+	}
+	return n
+}
+
+func (m Message) Hash() string {
+	return m.ID
+}
+
+var _ types.Message = Message{}
+
+type InterceptNetwork struct {
+	Addr   string
+	ctx    context.Context
+	server *http.Server
+
+	lock  *sync.Mutex
+	nodes map[uint64]string
+	// Make this bag of messages
+	messages map[string]Message
+}
+
+func NewInterceptNetwork(ctx context.Context, addr string) *InterceptNetwork {
+
+	f := &InterceptNetwork{
+		Addr:     addr,
+		ctx:      ctx,
+		lock:     new(sync.Mutex),
+		nodes:    make(map[uint64]string),
+		messages: make(map[string]Message),
+	}
+
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.New()
+	r.POST("/replica", f.handleReplica)
+	r.POST("/event", dummyHandler)
+	r.POST("/message", f.handleMessage)
+	f.server = &http.Server{
+		Addr:    addr,
+		Handler: r,
+	}
+
+	return f
+}
+
+func dummyHandler(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"message": "ok"})
+}
+
+func (n *InterceptNetwork) GetAllMessages() map[string]Message {
+	out := make(map[string]Message)
+	n.lock.Lock()
+	defer n.lock.Unlock()
+	for k, m := range n.messages {
+		out[k] = m.Copy()
+	}
+	return out
+}
+
+func (n *InterceptNetwork) handleMessage(c *gin.Context) {
+	m := Message{}
+	if err := c.ShouldBindJSON(&m); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to unmarshal request"})
+		return
+	}
+	parsedMessage := make(map[string]interface{})
+	if err := json.Unmarshal([]byte(m.Data), &parsedMessage); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to unmarshal request"})
+		return
+	}
+	m.ParsedMessage = parsedMessage
+
+	n.lock.Lock()
+	n.messages[m.ID] = m
+	n.lock.Unlock()
+
+	c.JSON(http.StatusOK, gin.H{"message": "ok"})
+}
+
+func (n *InterceptNetwork) handleReplica(c *gin.Context) {
+	replica := make(map[string]interface{})
+	if err := c.ShouldBindJSON(&replica); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to unmarshal request"})
+		return
+	}
+	nodeID := 0
+	nodeIDI, ok := replica["id"]
+	if !ok {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+		return
+	}
+	nodeIDS, ok := nodeIDI.(string)
+	if !ok {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+		return
+	}
+	nodeID, err := strconv.Atoi(nodeIDS)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+		return
+	}
+
+	nodeAddrI, ok := replica["addr"]
+	if !ok {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+		return
+	}
+	nodeAddr, ok := nodeAddrI.(string)
+	if !ok {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+		return
+	}
+
+	n.lock.Lock()
+	n.nodes[uint64(nodeID)] = nodeAddr
+	n.lock.Unlock()
+
+	c.JSON(http.StatusOK, gin.H{"message": "ok"})
+}
+
+func (n *InterceptNetwork) Start() {
+	go func() {
+		n.server.ListenAndServe()
+	}()
+
+	go func() {
+		<-n.ctx.Done()
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		n.server.Shutdown(ctx)
+	}()
+}
+
+func (n *InterceptNetwork) Reset() {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
+	n.messages = make(map[string]Message)
+	n.nodes = make(map[uint64]string)
+}
+
+func (n *InterceptNetwork) WaitForNodes(numNodes int) bool {
+	timeout := time.After(2 * time.Second)
+	numConnectedNodes := 0
+	for numConnectedNodes != numNodes {
+		select {
+		case <-n.ctx.Done():
+			return false
+		case <-timeout:
+			return false
+		case <-time.After(1 * time.Millisecond):
+		}
+		n.lock.Lock()
+		numConnectedNodes = len(n.nodes)
+		n.lock.Unlock()
+	}
+	return true
+}
+
+func (n *InterceptNetwork) SendMessage(id string) {
+	n.lock.Lock()
+	m, ok1 := n.messages[id]
+	nodeAddr := ""
+	if ok1 {
+		nodeAddr = n.nodes[m.To()]
+	}
+	n.lock.Unlock()
+
+	if !ok1 {
+		return
+	}
+
+	bs, err := json.Marshal(m)
+	if err != nil {
+		return
+	}
+	http.Post("http://"+nodeAddr+"/message", "application/json", bytes.NewBuffer(bs))
+
+	n.lock.Lock()
+	delete(n.messages, id)
+	n.lock.Unlock()
+}
+
+func (n *InterceptNetwork) DeleteMessage(id string) {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
+	delete(n.messages, id)
+}

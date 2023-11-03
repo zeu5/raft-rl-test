@@ -1,4 +1,4 @@
-package redisraft
+package ratis
 
 import (
 	"crypto/sha256"
@@ -8,7 +8,6 @@ import (
 	"os"
 	"path"
 	"strconv"
-	"strings"
 
 	"github.com/zeu5/raft-rl-test/types"
 	"gonum.org/v1/plot"
@@ -17,27 +16,27 @@ import (
 	"gonum.org/v1/plot/vg"
 )
 
-type redisRaftColoredState struct {
+type ratisRaftColoredState struct {
 	Params map[string]interface{}
 }
 
-type redisRaftState struct {
-	nodeStates map[uint64]*redisRaftColoredState
+type ratisRaftState struct {
+	nodeStates map[uint64]*ratisRaftColoredState
 }
 
-func (r *redisRaftState) Hash() string {
+func (r *ratisRaftState) Hash() string {
 	bs, _ := json.Marshal(r.nodeStates)
 	hash := sha256.Sum256(bs)
 	return hex.EncodeToString(hash[:])
 }
 
-func newRedisPartState(s types.State, colors ...RedisRaftColorFunc) *redisRaftState {
+func newRatisPartState(s types.State, colors ...RatisColorFunc) *ratisRaftState {
 	p, ok := s.(*types.Partition)
 	if ok {
-		r := &redisRaftState{nodeStates: make(map[uint64]*redisRaftColoredState)}
+		r := &ratisRaftState{nodeStates: make(map[uint64]*ratisRaftColoredState)}
 		for id, s := range p.ReplicaStates {
-			color := &redisRaftColoredState{Params: make(map[string]interface{})}
-			localState := s.(*RedisNodeState).Copy()
+			color := &ratisRaftColoredState{Params: make(map[string]interface{})}
+			localState := s.(*RatisNodeState).Copy()
 			for _, c := range colors {
 				k, v := c(localState)
 				color.Params[k] = v
@@ -46,20 +45,20 @@ func newRedisPartState(s types.State, colors ...RedisRaftColorFunc) *redisRaftSt
 		}
 		return r
 	}
-	return &redisRaftState{nodeStates: make(map[uint64]*redisRaftColoredState)}
+	return &ratisRaftState{nodeStates: make(map[uint64]*ratisRaftColoredState)}
 }
 
-func CoverageAnalyzer(colors ...RedisRaftColorFunc) types.Analyzer {
+func CoverageAnalyzer(colors ...RatisColorFunc) types.Analyzer {
 	return func(run int, s string, t []*types.Trace) types.DataSet {
 		c := make([]int, 0)
 		states := make(map[string]bool)
 		for _, trace := range t {
 			for i := 0; i < trace.Len(); i++ {
 				state, _, _, _ := trace.Get(i)
-				redisState := newRedisPartState(state, colors...)
-				redisStateHash := redisState.Hash()
-				if _, ok := states[redisStateHash]; !ok {
-					states[redisStateHash] = true
+				ratisState := newRatisPartState(state, colors...)
+				ratisStateHash := ratisState.Hash()
+				if _, ok := states[ratisStateHash]; !ok {
+					states[ratisStateHash] = true
 				}
 			}
 			c = append(c, len(states))
@@ -116,31 +115,18 @@ func BugAnalyzer(savePath string) types.Analyzer {
 	}
 	return func(i int, s string, t []*types.Trace) types.DataSet {
 		occurrences := make([]int, 0)
-		for iter, trace := range t {
-			for i := 0; i < trace.Len(); i++ {
-				state, _, _, _ := trace.Get(i)
-				pState := state.(*types.Partition)
-				hasBug := false
-				for _, s := range pState.ReplicaStates {
-					rState := s.(*RedisNodeState)
-					if strings.Contains(rState.LogStdout, "redis bug report") || strings.Contains(rState.LogStderr, "redis bug report") {
-						hasBug = true
-					}
-				}
-				if hasBug {
-					occurrences = append(occurrences, iter)
-					logLines := []string{}
-					for nodeID, s := range pState.ReplicaStates {
-						logLines = append(logLines, fmt.Sprintf("logs for node: %d\n", nodeID))
-						rState := s.(*RedisNodeState)
-						logLines = append(logLines, "----- Stdout -----", rState.LogStdout, "----- Stderr -----", rState.LogStderr, "\n\n")
-					}
-					allLogs := strings.Join(logLines, "\n")
-					logFilePath := path.Join(savePath, s+"_"+strconv.Itoa(i)+"_"+strconv.Itoa(iter)+".log")
-					os.WriteFile(logFilePath, []byte(allLogs), 0644)
-				}
-			}
-		}
+		// Todo: analyze to figure out where the bug is
+
+		// for iter, trace := range t {
+		// 	for i := 0; i < trace.Len(); i++ {
+		// 		state, _, _, _ := trace.Get(i)
+		// 		pState := state.(*types.Partition)
+		// 		hasBug := false
+		// 		if hasBug {
+		// 			// Record bug
+		// 		}
+		// 	}
+		// }
 		return occurrences
 	}
 }

@@ -4,6 +4,6 @@ raft-rl-test
 
 *.DS_Store
 
-results
+results*
 __pycache__
 result_*

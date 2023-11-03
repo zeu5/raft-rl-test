@@ -4,27 +4,26 @@ import (
 	"context"
 	"os"
 	"os/signal"
-	"path"
 
 	"github.com/spf13/cobra"
 	"github.com/zeu5/raft-rl-test/policies"
-	"github.com/zeu5/raft-rl-test/redisraft"
+	"github.com/zeu5/raft-rl-test/ratis"
 	"github.com/zeu5/raft-rl-test/types"
 )
 
-func RedisRaftExploration(episodes, horizon int, saveFile string, ctx context.Context) {
-	env := redisraft.NewRedisRaftEnv(ctx, &redisraft.ClusterConfig{
+func RatisExploration(episodes, horizon int, saveFile string, ctx context.Context) {
+	env := ratis.NewRatisRaftEnv(ctx, &ratis.RatisClusterConfig{
 		NumNodes:            3,
 		BasePort:            5000,
 		BaseInterceptPort:   2023,
-		ID:                  1,
 		InterceptListenAddr: "localhost:7074",
-		WorkingDir:          path.Join(saveFile, "tmp"),
+		// Todo: need to figure this out
+		RatisJarPath: "",
 	})
-	colors := []redisraft.RedisRaftColorFunc{redisraft.ColorState(), redisraft.ColorCommit(), redisraft.ColorLeader(), redisraft.ColorVote(), redisraft.ColorBoundedTerm(5)}
+	colors := []ratis.RatisColorFunc{ratis.ColorState(), ratis.ColorCommit(), ratis.ColorLeader(), ratis.ColorVote(), ratis.ColorBoundedTerm(5)}
 
 	partitionEnv := types.NewPartitionEnv(types.PartitionEnvConfig{
-		Painter:                redisraft.NewRedisRaftStatePainter(colors...),
+		Painter:                ratis.NewRatisStatePainter(colors...),
 		Env:                    env,
 		TicketBetweenPartition: 3,
 		MaxMessagesPerTick:     3,
@@ -34,8 +33,8 @@ func RedisRaftExploration(episodes, horizon int, saveFile string, ctx context.Co
 
 	c := types.NewComparison(runs)
 
-	c.AddAnalysis("plot", redisraft.CoverageAnalyzer(colors...), redisraft.CoverageComparator(saveFile))
-	c.AddAnalysis("bugs", redisraft.BugAnalyzer(saveFile), redisraft.BugComparator())
+	c.AddAnalysis("plot", ratis.CoverageAnalyzer(colors...), ratis.CoverageComparator(saveFile))
+	c.AddAnalysis("bugs", ratis.BugAnalyzer(saveFile), ratis.BugComparator())
 
 	c.AddExperiment(types.NewExperiment("NegReward", &types.AgentConfig{
 		Episodes:    episodes,
@@ -62,7 +61,7 @@ func RedisRaftExploration(episodes, horizon int, saveFile string, ctx context.Co
 	env.Cleanup()
 }
 
-func RedisRaftCommand() *cobra.Command {
+func RatisExplorationCommand() *cobra.Command {
 	return &cobra.Command{
 		Use: "redisraft",
 		Run: func(cmd *cobra.Command, args []string) {
@@ -80,7 +79,7 @@ func RedisRaftCommand() *cobra.Command {
 				cancel()
 			}()
 
-			RedisRaftExploration(episodes, horizon, saveFile, ctx)
+			RatisExploration(episodes, horizon, saveFile, ctx)
 
 			close(doneCh)
 		},

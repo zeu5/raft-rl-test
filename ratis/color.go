@@ -1,4 +1,4 @@
-package redisraft
+package ratis
 
 import (
 	"crypto/sha256"
@@ -8,20 +8,20 @@ import (
 	"github.com/zeu5/raft-rl-test/types"
 )
 
-type RedisPartitionColor struct {
+type RatisPartitionColor struct {
 	Params map[string]interface{}
 }
 
-var _ types.Color = &RedisPartitionColor{}
+var _ types.Color = &RatisPartitionColor{}
 
-func (r *RedisPartitionColor) Hash() string {
+func (r *RatisPartitionColor) Hash() string {
 	bs, _ := json.Marshal(r.Params)
 	hash := sha256.Sum256(bs)
 	return hex.EncodeToString(hash[:])
 }
 
-func (r *RedisPartitionColor) Copy() types.Color {
-	new := &RedisPartitionColor{
+func (r *RatisPartitionColor) Copy() types.Color {
+	new := &RatisPartitionColor{
 		Params: make(map[string]interface{}),
 	}
 	for k, v := range r.Params {
@@ -30,8 +30,8 @@ func (r *RedisPartitionColor) Copy() types.Color {
 	return new
 }
 
-// various functions to take info from RedisNodeState to 'colors' of the abstracted state
-type RedisRaftColorFunc func(*RedisNodeState) (string, interface{})
+// various functions to take info from RatisNodeState to 'colors' of the abstracted state
+type RatisColorFunc func(*RatisNodeState) (string, interface{})
 
 // return the state of the node, should be one of these:
 //
@@ -41,22 +41,22 @@ type RedisRaftColorFunc func(*RedisNodeState) (string, interface{})
 //		"StateLeader",
 //		"StatePreCandidate",
 //	}
-func ColorState() RedisRaftColorFunc {
-	return func(s *RedisNodeState) (string, interface{}) {
+func ColorState() RatisColorFunc {
+	return func(s *RatisNodeState) (string, interface{}) {
 		return "state", s.State
 	}
 }
 
 // return the current term of the node, should be just a number
-func ColorTerm() RedisRaftColorFunc {
-	return func(s *RedisNodeState) (string, interface{}) {
+func ColorTerm() RatisColorFunc {
+	return func(s *RatisNodeState) (string, interface{}) {
 		return "term", s.Term
 	}
 }
 
 // return the current term of the node, provides a bound that is the maximum considered term
-func ColorBoundedTerm(bound int) RedisRaftColorFunc {
-	return func(s *RedisNodeState) (string, interface{}) {
+func ColorBoundedTerm(bound int) RatisColorFunc {
+	return func(s *RatisNodeState) (string, interface{}) {
 		term := s.Term
 		if term > bound {
 			term = bound
@@ -66,8 +66,8 @@ func ColorBoundedTerm(bound int) RedisRaftColorFunc {
 }
 
 // return the relative current term of the node, 1 is the current minimum term number, the others are computed as difference from this
-func ColorRelativeTerm(minimum int) RedisRaftColorFunc {
-	return func(s *RedisNodeState) (string, interface{}) {
+func ColorRelativeTerm(minimum int) RatisColorFunc {
+	return func(s *RatisNodeState) (string, interface{}) {
 		term := s.Term            // get the value from process Status
 		term = term - minimum + 1 // compute difference
 		return "boundedTerm", term
@@ -76,8 +76,8 @@ func ColorRelativeTerm(minimum int) RedisRaftColorFunc {
 
 // return the relative current term of the node, 1 is the current minimum term number, the others are computed as difference from this
 // bound provides the maximum considered term gap
-func ColorRelativeBoundedTerm(minimum int, bound int) RedisRaftColorFunc {
-	return func(s *RedisNodeState) (string, interface{}) {
+func ColorRelativeBoundedTerm(minimum int, bound int) RatisColorFunc {
+	return func(s *RatisNodeState) (string, interface{}) {
 		term := s.Term            // get the value from process Status
 		term = term - minimum + 1 // compute difference
 		if term > bound {         // set to bound if higher gap
@@ -87,44 +87,44 @@ func ColorRelativeBoundedTerm(minimum int, bound int) RedisRaftColorFunc {
 	}
 }
 
-func ColorCommit() RedisRaftColorFunc {
-	return func(s *RedisNodeState) (string, interface{}) {
+func ColorCommit() RatisColorFunc {
+	return func(s *RatisNodeState) (string, interface{}) {
 		return "commit", s.Commit
 	}
 }
 
-func ColorApplied() RedisRaftColorFunc {
-	return func(s *RedisNodeState) (string, interface{}) {
+func ColorApplied() RatisColorFunc {
+	return func(s *RatisNodeState) (string, interface{}) {
 		return "applied", s.Applied
 	}
 }
 
-func ColorVote() RedisRaftColorFunc {
-	return func(s *RedisNodeState) (string, interface{}) {
+func ColorVote() RatisColorFunc {
+	return func(s *RatisNodeState) (string, interface{}) {
 		return "vote", s.Vote
 	}
 }
 
-func ColorLeader() RedisRaftColorFunc {
-	return func(s *RedisNodeState) (string, interface{}) {
+func ColorLeader() RatisColorFunc {
+	return func(s *RatisNodeState) (string, interface{}) {
 		return "leader", s.Lead
 	}
 }
 
-type RedisRaftStatePainter struct {
-	paramFuncs []RedisRaftColorFunc
+type RatisStatePainter struct {
+	paramFuncs []RatisColorFunc
 }
 
-func NewRedisRaftStatePainter(paramFuncs ...RedisRaftColorFunc) *RedisRaftStatePainter {
-	return &RedisRaftStatePainter{
+func NewRatisStatePainter(paramFuncs ...RatisColorFunc) *RatisStatePainter {
+	return &RatisStatePainter{
 		paramFuncs: paramFuncs,
 	}
 }
 
 // apply abstraction on a ReplicaState
-func (p *RedisRaftStatePainter) Color(s types.ReplicaState) types.Color {
-	rs := s.(*RedisNodeState) // cast the "state" component into RedisNodeState
-	c := &RedisPartitionColor{
+func (p *RatisStatePainter) Color(s types.ReplicaState) types.Color {
+	rs := s.(*RatisNodeState) // cast the "state" component into RatisNodeState
+	c := &RatisPartitionColor{
 		Params: make(map[string]interface{}),
 	}
 
@@ -135,4 +135,4 @@ func (p *RedisRaftStatePainter) Color(s types.ReplicaState) types.Color {
 	return c
 }
 
-var _ types.Painter = &RedisRaftStatePainter{}
+var _ types.Painter = &RatisStatePainter{}

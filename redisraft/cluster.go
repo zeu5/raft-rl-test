@@ -16,18 +16,28 @@ import (
 )
 
 type RedisNodeState struct {
-	Params  map[string]string
-	State   string
-	Term    int
-	Commit  int
-	Applied int
-	Vote    int
-	Lead    int
+	Params    map[string]string
+	LogStdout string
+	LogStderr string
+	State     string
+	Term      int
+	Commit    int
+	Applied   int
+	Vote      int
+	Lead      int
 }
 
 func (r *RedisNodeState) Copy() *RedisNodeState {
 	new := &RedisNodeState{
-		Params: make(map[string]string),
+		Params:    make(map[string]string),
+		LogStdout: r.LogStdout,
+		LogStderr: r.LogStderr,
+		State:     r.State,
+		Term:      r.Term,
+		Commit:    r.Commit,
+		Applied:   r.Applied,
+		Vote:      r.Vote,
+		Lead:      r.Lead,
 	}
 	for k, v := range r.Params {
 		new.Params[k] = v
@@ -225,7 +235,11 @@ func (r *RedisNode) Info() (*RedisNodeState, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ParseInfo(info), nil
+	pInfo := ParseInfo(info)
+	stdout, stderr := r.GetLogs()
+	pInfo.LogStdout = stdout
+	pInfo.LogStderr = stderr
+	return pInfo, nil
 }
 
 type ClusterConfig struct {

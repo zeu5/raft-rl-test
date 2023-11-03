@@ -1,4 +1,4 @@
-package redisraft
+package ratis
 
 import (
 	"context"
@@ -7,17 +7,17 @@ import (
 	"github.com/zeu5/raft-rl-test/types"
 )
 
-type RedisClusterState struct {
-	NodeStates map[uint64]*RedisNodeState
+type RatisClusterState struct {
+	NodeStates map[uint64]*RatisNodeState
 	Messages   map[string]Message
 }
 
-func (r *RedisClusterState) GetReplicaState(id uint64) types.ReplicaState {
+func (r *RatisClusterState) GetReplicaState(id uint64) types.ReplicaState {
 	s := r.NodeStates[id]
 	return s
 }
 
-func (r *RedisClusterState) PendingMessages() map[string]types.Message {
+func (r *RatisClusterState) PendingMessages() map[string]types.Message {
 	out := make(map[string]types.Message)
 	for k, m := range r.Messages {
 		out[k] = m
@@ -25,19 +25,19 @@ func (r *RedisClusterState) PendingMessages() map[string]types.Message {
 	return out
 }
 
-var _ types.PartitionedSystemState = &RedisClusterState{}
+var _ types.PartitionedSystemState = &RatisClusterState{}
 
-type RedisRaftEnv struct {
-	clusterConfig *ClusterConfig
+type RatisRaftEnv struct {
+	clusterConfig *RatisClusterConfig
 	network       *InterceptNetwork
-	cluster       *Cluster
+	cluster       *RatisCluster
 
-	curState *RedisClusterState
+	curState *RatisClusterState
 }
 
 // For a given config, should only be instantiated once since it spins up a sever and binds the addr:port
-func NewRedisRaftEnv(ctx context.Context, clusterConfig *ClusterConfig) *RedisRaftEnv {
-	e := &RedisRaftEnv{
+func NewRatisRaftEnv(ctx context.Context, clusterConfig *RatisClusterConfig) *RatisRaftEnv {
+	e := &RatisRaftEnv{
 		clusterConfig: clusterConfig,
 		network:       NewInterceptNetwork(ctx, clusterConfig.InterceptListenAddr),
 		cluster:       nil,
@@ -46,14 +46,14 @@ func NewRedisRaftEnv(ctx context.Context, clusterConfig *ClusterConfig) *RedisRa
 	return e
 }
 
-func (r *RedisRaftEnv) DeliverMessage(m types.Message) types.PartitionedSystemState {
+func (r *RatisRaftEnv) DeliverMessage(m types.Message) types.PartitionedSystemState {
 	rm, ok := m.(Message)
 	if !ok {
 		return r.curState
 	}
 	r.network.SendMessage(rm.ID)
-	newState := &RedisClusterState{
-		NodeStates: make(map[uint64]*RedisNodeState),
+	newState := &RatisClusterState{
+		NodeStates: make(map[uint64]*RatisNodeState),
 	}
 	for id, s := range r.curState.NodeStates {
 		newState.NodeStates[id] = s.Copy()
@@ -64,14 +64,14 @@ func (r *RedisRaftEnv) DeliverMessage(m types.Message) types.PartitionedSystemSt
 	return newState
 }
 
-func (r *RedisRaftEnv) DropMessage(m types.Message) types.PartitionedSystemState {
+func (r *RatisRaftEnv) DropMessage(m types.Message) types.PartitionedSystemState {
 	rm, ok := m.(Message)
 	if !ok {
 		return r.curState
 	}
 	r.network.DeleteMessage(rm.ID)
-	newState := &RedisClusterState{
-		NodeStates: make(map[uint64]*RedisNodeState),
+	newState := &RatisClusterState{
+		NodeStates: make(map[uint64]*RatisNodeState),
 	}
 	for id, s := range r.curState.NodeStates {
 		newState.NodeStates[id] = s.Copy()
@@ -82,7 +82,7 @@ func (r *RedisRaftEnv) DropMessage(m types.Message) types.PartitionedSystemState
 	return newState
 }
 
-func (r *RedisRaftEnv) Reset() types.PartitionedSystemState {
+func (r *RatisRaftEnv) Reset() types.PartitionedSystemState {
 	if r.cluster != nil {
 		r.cluster.Destroy()
 	}
@@ -90,7 +90,7 @@ func (r *RedisRaftEnv) Reset() types.PartitionedSystemState {
 	r.cluster = NewCluster(r.clusterConfig)
 	r.cluster.Start()
 
-	newState := &RedisClusterState{
+	newState := &RatisClusterState{
 		NodeStates: r.cluster.GetNodeStates(),
 		Messages:   r.network.GetAllMessages(),
 	}
@@ -98,16 +98,16 @@ func (r *RedisRaftEnv) Reset() types.PartitionedSystemState {
 	return newState
 }
 
-func (r *RedisRaftEnv) Cleanup() {
+func (r *RatisRaftEnv) Cleanup() {
 	if r.cluster != nil {
 		r.cluster.Destroy()
 		r.cluster = nil
 	}
 }
 
-func (r *RedisRaftEnv) Tick() types.PartitionedSystemState {
+func (r *RatisRaftEnv) Tick() types.PartitionedSystemState {
 	time.Sleep(50 * time.Microsecond)
-	newState := &RedisClusterState{
+	newState := &RatisClusterState{
 		NodeStates: r.cluster.GetNodeStates(),
 		Messages:   r.network.GetAllMessages(),
 	}
@@ -115,4 +115,4 @@ func (r *RedisRaftEnv) Tick() types.PartitionedSystemState {
 	return newState
 }
 
-var _ types.PartitionedSystemEnvironment = &RedisRaftEnv{}
+var _ types.PartitionedSystemEnvironment = &RatisRaftEnv{}
