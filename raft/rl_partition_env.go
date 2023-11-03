@@ -266,9 +266,10 @@ func (p *RaftPartitionEnv) DeliverMessage(m types.Message) types.PartitionedSyst
 		}
 		if haveLeader {
 			message := rm.Message
+			messageKey := msgKey(message)
 			message.To = leader
 			p.nodes[leader].Step((message))
-			delete(p.messages, msgKey(message))
+			delete(p.messages, messageKey)
 		}
 	} else {
 		node := p.nodes[rm.Message.To]
