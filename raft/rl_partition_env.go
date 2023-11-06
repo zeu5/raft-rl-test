@@ -220,6 +220,7 @@ func (p *RaftPartitionEnv) Tick() types.PartitionedSystemState {
 		NodeStates:   make(map[uint64]raft.Status),
 		WithTimeouts: p.config.Timeouts,
 		Logs:         make(map[uint64][]pb.Entry), // guess this should be added also here?
+		Snapshots:    make(map[uint64]pb.Snapshot),
 	}
 	for id, node := range p.nodes {
 		if node.HasReady() {
@@ -235,16 +236,23 @@ func (p *RaftPartitionEnv) Tick() types.PartitionedSystemState {
 			}
 			node.Advance(ready)
 		}
-		status := node.Status()
 
-		// populate replica log
+		// add status
+		status := node.Status()
+		newState.NodeStates[id] = status
+
+		// add log
 		newState.Logs[id] = make([]pb.Entry, 0)
 		ents, err := p.storages[id].Entries(1, status.Commit+1, 1024*1024) // hardcoded value from link_env.go
 		if err == nil {
 			newState.Logs[id] = ents
 		}
 
-		newState.NodeStates[id] = status
+		// add snapshot
+		snapshot, err := p.storages[id].Snapshot()
+		if err == nil {
+			newState.Snapshots[id] = snapshot
+		}
 	}
 	newState.Messages = copyMessages(p.messages)
 	p.curState = newState
@@ -282,12 +290,14 @@ func (p *RaftPartitionEnv) DeliverMessage(m types.Message) types.PartitionedSyst
 		NodeStates:   make(map[uint64]raft.Status),
 		WithTimeouts: p.config.Timeouts,
 		Logs:         make(map[uint64][]pb.Entry),
+		Snapshots:    make(map[uint64]pb.Snapshot),
 	}
 	for id, node := range p.nodes {
 		if node.HasReady() {
 			ready := node.Ready()
 			if !raft.IsEmptySnap(ready.Snapshot) {
 				p.storages[id].ApplySnapshot(ready.Snapshot)
+				// snap, err := p.storages[id].Snapshot()
 			}
 			if len(ready.Entries) > 0 {
 				p.storages[id].Append(ready.Entries)
@@ -297,13 +307,23 @@ func (p *RaftPartitionEnv) DeliverMessage(m types.Message) types.PartitionedSyst
 			}
 			node.Advance(ready)
 		}
+		// add status
 		status := node.Status()
+		newState.NodeStates[id] = status
+
+		// add log
 		newState.Logs[id] = make([]pb.Entry, 0)
 		ents, err := p.storages[id].Entries(1, status.Commit+1, 1024*1024) // hardcoded value from link_env.go
 		if err == nil {
 			newState.Logs[id] = ents
 		}
-		newState.NodeStates[id] = status
+
+		// add snapshot
+		snapshot, err := p.storages[id].Snapshot()
+		if err == nil {
+			newState.Snapshots[id] = snapshot
+		}
+
 	}
 	newState.Messages = copyMessages(p.messages)
 	p.curState = newState
@@ -316,6 +336,7 @@ func (p *RaftPartitionEnv) DropMessage(m types.Message) types.PartitionedSystemS
 		NodeStates:   copyNodeStates(p.curState.NodeStates),
 		Messages:     copyMessages(p.curState.Messages),
 		Logs:         copyLogs(p.curState.Logs), // copy the logs for the new state
+		Snapshots:    copySnapshots(p.curState.Snapshots),
 		WithTimeouts: p.config.Timeouts,
 	}
 	delete(newState.Messages, m.Hash())

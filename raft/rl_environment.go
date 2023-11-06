@@ -29,8 +29,9 @@ type RaftState struct {
 	// States of each node (obtained from the raft implementation)
 	NodeStates map[uint64]raft.Status
 	// The messages in transit
-	Messages map[string]pb.Message
-	Logs     map[uint64][]pb.Entry
+	Messages  map[string]pb.Message
+	Logs      map[uint64][]pb.Entry
+	Snapshots map[uint64]pb.Snapshot
 	// Boolean to indicate if the actions include dropping messages
 	WithTimeouts bool
 }
@@ -43,8 +44,9 @@ func (r RaftState) GetReplicaStateOld(rep uint64) types.ReplicaState {
 // Implements the PartitionedSystemState
 func (r RaftState) GetReplicaState(rep uint64) types.ReplicaState {
 	replicaState := make(map[string]interface{})
-	replicaState["state"] = r.NodeStates[rep] // add replica state as raft.Status
-	replicaState["log"] = r.Logs[rep]         // add replica log as []pb.Entry
+	replicaState["state"] = r.NodeStates[rep]   // add replica state as raft.Status
+	replicaState["log"] = r.Logs[rep]           // add replica log as []pb.Entry
+	replicaState["snapshot"] = r.Snapshots[rep] // add replica snapshot as pb.Snapshot
 	return replicaState
 }
 
@@ -440,6 +442,25 @@ func copyLogs(logs map[uint64][]pb.Entry) map[uint64][]pb.Entry {
 		}
 		c[k] = newLog
 	}
+	return c
+}
+
+// copy the snapshots hashmap
+func copySnapshots(snapshots map[uint64]pb.Snapshot) map[uint64]pb.Snapshot {
+	c := make(map[uint64]pb.Snapshot)
+
+	for id, sn := range snapshots {
+		newSnap := pb.Snapshot{
+			Data: sn.Data,
+			Metadata: pb.SnapshotMetadata{
+				ConfState: sn.Metadata.ConfState,
+				Index:     sn.Metadata.Index,
+				Term:      sn.Metadata.Term,
+			},
+		}
+		c[id] = newSnap
+	}
+
 	return c
 }
 
