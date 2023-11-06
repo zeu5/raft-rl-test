@@ -255,6 +255,40 @@ func (p *RaftPartitionEnv) Tick() types.PartitionedSystemState {
 		}
 	}
 	newState.Messages = copyMessages(p.messages)
+	newState.Requests = copyMessagesList(p.curState.Requests)
+	p.curState = newState
+	return newState
+}
+
+func (p *RaftPartitionEnv) ReceiveRequest(r types.Request) types.PartitionedSystemState {
+	newState := RaftState{
+		NodeStates:   copyNodeStates(p.curState.NodeStates),
+		Messages:     copyMessages(p.curState.Messages),
+		Logs:         copyLogs(p.curState.Logs), // copy the logs for the new state
+		Snapshots:    copySnapshots(p.curState.Snapshots),
+		WithTimeouts: p.config.Timeouts,
+		Requests:     make([]pb.Message, 0),
+	}
+
+	haveLeader := false
+	leader := uint64(0)
+	for id, node := range p.nodes {
+		if node.Status().RaftState == raft.StateLeader {
+			haveLeader = true
+			leader = id
+			break
+		}
+	}
+	remainingRequests := p.curState.Requests
+	if haveLeader {
+		message := r.(pb.Message)
+		message.To = leader
+		p.nodes[leader].Step((message))
+		remainingRequests = p.curState.Requests[1:]
+	}
+	for _, r := range remainingRequests {
+		newState.Requests = append(newState.Requests, copyMessage(r))
+	}
 	p.curState = newState
 	return newState
 }
@@ -262,33 +296,16 @@ func (p *RaftPartitionEnv) Tick() types.PartitionedSystemState {
 // deliver the specified message in the system and returns the subsequent state, no tick pass?
 func (p *RaftPartitionEnv) DeliverMessage(m types.Message) types.PartitionedSystemState {
 	rm := m.(RaftMessageWrapper)
-	if rm.Type == pb.MsgProp {
-		haveLeader := false
-		leader := uint64(0)
-		for id, node := range p.nodes {
-			if node.Status().RaftState == raft.StateLeader {
-				haveLeader = true
-				leader = id
-				break
-			}
-		}
-		if haveLeader {
-			message := rm.Message
-			messageKey := msgKey(message)
-			message.To = leader
-			p.nodes[leader].Step((message))
-			delete(p.messages, messageKey)
-		}
-	} else {
-		node, exists := p.nodes[rm.Message.To]
-		if exists {
-			node.Step(rm.Message)
-		}
-		delete(p.messages, msgKey(rm.Message))
+	node, exists := p.nodes[rm.Message.To]
+	if exists {
+		node.Step(rm.Message)
 	}
+	delete(p.messages, msgKey(rm.Message))
+
 	newState := RaftState{
 		NodeStates:   make(map[uint64]raft.Status),
 		WithTimeouts: p.config.Timeouts,
+		Requests:     copyMessagesList(p.curState.Requests),
 		Logs:         make(map[uint64][]pb.Entry),
 		Snapshots:    make(map[uint64]pb.Snapshot),
 	}
@@ -337,6 +354,7 @@ func (p *RaftPartitionEnv) DropMessage(m types.Message) types.PartitionedSystemS
 		Messages:     copyMessages(p.curState.Messages),
 		Logs:         copyLogs(p.curState.Logs), // copy the logs for the new state
 		Snapshots:    copySnapshots(p.curState.Snapshots),
+		Requests:     copyMessagesList(p.curState.Requests),
 		WithTimeouts: p.config.Timeouts,
 	}
 	delete(newState.Messages, m.Hash())

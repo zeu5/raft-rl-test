@@ -43,6 +43,8 @@ type Message interface {
 	Hash() string
 }
 
+type Request interface{}
+
 // The global state of a partitioned system
 // To abstract away the details of a particular protocol
 type PartitionedSystemState interface {
@@ -50,6 +52,10 @@ type PartitionedSystemState interface {
 	GetReplicaState(uint64) ReplicaState
 	// The messages that are currently in transit
 	PendingMessages() map[string]Message
+	// Number of pending requests
+	PendingRequests() []Request
+	// Can we deliver a request
+	CanDeliverRequest() bool
 }
 
 // The environment encoding the distributed protocol that can be controlled in a
@@ -64,6 +70,8 @@ type PartitionedSystemEnvironment interface {
 	DeliverMessage(Message) PartitionedSystemState
 	// Drop a message
 	DropMessage(Message) PartitionedSystemState
+	// Receive a request
+	ReceiveRequest(Request) PartitionedSystemState
 	// Stop a node
 	Stop(uint64)
 	// Start a node
@@ -82,7 +90,9 @@ type Partition struct {
 	// Only this is used to hash (therefore indexed by RL)
 	Partition   [][]Color
 	RepeatCount int
-
+	// About requests
+	PendingRequests   []Request
+	CanDeliverRequest bool
 	// For crashes
 	WithCrashes bool
 	ActiveNodes map[uint64]bool
@@ -112,6 +122,13 @@ func (s *StopStartAction) Hash() string {
 }
 
 var _ Action = &StopStartAction{}
+
+type SendRequestAction struct {
+}
+
+func (s *SendRequestAction) Hash() string {
+	return "Request"
+}
 
 // Partition slice used to pass to the sort function
 type PartitionSlice [][]Color
@@ -199,6 +216,10 @@ func (p *Partition) Actions() []Action {
 			partitionActions = append(partitionActions, &StopStartAction{Action: "Start"})
 		}
 	}
+	if p.CanDeliverRequest && len(p.PendingRequests) > 0 {
+		partitionActions = append(partitionActions, &SendRequestAction{})
+	}
+
 	return partitionActions
 }
 
@@ -211,7 +232,7 @@ func (p *Partition) Hash() string {
 			partition[i][j] = color.Hash()
 		}
 	}
-	bs, _ := json.Marshal(map[string]interface{}{"colors": partition, "repeat_count": p.RepeatCount})
+	bs, _ := json.Marshal(map[string]interface{}{"colors": partition, "repeat_count": p.RepeatCount, "pending_requests": len(p.PendingRequests)})
 	hash := sha256.Sum256(bs)
 	return hex.EncodeToString(hash[:])
 }
@@ -330,13 +351,15 @@ func (p *PartitionEnv) Step(a Action) State {
 	// 3. Update states, partitions and return
 
 	nextState := &Partition{
-		ReplicaColors: make(map[uint64]Color),
-		PartitionMap:  make(map[uint64]int),
-		ReplicaStates: make(map[uint64]ReplicaState),
-		Partition:     make([][]Color, 0),
-		RepeatCount:   p.CurPartition.RepeatCount,
-		WithCrashes:   p.config.WithCrashes,
-		ActiveNodes:   make(map[uint64]bool),
+		ReplicaColors:     make(map[uint64]Color),
+		PartitionMap:      make(map[uint64]int),
+		ReplicaStates:     make(map[uint64]ReplicaState),
+		Partition:         make([][]Color, 0),
+		RepeatCount:       p.CurPartition.RepeatCount,
+		WithCrashes:       p.config.WithCrashes,
+		ActiveNodes:       make(map[uint64]bool),
+		PendingRequests:   make([]Request, 0),
+		CanDeliverRequest: false,
 	}
 
 	newPartition := make([][]uint64, len(p.CurPartition.Partition))
@@ -347,8 +370,9 @@ func (p *PartitionEnv) Step(a Action) State {
 	}
 
 	ss, isStartStop := a.(*StopStartAction)
-	_, isChange := a.(*CreatePartitionAction)
+	ca, isChange := a.(*CreatePartitionAction)
 	_, isKeepSame := a.(*KeepSamePartitionAction)
+	_, isSendRequest := a.(*SendRequestAction)
 
 	if isStartStop {
 		if ss.Action == "Stop" {
@@ -381,8 +405,6 @@ func (p *PartitionEnv) Step(a Action) State {
 	}
 
 	if isChange {
-		ca, _ := a.(*CreatePartitionAction)
-
 		// 1. Change partition
 		coloredReplicas := make(map[string][]uint64)
 		for r, c := range p.CurPartition.ReplicaColors {
@@ -413,10 +435,15 @@ func (p *PartitionEnv) Step(a Action) State {
 		}
 	}
 
-	// 2. Perform ticks, delivering messages in between
-	var s PartitionedSystemState = nil                     // is this the new state?
-	for i := 0; i < p.config.TicketBetweenPartition; i++ { // for the specified number of ticks between two partitions (action of the agent)
+	var s PartitionedSystemState = nil // is this the new state?
+	// If we have to send a new request as the action then we pick the next one from the stack and push that
+	if isSendRequest && len(p.CurPartition.PendingRequests) > 0 {
+		nextRequest := p.CurPartition.PendingRequests[0]
+		s = p.UnderlyingEnv.ReceiveRequest(nextRequest)
+	}
 
+	// 2. Perform ticks, delivering messages in between
+	for i := 0; i < p.config.TicketBetweenPartition; i++ { // for the specified number of ticks between two partitions (action of the agent)
 		messages := make([]Message, 0)
 		if s == nil {
 			for _, m := range p.messages { // in the beginning s is nil, use p.messages (stored from previous partition state)
@@ -458,6 +485,11 @@ func (p *PartitionEnv) Step(a Action) State {
 	for k, m := range s.PendingMessages() { // save pending messages for next state
 		p.messages[k] = m
 	}
+
+	newRequests := s.PendingRequests()
+	nextState.PendingRequests = make([]Request, len(newRequests))
+	nextState.CanDeliverRequest = s.CanDeliverRequest()
+	copy(nextState.PendingRequests, newRequests)
 
 	// for each replica, get its state from s (underlying env) and store it as it is (rs) + store its abstraction (color)
 	for i := 0; i < p.NumReplicas; i++ {

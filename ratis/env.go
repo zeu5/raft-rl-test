@@ -1,126 +1,119 @@
 package ratis
 
-import (
-	"context"
-	"time"
+// type RatisClusterState struct {
+// 	NodeStates map[uint64]*RatisNodeState
+// 	Messages   map[string]Message
+// }
 
-	"github.com/zeu5/raft-rl-test/types"
-)
+// func (r *RatisClusterState) GetReplicaState(id uint64) types.ReplicaState {
+// 	s := r.NodeStates[id]
+// 	return s
+// }
 
-type RatisClusterState struct {
-	NodeStates map[uint64]*RatisNodeState
-	Messages   map[string]Message
-}
+// func (r *RatisClusterState) PendingMessages() map[string]types.Message {
+// 	out := make(map[string]types.Message)
+// 	for k, m := range r.Messages {
+// 		out[k] = m
+// 	}
+// 	return out
+// }
 
-func (r *RatisClusterState) GetReplicaState(id uint64) types.ReplicaState {
-	s := r.NodeStates[id]
-	return s
-}
+// var _ types.PartitionedSystemState = &RatisClusterState{}
 
-func (r *RatisClusterState) PendingMessages() map[string]types.Message {
-	out := make(map[string]types.Message)
-	for k, m := range r.Messages {
-		out[k] = m
-	}
-	return out
-}
+// type RatisRaftEnv struct {
+// 	clusterConfig *RatisClusterConfig
+// 	network       *InterceptNetwork
+// 	cluster       *RatisCluster
 
-var _ types.PartitionedSystemState = &RatisClusterState{}
+// 	curState *RatisClusterState
+// }
 
-type RatisRaftEnv struct {
-	clusterConfig *RatisClusterConfig
-	network       *InterceptNetwork
-	cluster       *RatisCluster
+// // For a given config, should only be instantiated once since it spins up a sever and binds the addr:port
+// func NewRatisRaftEnv(ctx context.Context, clusterConfig *RatisClusterConfig) *RatisRaftEnv {
+// 	e := &RatisRaftEnv{
+// 		clusterConfig: clusterConfig,
+// 		network:       NewInterceptNetwork(ctx, clusterConfig.InterceptListenAddr),
+// 		cluster:       nil,
+// 	}
+// 	e.network.Start()
+// 	return e
+// }
 
-	curState *RatisClusterState
-}
+// func (r *RatisRaftEnv) Start(node uint64) {
+// 	// TODO: Need to implement this
+// }
 
-// For a given config, should only be instantiated once since it spins up a sever and binds the addr:port
-func NewRatisRaftEnv(ctx context.Context, clusterConfig *RatisClusterConfig) *RatisRaftEnv {
-	e := &RatisRaftEnv{
-		clusterConfig: clusterConfig,
-		network:       NewInterceptNetwork(ctx, clusterConfig.InterceptListenAddr),
-		cluster:       nil,
-	}
-	e.network.Start()
-	return e
-}
+// func (r *RatisRaftEnv) Stop(node uint64) {
+// 	// TODO: Need to implement this
+// }
 
-func (r *RatisRaftEnv) Start(node uint64) {
-	// TODO: Need to implement this
-}
+// func (r *RatisRaftEnv) DeliverMessage(m types.Message) types.PartitionedSystemState {
+// 	rm, ok := m.(Message)
+// 	if !ok {
+// 		return r.curState
+// 	}
+// 	r.network.SendMessage(rm.ID)
+// 	newState := &RatisClusterState{
+// 		NodeStates: make(map[uint64]*RatisNodeState),
+// 	}
+// 	for id, s := range r.curState.NodeStates {
+// 		newState.NodeStates[id] = s.Copy()
+// 	}
+// 	newState.Messages = r.network.GetAllMessages()
+// 	r.curState = newState
 
-func (r *RatisRaftEnv) Stop(node uint64) {
-	// TODO: Need to implement this
-}
+// 	return newState
+// }
 
-func (r *RatisRaftEnv) DeliverMessage(m types.Message) types.PartitionedSystemState {
-	rm, ok := m.(Message)
-	if !ok {
-		return r.curState
-	}
-	r.network.SendMessage(rm.ID)
-	newState := &RatisClusterState{
-		NodeStates: make(map[uint64]*RatisNodeState),
-	}
-	for id, s := range r.curState.NodeStates {
-		newState.NodeStates[id] = s.Copy()
-	}
-	newState.Messages = r.network.GetAllMessages()
-	r.curState = newState
+// func (r *RatisRaftEnv) DropMessage(m types.Message) types.PartitionedSystemState {
+// 	rm, ok := m.(Message)
+// 	if !ok {
+// 		return r.curState
+// 	}
+// 	r.network.DeleteMessage(rm.ID)
+// 	newState := &RatisClusterState{
+// 		NodeStates: make(map[uint64]*RatisNodeState),
+// 	}
+// 	for id, s := range r.curState.NodeStates {
+// 		newState.NodeStates[id] = s.Copy()
+// 	}
+// 	newState.Messages = r.network.GetAllMessages()
+// 	r.curState = newState
 
-	return newState
-}
+// 	return newState
+// }
 
-func (r *RatisRaftEnv) DropMessage(m types.Message) types.PartitionedSystemState {
-	rm, ok := m.(Message)
-	if !ok {
-		return r.curState
-	}
-	r.network.DeleteMessage(rm.ID)
-	newState := &RatisClusterState{
-		NodeStates: make(map[uint64]*RatisNodeState),
-	}
-	for id, s := range r.curState.NodeStates {
-		newState.NodeStates[id] = s.Copy()
-	}
-	newState.Messages = r.network.GetAllMessages()
-	r.curState = newState
+// func (r *RatisRaftEnv) Reset() types.PartitionedSystemState {
+// 	if r.cluster != nil {
+// 		r.cluster.Destroy()
+// 	}
+// 	r.network.Reset()
+// 	r.cluster = NewCluster(r.clusterConfig)
+// 	r.cluster.Start()
 
-	return newState
-}
+// 	newState := &RatisClusterState{
+// 		NodeStates: r.cluster.GetNodeStates(),
+// 		Messages:   r.network.GetAllMessages(),
+// 	}
+// 	r.curState = newState
+// 	return newState
+// }
 
-func (r *RatisRaftEnv) Reset() types.PartitionedSystemState {
-	if r.cluster != nil {
-		r.cluster.Destroy()
-	}
-	r.network.Reset()
-	r.cluster = NewCluster(r.clusterConfig)
-	r.cluster.Start()
+// func (r *RatisRaftEnv) Cleanup() {
+// 	if r.cluster != nil {
+// 		r.cluster.Destroy()
+// 		r.cluster = nil
+// 	}
+// }
 
-	newState := &RatisClusterState{
-		NodeStates: r.cluster.GetNodeStates(),
-		Messages:   r.network.GetAllMessages(),
-	}
-	r.curState = newState
-	return newState
-}
+// func (r *RatisRaftEnv) Tick() types.PartitionedSystemState {
+// 	time.Sleep(50 * time.Microsecond)
+// 	newState := &RatisClusterState{
+// 		NodeStates: r.cluster.GetNodeStates(),
+// 		Messages:   r.network.GetAllMessages(),
+// 	}
+// 	r.curState = newState
+// 	return newState
+// }
 
-func (r *RatisRaftEnv) Cleanup() {
-	if r.cluster != nil {
-		r.cluster.Destroy()
-		r.cluster = nil
-	}
-}
-
-func (r *RatisRaftEnv) Tick() types.PartitionedSystemState {
-	time.Sleep(50 * time.Microsecond)
-	newState := &RatisClusterState{
-		NodeStates: r.cluster.GetNodeStates(),
-		Messages:   r.network.GetAllMessages(),
-	}
-	r.curState = newState
-	return newState
-}
-
-var _ types.PartitionedSystemEnvironment = &RatisRaftEnv{}
+// var _ types.PartitionedSystemEnvironment = &RatisRaftEnv{}

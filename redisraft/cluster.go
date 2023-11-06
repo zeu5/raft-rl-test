@@ -254,6 +254,7 @@ type ClusterConfig struct {
 	LogLevel              string
 	RequestTimeout        int
 	ElectionTimeout       int
+	NumRequests           int
 }
 
 func (c *ClusterConfig) Copy() *ClusterConfig {
@@ -269,6 +270,7 @@ func (c *ClusterConfig) Copy() *ClusterConfig {
 		LogLevel:              c.LogLevel,
 		RequestTimeout:        c.RequestTimeout,
 		ElectionTimeout:       c.ElectionTimeout,
+		NumRequests:           c.NumRequests,
 	}
 }
 

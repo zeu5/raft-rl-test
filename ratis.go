@@ -6,59 +6,56 @@ import (
 	"os/signal"
 
 	"github.com/spf13/cobra"
-	"github.com/zeu5/raft-rl-test/policies"
-	"github.com/zeu5/raft-rl-test/ratis"
-	"github.com/zeu5/raft-rl-test/types"
 )
 
 func RatisExploration(episodes, horizon int, saveFile string, ctx context.Context) {
-	env := ratis.NewRatisRaftEnv(ctx, &ratis.RatisClusterConfig{
-		NumNodes:            3,
-		BasePort:            5000,
-		BaseInterceptPort:   2023,
-		InterceptListenAddr: "localhost:7074",
-		// Todo: need to figure this out
-		RatisJarPath: "",
-	})
-	colors := []ratis.RatisColorFunc{ratis.ColorState(), ratis.ColorCommit(), ratis.ColorLeader(), ratis.ColorVote(), ratis.ColorBoundedTerm(5)}
+	// env := ratis.NewRatisRaftEnv(ctx, &ratis.RatisClusterConfig{
+	// 	NumNodes:            3,
+	// 	BasePort:            5000,
+	// 	BaseInterceptPort:   2023,
+	// 	InterceptListenAddr: "localhost:7074",
+	// 	// Todo: need to figure this out
+	// 	RatisJarPath: "",
+	// })
+	// colors := []ratis.RatisColorFunc{ratis.ColorState(), ratis.ColorCommit(), ratis.ColorLeader(), ratis.ColorVote(), ratis.ColorBoundedTerm(5)}
 
-	partitionEnv := types.NewPartitionEnv(types.PartitionEnvConfig{
-		Painter:                ratis.NewRatisStatePainter(colors...),
-		Env:                    env,
-		TicketBetweenPartition: 3,
-		MaxMessagesPerTick:     3,
-		StaySameStateUpto:      2,
-		NumReplicas:            3,
-	})
+	// partitionEnv := types.NewPartitionEnv(types.PartitionEnvConfig{
+	// 	Painter:                ratis.NewRatisStatePainter(colors...),
+	// 	Env:                    env,
+	// 	TicketBetweenPartition: 3,
+	// 	MaxMessagesPerTick:     3,
+	// 	StaySameStateUpto:      2,
+	// 	NumReplicas:            3,
+	// })
 
-	c := types.NewComparison(runs)
+	// c := types.NewComparison(runs)
 
-	c.AddAnalysis("plot", ratis.CoverageAnalyzer(colors...), ratis.CoverageComparator(saveFile))
-	c.AddAnalysis("bugs", ratis.BugAnalyzer(saveFile), ratis.BugComparator())
+	// c.AddAnalysis("plot", ratis.CoverageAnalyzer(colors...), ratis.CoverageComparator(saveFile))
+	// c.AddAnalysis("bugs", ratis.BugAnalyzer(saveFile), ratis.BugComparator())
 
-	c.AddExperiment(types.NewExperiment("NegReward", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      policies.NewSoftMaxNegFreqPolicy(0.1, 0.99, 1),
-		Environment: partitionEnv,
-	}))
+	// c.AddExperiment(types.NewExperiment("NegReward", &types.AgentConfig{
+	// 	Episodes:    episodes,
+	// 	Horizon:     horizon,
+	// 	Policy:      policies.NewSoftMaxNegFreqPolicy(0.1, 0.99, 1),
+	// 	Environment: partitionEnv,
+	// }))
 
-	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      types.NewRandomPolicy(),
-		Environment: partitionEnv,
-	}))
+	// c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
+	// 	Episodes:    episodes,
+	// 	Horizon:     horizon,
+	// 	Policy:      types.NewRandomPolicy(),
+	// 	Environment: partitionEnv,
+	// }))
 
-	c.AddExperiment(types.NewExperiment("BonusMax", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
-		Environment: partitionEnv,
-	}))
+	// c.AddExperiment(types.NewExperiment("BonusMax", &types.AgentConfig{
+	// 	Episodes:    episodes,
+	// 	Horizon:     horizon,
+	// 	Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
+	// 	Environment: partitionEnv,
+	// }))
 
-	c.Run()
-	env.Cleanup()
+	// c.Run()
+	// env.Cleanup()
 }
 
 func RatisExplorationCommand() *cobra.Command {

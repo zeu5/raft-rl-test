@@ -33,3 +33,11 @@ func copyReplicaStates(states map[uint64]LocalState) map[uint64]LocalState {
 	}
 	return out
 }
+
+func copyMessagesList(messages []Message) []Message {
+	out := make([]Message, len(messages))
+	for i, m := range messages {
+		out[i] = m.Copy()
+	}
+	return out
+}

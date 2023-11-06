@@ -14,6 +14,7 @@ import (
 type LPaxosState struct {
 	NodeStates   map[uint64]LNodeState
 	Messages     map[string]Message
+	Requests     []Message
 	WithTimeouts bool
 }
 
@@ -69,6 +70,25 @@ func (l *LPaxosState) PendingMessages() map[string]types.Message {
 		pm[k] = m.Copy()
 	}
 	return pm
+}
+
+func (l *LPaxosState) CanDeliverRequest() bool {
+	haveLeader := false
+	for id, n := range l.NodeStates {
+		if n.Leader == id {
+			haveLeader = true
+			break
+		}
+	}
+	return haveLeader
+}
+
+func (l *LPaxosState) PendingRequests() []types.Request {
+	requests := make([]types.Request, len(l.Requests))
+	for i, r := range l.Requests {
+		requests[i] = r.Copy()
+	}
+	return requests
 }
 
 func (l *LPaxosState) Actions() []types.Action {
@@ -152,7 +172,14 @@ func (e *LPaxosEnv) makeNodes() {
 	initState := &LPaxosState{
 		NodeStates:   make(map[uint64]LNodeState),
 		Messages:     copyMessages(e.messages),
+		Requests:     make([]Message, e.config.Requests),
 		WithTimeouts: e.config.Timeouts,
+	}
+	for i := 0; i < e.config.Requests; i++ {
+		initState.Requests[i] = Message{
+			Type: CommandMessage,
+			Log:  []Entry{{Data: []byte(strconv.Itoa(i + 1))}},
+		}
 	}
 	for id, n := range e.nodes {
 		initState.NodeStates[id] = n.Status()
@@ -170,13 +197,6 @@ func (e *LPaxosEnv) Stop(node uint64) {
 
 func (e *LPaxosEnv) Reset() types.State {
 	e.messages = make(map[string]Message)
-	for i := 0; i < e.config.Requests; i++ {
-		cmd := Message{
-			Type: CommandMessage,
-			Log:  []Entry{{Data: []byte(strconv.Itoa(i + 1))}},
-		}
-		e.messages[cmd.Hash()] = cmd
-	}
 	e.makeNodes()
 	return e.curState
 }
@@ -258,4 +278,12 @@ func copyMessages(messages map[string]Message) map[string]Message {
 		res[k] = m.Copy()
 	}
 	return res
+}
+
+func copyMessagesList(messages []Message) []Message {
+	newMessages := make([]Message, len(messages))
+	for i, m := range messages {
+		newMessages[i] = m.Copy()
+	}
+	return newMessages
 }

@@ -30,6 +30,7 @@ var _ types.Message = MessageWrapper{}
 type RSLPartitionState struct {
 	ReplicaStates map[uint64]LocalState
 	Messages      map[string]Message
+	Requests      []Message
 }
 
 func (p *RSLPartitionState) GetReplicaState(node uint64) types.ReplicaState {
@@ -38,6 +39,25 @@ func (p *RSLPartitionState) GetReplicaState(node uint64) types.ReplicaState {
 
 func (p *RSLPartitionState) PendingMessages() map[string]types.Message {
 	return copyToMessageWrappers(p.Messages)
+}
+
+func (p *RSLPartitionState) CanDeliverRequest() bool {
+	havePrimary := false
+	for _, s := range p.ReplicaStates {
+		if s.State == StateStablePrimary {
+			havePrimary = true
+			break
+		}
+	}
+	return havePrimary
+}
+
+func (p *RSLPartitionState) PendingRequests() []types.Request {
+	out := make([]types.Request, len(p.Requests))
+	for i, r := range p.Requests {
+		out[i] = r.Copy()
+	}
+	return out
 }
 
 func copyToMessageWrappers(messages map[string]Message) map[string]types.Message {
@@ -90,6 +110,7 @@ func (r *RSLPartitionEnv) Reset() types.PartitionedSystemState {
 	newState := &RSLPartitionState{
 		ReplicaStates: make(map[uint64]LocalState),
 		Messages:      copyMessages(r.messages),
+		Requests:      make([]Message, r.config.NumCommands),
 	}
 
 	r.config.NodeConfig.Peers = peers
@@ -104,7 +125,7 @@ func (r *RSLPartitionEnv) Reset() types.PartitionedSystemState {
 	}
 	for i := 0; i < r.config.NumCommands; i++ {
 		cmd := Message{Type: MessageCommand, Command: Command{Data: []byte(strconv.Itoa(i + 1))}}
-		r.messages[cmd.Hash()] = cmd
+		newState.Requests[i] = cmd
 	}
 	for _, c := range r.config.AdditionalCommands {
 		cmd := Message{Type: MessageCommand, Command: c.Copy()}
@@ -120,6 +141,28 @@ func (r *RSLPartitionEnv) Start(node uint64) {
 
 func (r *RSLPartitionEnv) Stop(node uint64) {
 	// TODO: Need to implement this
+}
+
+func (r *RSLPartitionEnv) ReceiveRequest(req types.Request) types.PartitionedSystemState {
+	newState := &RSLPartitionState{
+		ReplicaStates: copyReplicaStates(r.curState.ReplicaStates),
+		Messages:      copyMessages(r.messages),
+		Requests:      make([]Message, 0),
+	}
+	remainingRequests := r.curState.Requests
+	cmd := req.(Message)
+	for _, n := range r.nodes {
+		if n.IsPrimary() {
+			n.Propose(cmd.Command)
+			remainingRequests = r.curState.Requests[1:]
+			break
+		}
+	}
+	for _, re := range remainingRequests {
+		newState.Requests = append(newState.Requests, re.Copy())
+	}
+	r.curState = newState
+	return newState
 }
 
 // Moves clock of each process by one
@@ -140,6 +183,7 @@ func (r *RSLPartitionEnv) Tick() types.PartitionedSystemState {
 		newState.ReplicaStates[node.ID] = node.State()
 	}
 	newState.Messages = copyMessages(r.messages)
+	newState.Requests = copyMessagesList(r.curState.Requests)
 	r.curState = newState
 	return newState
 }
@@ -178,6 +222,7 @@ func (r *RSLPartitionEnv) DeliverMessage(m types.Message) types.PartitionedSyste
 		}
 	}
 	newState.Messages = copyMessages(r.messages)
+	newState.Requests = copyMessagesList(r.curState.Requests)
 	r.curState = newState
 
 	return newState
@@ -191,6 +236,7 @@ func (r *RSLPartitionEnv) DropMessage(m types.Message) types.PartitionedSystemSt
 	newState := &RSLPartitionState{
 		ReplicaStates: copyReplicaStates(r.curState.ReplicaStates),
 		Messages:      copyMessages(r.messages),
+		Requests:      copyMessagesList(r.curState.Requests),
 	}
 	r.curState = newState
 	return newState

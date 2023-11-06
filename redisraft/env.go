@@ -7,9 +7,15 @@ import (
 	"github.com/zeu5/raft-rl-test/types"
 )
 
+type RedisRequest struct {
+	Type string
+}
+
 type RedisClusterState struct {
-	NodeStates map[uint64]*RedisNodeState
-	Messages   map[string]Message
+	NodeStates  map[uint64]*RedisNodeState
+	Messages    map[string]Message
+	NextRequest int
+	MaxRequests int
 }
 
 func (r *RedisClusterState) GetReplicaState(id uint64) types.ReplicaState {
@@ -21,6 +27,25 @@ func (r *RedisClusterState) PendingMessages() map[string]types.Message {
 	out := make(map[string]types.Message)
 	for k, m := range r.Messages {
 		out[k] = m
+	}
+	return out
+}
+
+func (r *RedisClusterState) CanDeliverRequest() bool {
+	haveLeader := false
+	for _, s := range r.NodeStates {
+		if s.State == "leader" {
+			haveLeader = true
+			break
+		}
+	}
+	return haveLeader
+}
+
+func (r *RedisClusterState) PendingRequests() []types.Request {
+	out := make([]types.Request, 0)
+	for i := r.NextRequest; i < r.MaxRequests; i++ {
+		out = append(out, RedisRequest{Type: "Incr"})
 	}
 	return out
 }
@@ -46,6 +71,17 @@ func NewRedisRaftEnv(ctx context.Context, clusterConfig *ClusterConfig) *RedisRa
 	return e
 }
 
+func (r *RedisRaftEnv) ReceiveRequest(req types.Request) types.PartitionedSystemState {
+	newState := &RedisClusterState{
+		NodeStates:  make(map[uint64]*RedisNodeState),
+		NextRequest: r.curState.NextRequest + 1,
+		MaxRequests: r.curState.MaxRequests,
+		Messages:    r.network.GetAllMessages(),
+	}
+	// TODO: Need to send request
+	return newState
+}
+
 func (r *RedisRaftEnv) DeliverMessage(m types.Message) types.PartitionedSystemState {
 	rm, ok := m.(Message)
 	if !ok {
@@ -53,7 +89,9 @@ func (r *RedisRaftEnv) DeliverMessage(m types.Message) types.PartitionedSystemSt
 	}
 	r.network.SendMessage(rm.ID)
 	newState := &RedisClusterState{
-		NodeStates: make(map[uint64]*RedisNodeState),
+		NodeStates:  make(map[uint64]*RedisNodeState),
+		NextRequest: r.curState.NextRequest,
+		MaxRequests: r.curState.MaxRequests,
 	}
 	for id, s := range r.curState.NodeStates {
 		newState.NodeStates[id] = s.Copy()
@@ -71,7 +109,9 @@ func (r *RedisRaftEnv) DropMessage(m types.Message) types.PartitionedSystemState
 	}
 	r.network.DeleteMessage(rm.ID)
 	newState := &RedisClusterState{
-		NodeStates: make(map[uint64]*RedisNodeState),
+		NodeStates:  make(map[uint64]*RedisNodeState),
+		NextRequest: r.curState.NextRequest,
+		MaxRequests: r.curState.MaxRequests,
 	}
 	for id, s := range r.curState.NodeStates {
 		newState.NodeStates[id] = s.Copy()
@@ -91,8 +131,10 @@ func (r *RedisRaftEnv) Reset() types.PartitionedSystemState {
 	r.cluster.Start()
 
 	newState := &RedisClusterState{
-		NodeStates: r.cluster.GetNodeStates(),
-		Messages:   r.network.GetAllMessages(),
+		NodeStates:  r.cluster.GetNodeStates(),
+		Messages:    r.network.GetAllMessages(),
+		NextRequest: 1,
+		MaxRequests: r.clusterConfig.NumRequests,
 	}
 	r.curState = newState
 	return newState
@@ -116,8 +158,10 @@ func (r *RedisRaftEnv) Cleanup() {
 func (r *RedisRaftEnv) Tick() types.PartitionedSystemState {
 	time.Sleep(50 * time.Microsecond)
 	newState := &RedisClusterState{
-		NodeStates: r.cluster.GetNodeStates(),
-		Messages:   r.network.GetAllMessages(),
+		NodeStates:  r.cluster.GetNodeStates(),
+		Messages:    r.network.GetAllMessages(),
+		NextRequest: r.curState.NextRequest,
+		MaxRequests: r.curState.MaxRequests,
 	}
 	r.curState = newState
 	return newState

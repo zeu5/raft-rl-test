@@ -32,6 +32,8 @@ type RaftState struct {
 	Messages  map[string]pb.Message
 	Logs      map[uint64][]pb.Entry
 	Snapshots map[uint64]pb.Snapshot
+	// Test harness and pending requests
+	Requests []pb.Message
 	// Boolean to indicate if the actions include dropping messages
 	WithTimeouts bool
 }
@@ -57,6 +59,25 @@ func (r RaftState) PendingMessages() map[string]types.Message {
 		messages[k] = RaftMessageWrapper{m}
 	}
 	return messages
+}
+
+func (r RaftState) PendingRequests() []types.Request {
+	requests := make([]types.Request, len(r.Requests))
+	for i, r := range r.Requests {
+		requests[i] = copyMessage(r)
+	}
+	return requests
+}
+
+func (r RaftState) CanDeliverRequest() bool {
+	haveLeader := false
+	for _, s := range r.NodeStates {
+		if s.RaftState == raft.StateLeader {
+			haveLeader = true
+			break
+		}
+	}
+	return haveLeader
 }
 
 var _ types.State = RaftState{}
@@ -231,7 +252,18 @@ func (r *RaftEnvironment) makeNodes() {
 		Messages:     copyMessages(r.messages),
 		Logs:         make(map[uint64][]pb.Entry),
 		WithTimeouts: r.config.Timeouts,
+		Requests:     make([]pb.Message, r.config.Requests),
 	}
+	for i := 0; i < r.config.Requests; i++ {
+		initState.Requests[i] = pb.Message{
+			Type: pb.MsgProp,
+			From: uint64(0),
+			Entries: []pb.Entry{
+				{Data: []byte(strconv.Itoa(i + 1))},
+			},
+		}
+	}
+
 	for id, node := range r.nodes {
 		initState.NodeStates[id] = node.Status()
 		initState.Logs[id] = make([]pb.Entry, 0)
@@ -269,16 +301,6 @@ func (r *RaftEnvironment) Stop(node uint64) {
 
 func (r *RaftEnvironment) Reset() types.State {
 	r.messages = make(map[string]pb.Message)
-	for i := 0; i < r.config.Requests; i++ {
-		proposal := pb.Message{
-			Type: pb.MsgProp,
-			From: uint64(0),
-			Entries: []pb.Entry{
-				{Data: []byte(strconv.Itoa(i + 1))},
-			},
-		}
-		r.messages[msgKey(proposal)] = proposal
-	}
 	r.makeNodes()
 	return r.curState
 }
@@ -393,6 +415,42 @@ func copyNodeStates(nodeStates map[uint64]raft.Status) map[uint64]raft.Status {
 		c[k] = newStatus
 	}
 	return c
+}
+
+func copyMessage(m pb.Message) pb.Message {
+	newMessage := pb.Message{
+		Type:       m.Type,
+		To:         m.To,
+		From:       m.From,
+		Term:       m.Term,
+		LogTerm:    m.LogTerm,
+		Index:      m.Index,
+		Entries:    make([]pb.Entry, len(m.Entries)),
+		Commit:     m.Commit,
+		Vote:       m.Vote,
+		Snapshot:   m.Snapshot,
+		Reject:     m.Reject,
+		RejectHint: m.RejectHint,
+		Context:    m.Context,
+		Responses:  m.Responses,
+	}
+	for i, entry := range m.Entries {
+		newMessage.Entries[i] = pb.Entry{
+			Term:  entry.Term,
+			Index: entry.Index,
+			Type:  entry.Type,
+			Data:  entry.Data,
+		}
+	}
+	return newMessage
+}
+
+func copyMessagesList(messages []pb.Message) []pb.Message {
+	newList := make([]pb.Message, len(messages))
+	for i, m := range messages {
+		newList[i] = copyMessage(m)
+	}
+	return newList
 }
 
 func copyMessages(messages map[string]pb.Message) map[string]pb.Message {

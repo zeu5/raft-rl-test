@@ -103,6 +103,36 @@ func NewLPaxosPartitionEnv(c LPaxosEnvConfig) *LPaxosPartitionEnv {
 	}
 }
 
+func (l *LPaxosPartitionEnv) ReceiveRequest(r types.Request) types.PartitionedSystemState {
+	newState := &LPaxosState{
+		NodeStates:   copyNodeStates(l.curState.NodeStates),
+		Messages:     copyMessages(l.messages),
+		Requests:     make([]Message, 0),
+		WithTimeouts: l.config.Timeouts,
+	}
+	haveLeader := false
+	var leader uint64 = 0
+	for id, n := range l.curState.NodeStates {
+		if n.Leader == id {
+			leader = id
+			haveLeader = true
+			break
+		}
+	}
+	remainingRequests := l.curState.Requests
+	if haveLeader {
+		message := r.(Message)
+		message.T = leader
+		l.nodes[leader].Step(message)
+		remainingRequests = l.curState.Requests[1:]
+	}
+	for _, r := range remainingRequests {
+		newState.Requests = append(newState.Requests, r.Copy())
+	}
+	l.curState = newState
+	return newState
+}
+
 func (l *LPaxosPartitionEnv) Reset() types.PartitionedSystemState {
 	s := l.LPaxosEnv.Reset()
 	return s.(*LPaxosState)
@@ -124,6 +154,7 @@ func (l *LPaxosPartitionEnv) Tick() types.PartitionedSystemState {
 		newState.NodeStates[id] = node.Status()
 	}
 	newState.Messages = copyMessages(l.messages)
+	newState.Requests = copyMessagesList(l.curState.Requests)
 	l.curState = newState
 	return newState
 }
@@ -153,6 +184,7 @@ func (l *LPaxosPartitionEnv) DeliverMessage(m types.Message) types.PartitionedSy
 	}
 	newState := &LPaxosState{
 		NodeStates:   make(map[uint64]LNodeState),
+		Requests:     copyMessagesList(l.curState.Requests),
 		WithTimeouts: l.config.Timeouts,
 	}
 	for id, node := range l.nodes {
@@ -172,6 +204,7 @@ func (l *LPaxosPartitionEnv) DropMessage(m types.Message) types.PartitionedSyste
 	newState := &LPaxosState{
 		NodeStates:   copyNodeStates(l.curState.NodeStates),
 		Messages:     copyMessages(l.messages),
+		Requests:     copyMessagesList(l.curState.Requests),
 		WithTimeouts: l.config.Timeouts,
 	}
 	l.curState = newState
