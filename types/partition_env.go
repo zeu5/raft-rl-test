@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"math/rand"
 	"sort"
-	"strconv"
 	"time"
 
 	"github.com/zeu5/raft-rl-test/util"
@@ -104,12 +103,12 @@ func (k *KeepSamePartitionAction) Hash() string {
 }
 
 type StopStartAction struct {
-	Node   uint64
+	Color  string
 	Action string
 }
 
 func (s *StopStartAction) Hash() string {
-	return s.Action + "_" + strconv.Itoa(int(s.Node))
+	return s.Action + "_" + s.Color
 }
 
 var _ Action = &StopStartAction{}
@@ -184,12 +183,20 @@ func (p *Partition) Actions() []Action {
 		partitionActions = append(partitionActions, &CreatePartitionAction{Partition: partition})
 	}
 	if p.WithCrashes {
-		for node := range p.ReplicaStates {
+		activeColors := make(map[string]Color)
+		haveInactive := false
+		for node, color := range p.ReplicaColors {
 			if _, ok := p.ActiveNodes[node]; ok {
-				partitionActions = append(partitionActions, &StopStartAction{Node: node, Action: "Stop"})
+				activeColors[color.Hash()] = color
 			} else {
-				partitionActions = append(partitionActions, &StopStartAction{Node: node, Action: "Start"})
+				haveInactive = true
 			}
+		}
+		for c := range activeColors {
+			partitionActions = append(partitionActions, &StopStartAction{Color: c, Action: "Stop"})
+		}
+		if haveInactive {
+			partitionActions = append(partitionActions, &StopStartAction{Action: "Start"})
 		}
 	}
 	return partitionActions
@@ -316,54 +323,6 @@ func (p *PartitionEnv) Reset() State {
 	return copyPartition(p.CurPartition)
 }
 
-func (p *PartitionEnv) updatePartition(a Action) ([][]uint64, map[uint64]int, bool) {
-	newPartition := make([][]uint64, len(p.CurPartition.Partition))
-	newPartitionMap := make(map[uint64]int)
-
-	switch a.(type) {
-	case *CreatePartitionAction:
-	case *KeepSamePartitionAction:
-	case *StopStartAction:
-
-	}
-
-	_, notKeepSame := a.(*CreatePartitionAction)
-
-	if notKeepSame {
-		ca, _ := a.(*CreatePartitionAction)
-
-		// 1. Change partition
-		coloredReplicas := make(map[string][]uint64)
-		for r, c := range p.CurPartition.ReplicaColors {
-			cHash := c.Hash()
-			if _, ok := coloredReplicas[cHash]; !ok {
-				coloredReplicas[cHash] = make([]uint64, 0)
-			}
-			coloredReplicas[cHash] = append(coloredReplicas[cHash], r)
-		}
-		newPartition = make([][]uint64, len(ca.Partition))
-		for i, p := range ca.Partition {
-			newPartition[i] = make([]uint64, len(p))
-			for j, c := range p {
-				cHash := c.Hash()
-				nextReplica := coloredReplicas[cHash][0]
-				coloredReplicas[cHash] = coloredReplicas[cHash][1:]
-				newPartition[i][j] = nextReplica
-				newPartitionMap[nextReplica] = i
-			}
-		}
-	} else {
-		for i := range p.CurPartition.Partition {
-			newPartition[i] = make([]uint64, 0)
-		}
-		for r, i := range p.CurPartition.PartitionMap {
-			newPartition[i] = append(newPartition[i], r)
-			newPartitionMap[r] = i
-		}
-	}
-	return newPartition, newPartitionMap, !notKeepSame
-}
-
 func (p *PartitionEnv) Step(a Action) State {
 	// 1. Change partition
 	// 2. Perform ticks, delivering messages in between
@@ -391,13 +350,32 @@ func (p *PartitionEnv) Step(a Action) State {
 	_, isKeepSame := a.(*KeepSamePartitionAction)
 
 	if isStartStop {
-		_, isActive := p.CurPartition.ActiveNodes[ss.Node]
-		if ss.Action == "Stop" && isActive {
-			p.UnderlyingEnv.Stop(ss.Node)
-			delete(newActive, ss.Node)
-		} else if ss.Action == "Start" && !isActive {
-			p.UnderlyingEnv.Start(ss.Node)
-			newActive[ss.Node] = true
+		if ss.Action == "Stop" {
+			activeNodes := make([]uint64, 0)
+			for node, c := range p.CurPartition.ReplicaColors {
+				if c.Hash() == ss.Color {
+					activeNodes = append(activeNodes, node)
+				}
+			}
+			if len(activeNodes) > 0 {
+				nodeI := p.rand.Intn(len(activeNodes))
+				node := activeNodes[nodeI]
+				p.UnderlyingEnv.Stop(node)
+				delete(newActive, node)
+			}
+		} else if ss.Action == "Start" {
+			inactiveNodes := make([]uint64, 0)
+			for node := range p.CurPartition.ReplicaColors {
+				if _, ok := p.CurPartition.ActiveNodes[node]; !ok {
+					inactiveNodes = append(inactiveNodes, node)
+				}
+			}
+			if len(inactiveNodes) > 0 {
+				nodeI := p.rand.Intn(len(inactiveNodes))
+				node := inactiveNodes[nodeI]
+				p.UnderlyingEnv.Start(node)
+				newActive[node] = true
+			}
 		}
 	}
 
