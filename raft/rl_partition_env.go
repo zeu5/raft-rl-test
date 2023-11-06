@@ -35,7 +35,7 @@ func (r *RaftPartitionColor) Copy() types.Color {
 }
 
 // various functions to take info from raft.Status to 'colors' of the abstracted state
-type RaftColorFunc func(raft.Status) (string, interface{})
+type RaftColorFunc func(RaftReplicaState) (string, interface{})
 
 // return the state of the node, should be one of these:
 //
@@ -46,22 +46,22 @@ type RaftColorFunc func(raft.Status) (string, interface{})
 //		"StatePreCandidate",
 //	}
 func ColorState() RaftColorFunc {
-	return func(s raft.Status) (string, interface{}) {
-		return "state", s.RaftState.String()
+	return func(s RaftReplicaState) (string, interface{}) {
+		return "state", s.State.RaftState.String()
 	}
 }
 
 // return the current term of the node, should be just a number
 func ColorTerm() RaftColorFunc {
-	return func(s raft.Status) (string, interface{}) {
-		return "term", s.Term
+	return func(s RaftReplicaState) (string, interface{}) {
+		return "term", s.State.Term
 	}
 }
 
 // return the current term of the node, provides a bound that is the maximum considered term
 func ColorBoundedTerm(bound int) RaftColorFunc {
-	return func(s raft.Status) (string, interface{}) {
-		term := s.Term
+	return func(s RaftReplicaState) (string, interface{}) {
+		term := s.State.Term
 		if term > uint64(bound) {
 			term = uint64(bound)
 		}
@@ -69,49 +69,41 @@ func ColorBoundedTerm(bound int) RaftColorFunc {
 	}
 }
 
-// return the relative current term of the node, 1 is the current minimum term number, the others are computed as difference from this
-func ColorRelativeTerm(minimum int) RaftColorFunc {
-	return func(s raft.Status) (string, interface{}) {
-		term := s.Term                    // get the value from process Status
-		term = term - uint64(minimum) + 1 // compute difference
-		return "boundedTerm", term
-	}
-}
-
-// return the relative current term of the node, 1 is the current minimum term number, the others are computed as difference from this
-// bound provides the maximum considered term gap
-func ColorRelativeBoundedTerm(minimum int, bound int) RaftColorFunc {
-	return func(s raft.Status) (string, interface{}) {
-		term := s.Term                    // get the value from process Status
-		term = term - uint64(minimum) + 1 // compute difference
-		if term > uint64(bound) {         // set to bound if higher gap
-			term = uint64(bound)
-		}
-		return "boundedTerm", term
-	}
-}
-
 func ColorCommit() RaftColorFunc {
-	return func(s raft.Status) (string, interface{}) {
-		return "commit", s.Commit
+	return func(s RaftReplicaState) (string, interface{}) {
+		return "commit", s.State.Commit
 	}
 }
 
 func ColorApplied() RaftColorFunc {
-	return func(s raft.Status) (string, interface{}) {
-		return "applied", s.Applied
+	return func(s RaftReplicaState) (string, interface{}) {
+		return "applied", s.State.Applied
 	}
 }
 
 func ColorVote() RaftColorFunc {
-	return func(s raft.Status) (string, interface{}) {
-		return "vote", s.Vote
+	return func(s RaftReplicaState) (string, interface{}) {
+		return "vote", s.State.Vote
 	}
 }
 
 func ColorLeader() RaftColorFunc {
-	return func(s raft.Status) (string, interface{}) {
-		return "leader", s.Lead
+	return func(s RaftReplicaState) (string, interface{}) {
+		return "leader", s.State.Lead
+	}
+}
+
+// return the snapshot index of a replica
+func ColorSnapshotIndex() RaftColorFunc {
+	return func(s RaftReplicaState) (string, interface{}) {
+		return "snapshotIndex", s.Snapshot.Index
+	}
+}
+
+// return the snapshot index of a replica
+func ColorSnapshotTerm() RaftColorFunc {
+	return func(s RaftReplicaState) (string, interface{}) {
+		return "snapshotTerm", s.Snapshot.Term
 	}
 }
 
@@ -127,14 +119,13 @@ func NewRaftStatePainter(paramFuncs ...RaftColorFunc) *RaftStatePainter {
 
 // apply abstraction on a ReplicaState
 func (p *RaftStatePainter) Color(s types.ReplicaState) types.Color {
-	rsState := s.(map[string]interface{}) // cast into a map
-	rs := rsState["state"].(raft.Status)  // cast the "state" component into raft.Status
+	replicaState := s.(RaftReplicaState) // cast into RaftReplicaState
 	c := &RaftPartitionColor{
 		Params: make(map[string]interface{}),
 	}
 
 	for _, p := range p.paramFuncs {
-		k, v := p(rs)
+		k, v := p(replicaState)
 		c.Params[k] = v
 	}
 	return c
@@ -220,7 +211,7 @@ func (p *RaftPartitionEnv) Tick() types.PartitionedSystemState {
 		NodeStates:   make(map[uint64]raft.Status),
 		WithTimeouts: p.config.Timeouts,
 		Logs:         make(map[uint64][]pb.Entry), // guess this should be added also here?
-		Snapshots:    make(map[uint64]pb.Snapshot),
+		Snapshots:    make(map[uint64]pb.SnapshotMetadata),
 	}
 	for id, node := range p.nodes {
 		if node.HasReady() {
@@ -251,7 +242,7 @@ func (p *RaftPartitionEnv) Tick() types.PartitionedSystemState {
 		// add snapshot
 		snapshot, err := p.storages[id].Snapshot()
 		if err == nil {
-			newState.Snapshots[id] = snapshot
+			newState.Snapshots[id] = snapshot.Metadata
 		}
 	}
 	newState.Messages = copyMessages(p.messages)
@@ -290,7 +281,7 @@ func (p *RaftPartitionEnv) DeliverMessage(m types.Message) types.PartitionedSyst
 		NodeStates:   make(map[uint64]raft.Status),
 		WithTimeouts: p.config.Timeouts,
 		Logs:         make(map[uint64][]pb.Entry),
-		Snapshots:    make(map[uint64]pb.Snapshot),
+		Snapshots:    make(map[uint64]pb.SnapshotMetadata),
 	}
 	for id, node := range p.nodes {
 		if node.HasReady() {
@@ -321,7 +312,7 @@ func (p *RaftPartitionEnv) DeliverMessage(m types.Message) types.PartitionedSyst
 		// add snapshot
 		snapshot, err := p.storages[id].Snapshot()
 		if err == nil {
-			newState.Snapshots[id] = snapshot
+			newState.Snapshots[id] = snapshot.Metadata
 		}
 
 	}
