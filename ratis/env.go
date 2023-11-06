@@ -46,6 +46,14 @@ func NewRatisRaftEnv(ctx context.Context, clusterConfig *RatisClusterConfig) *Ra
 	return e
 }
 
+func (r *RatisRaftEnv) Start(node uint64) {
+	// TODO: Need to implement this
+}
+
+func (r *RatisRaftEnv) Stop(node uint64) {
+	// TODO: Need to implement this
+}
+
 func (r *RatisRaftEnv) DeliverMessage(m types.Message) types.PartitionedSystemState {
 	rm, ok := m.(Message)
 	if !ok {

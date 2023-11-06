@@ -237,6 +237,34 @@ func (r *RaftEnvironment) makeNodes() {
 	r.curState = initState
 }
 
+func (r *RaftEnvironment) Start(node uint64) {
+	// TODO: need to implement this
+	_, exists := r.nodes[node]
+	if exists {
+		return
+	}
+	r.nodes[node], _ = raft.NewRawNode(&raft.Config{
+		ID:                        node,
+		ElectionTick:              r.config.ElectionTick,
+		HeartbeatTick:             r.config.HeartbeatTick,
+		Storage:                   r.storages[node],
+		MaxSizePerMsg:             1024 * 1024,
+		MaxInflightMsgs:           256,
+		MaxUncommittedEntriesSize: 1 << 30,
+		Logger:                    &raft.DefaultLogger{Logger: log.New(io.Discard, "", 0)},
+	})
+	peers := make([]raft.Peer, r.config.Replicas)
+	for i := 0; i < r.config.Replicas; i++ {
+		peers[i] = raft.Peer{ID: uint64(i + 1)}
+	}
+	r.nodes[node].Bootstrap(peers)
+}
+
+func (r *RaftEnvironment) Stop(node uint64) {
+	// TODO: need to implement this
+	delete(r.nodes, node)
+}
+
 func (r *RaftEnvironment) Reset() types.State {
 	r.messages = make(map[string]pb.Message)
 	for i := 0; i < r.config.Requests; i++ {
