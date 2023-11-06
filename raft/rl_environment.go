@@ -31,11 +31,18 @@ type RaftState struct {
 	// The messages in transit
 	Messages  map[string]pb.Message
 	Logs      map[uint64][]pb.Entry
-	Snapshots map[uint64]pb.Snapshot
+	Snapshots map[uint64]pb.SnapshotMetadata
 	// Test harness and pending requests
 	Requests []pb.Message
 	// Boolean to indicate if the actions include dropping messages
 	WithTimeouts bool
+}
+
+// State of a replica in the Raft environment
+type RaftReplicaState struct {
+	State    raft.Status
+	Log      []pb.Entry
+	Snapshot pb.SnapshotMetadata
 }
 
 // Implements the PartitionedSystemState
@@ -45,11 +52,11 @@ func (r RaftState) GetReplicaStateOld(rep uint64) types.ReplicaState {
 
 // Implements the PartitionedSystemState
 func (r RaftState) GetReplicaState(rep uint64) types.ReplicaState {
-	replicaState := make(map[string]interface{})
-	replicaState["state"] = r.NodeStates[rep]   // add replica state as raft.Status
-	replicaState["log"] = r.Logs[rep]           // add replica log as []pb.Entry
-	replicaState["snapshot"] = r.Snapshots[rep] // add replica snapshot as pb.Snapshot
-	return replicaState
+	return RaftReplicaState{
+		State:    r.NodeStates[rep],
+		Log:      r.Logs[rep],
+		Snapshot: r.Snapshots[rep],
+	}
 }
 
 // Implements the PartitionedSystemState
@@ -251,6 +258,7 @@ func (r *RaftEnvironment) makeNodes() {
 		NodeStates:   make(map[uint64]raft.Status),
 		Messages:     copyMessages(r.messages),
 		Logs:         make(map[uint64][]pb.Entry),
+		Snapshots:    make(map[uint64]pb.SnapshotMetadata),
 		WithTimeouts: r.config.Timeouts,
 		Requests:     make([]pb.Message, r.config.Requests),
 	}
@@ -504,18 +512,16 @@ func copyLogs(logs map[uint64][]pb.Entry) map[uint64][]pb.Entry {
 }
 
 // copy the snapshots hashmap
-func copySnapshots(snapshots map[uint64]pb.Snapshot) map[uint64]pb.Snapshot {
-	c := make(map[uint64]pb.Snapshot)
+func copySnapshots(snapshots map[uint64]pb.SnapshotMetadata) map[uint64]pb.SnapshotMetadata {
+	c := make(map[uint64]pb.SnapshotMetadata)
 
 	for id, sn := range snapshots {
-		newSnap := pb.Snapshot{
-			Data: sn.Data,
-			Metadata: pb.SnapshotMetadata{
-				ConfState: sn.Metadata.ConfState,
-				Index:     sn.Metadata.Index,
-				Term:      sn.Metadata.Term,
-			},
+		newSnap := pb.SnapshotMetadata{
+			ConfState: sn.ConfState,
+			Index:     sn.Index,
+			Term:      sn.Term,
 		}
+
 		c[id] = newSnap
 	}
 
