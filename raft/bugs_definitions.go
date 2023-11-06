@@ -4,7 +4,6 @@ import (
 	"bytes"
 
 	"github.com/zeu5/raft-rl-test/types"
-	"go.etcd.io/raft/v3"
 	pb "go.etcd.io/raft/v3/raftpb"
 )
 
@@ -31,8 +30,8 @@ func ReducedLog() func(*types.Trace) bool {
 			pS, ok := s.(*types.Partition)
 			if ok {
 				for replica_id, elem := range pS.ReplicaStates {
-					repState := elem.(map[string]interface{}) // cast into map
-					curLog := repState["log"].([]pb.Entry)    // cast "log" into list of pb.Entry
+					repState := elem.(RaftReplicaState) // cast into map
+					curLog := repState.Log              // cast "log" into list of pb.Entry
 
 					if _, ok := replicasLogs[replica_id]; !ok { // init empty list if previous replica log is not present
 						replicasLogs[replica_id] = make([]pb.Entry, 0)
@@ -60,8 +59,8 @@ func ModifiedLog() func(*types.Trace) bool {
 			pS, ok := s.(*types.Partition)
 			if ok {
 				for replica_id, elem := range pS.ReplicaStates {
-					repState := elem.(map[string]interface{}) // cast into map
-					curLog := repState["log"].([]pb.Entry)    // cast "log" into list of pb.Entry
+					repState := elem.(RaftReplicaState) // cast into map
+					curLog := repState.Log              // cast "log" into list of pb.Entry
 
 					if _, ok := replicasLogs[replica_id]; !ok { // init empty list if previous replica log is not present
 						replicasLogs[replica_id] = make([]pb.Entry, 0)
@@ -91,8 +90,8 @@ func InconsistentLogs() func(*types.Trace) bool {
 				// make a list of logs, starting at index 0
 				logsList := make([][]pb.Entry, 0, len(pS.ReplicaStates))
 				for _, value := range pS.ReplicaStates {
-					state := value.(map[string]interface{})
-					log := state["log"].([]pb.Entry)
+					state := value.(RaftReplicaState)
+					log := state.Log
 					logsList = append(logsList, log)
 				}
 
@@ -124,8 +123,8 @@ func MultipleLeaders() func(*types.Trace) bool {
 			if ok {
 				leaders := make(map[int]int)             // map for leaders number, term : count
 				for _, state := range pS.ReplicaStates { // for each replica state
-					repState := state.(map[string]interface{})
-					curState := repState["state"].(raft.Status)                             // cast into raft.Status
+					repState := state.(RaftReplicaState)
+					curState := repState.State                                              // cast into raft.Status
 					if curState.BasicStatus.SoftState.RaftState.String() == "StateLeader" { // if the current softState of the replica is "StateLeader"
 						curTerm := curState.BasicStatus.HardState.Term // take term
 						val := 0
@@ -152,10 +151,10 @@ func DummyBug() func(*types.Trace) bool {
 			pS, ok := s.(*types.Partition)
 			if ok {
 				for _, elem := range pS.ReplicaStates {
-					repState := elem.(map[string]interface{}) // cast into map
-					curLog := repState["log"].([]pb.Entry)    // cast "log" into list of pb.Entry
+					repState := elem.(RaftReplicaState) // cast into map
+					curLog := repState.Log              // cast "log" into list of pb.Entry
 
-					if len(filterEntriesNoElection(curLog)) > 1 { // check if log size decreased
+					if len(filterEntries(curLog)) > 0 { // check if log size decreased
 						filteredLog := filterEntries(curLog)
 						differentTerms := make(map[uint64]bool, 0)
 						for _, ent := range filteredLog {
