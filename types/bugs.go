@@ -24,7 +24,7 @@ func BugAnalyzer(savePath string, bugs ...BugDesc) Analyzer {
 		for i, t := range traces {
 			for _, b := range bugs {
 				_, ok := occurrences[b.Name]
-				if !ok && b.Check(t) {
+				if b.Check(t) && !ok { // swapped order just to debug
 					occurrences[b.Name] = i
 					bugPath := path.Join(savePath, strconv.Itoa(run)+"_"+s+"_"+b.Name+"_"+strconv.Itoa(i)+"_bug.json")
 					t.Record(bugPath)

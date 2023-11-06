@@ -156,6 +156,7 @@ func (p *Partition) Actions() []Action {
 	return partitionActions
 }
 
+// hash of a partition state, state representation for the RL agent
 func (p *Partition) Hash() string {
 	partition := make([][]string, len(p.Partition))
 	for i, par := range p.Partition {

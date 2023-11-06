@@ -61,8 +61,8 @@ func getRaftPartEnv(config raft.RaftEnvironmentConfig, colors []raft.RaftColorFu
 		Painter:                raft.NewRaftStatePainter(colors...),  // pass the abstraction to env
 		Env:                    raft.NewPartitionEnvironment(config), // actual environment
 		TicketBetweenPartition: 3,                                    // ticks between actions
-		MaxMessagesPerTick:     3,                                    // upper bound of random num of delivered messages
-		StaySameStateUpto:      2,                                    // counter to distinguish consecutive states
+		MaxMessagesPerTick:     10,                                   // upper bound of random num of delivered messages
+		StaySameStateUpto:      4,                                    // counter to distinguish consecutive states
 		NumReplicas:            config.Replicas,
 	})
 }
