@@ -2,8 +2,6 @@ package raft
 
 import (
 	"github.com/zeu5/raft-rl-test/types"
-	"go.etcd.io/raft/v3"
-	pb "go.etcd.io/raft/v3/raftpb"
 )
 
 // File contains predicates over etcd-raft states
@@ -17,8 +15,8 @@ func LeaderElectedPredicate() types.RewardFuncSingle {
 		}
 
 		for _, state := range pS.ReplicaStates { // for each replica state
-			repState := state.(map[string]interface{})
-			curState := repState["state"].(raft.Status) // cast into raft.Status
+			repState := state.(RaftReplicaState)
+			curState := repState.State // cast into raft.Status
 			if curState.BasicStatus.SoftState.RaftState.String() == "StateLeader" {
 				return true
 			}
@@ -37,8 +35,8 @@ func LeaderElectedPredicateSpecific(r_id uint64) types.RewardFuncSingle {
 		}
 
 		state := pS.ReplicaStates[r_id] // take the replica state of the specified replica_id
-		repState := state.(map[string]interface{})
-		curState := repState["state"].(raft.Status) // cast into raft.Status
+		repState := state.(RaftReplicaState)
+		curState := repState.State // cast into raft.Status
 		return curState.BasicStatus.SoftState.RaftState.String() == "StateLeader"
 	}
 }
@@ -52,8 +50,8 @@ func AtLeastOneLogNotEmpty() types.RewardFuncSingle {
 		}
 
 		for _, state := range pS.ReplicaStates { // for each replica state
-			repState := state.(map[string]interface{})
-			curLog := repState["log"].([]pb.Entry) // cast into raft.Status
+			repState := state.(RaftReplicaState)
+			curLog := repState.Log // cast into raft.Status
 			if len(filterEntries(curLog)) > 0 {
 				return true
 			}
@@ -72,8 +70,8 @@ func EmptyLogSpecific(r_id uint64) types.RewardFuncSingle {
 		}
 
 		state := pS.ReplicaStates[r_id] // take the replica state of the specified replica_id
-		repState := state.(map[string]interface{})
-		curLog := repState["log"].([]pb.Entry) // cast into raft.Status
+		repState := state.(RaftReplicaState)
+		curLog := repState.Log // cast into raft.Status
 		return len(filterEntries(curLog)) == 0
 	}
 }
@@ -87,8 +85,8 @@ func ExactEntriesInLog(num int) types.RewardFuncSingle {
 		}
 
 		for _, state := range pS.ReplicaStates { // for each replica state
-			repState := state.(map[string]interface{})
-			curLog := repState["log"].([]pb.Entry) // cast into raft.Status
+			repState := state.(RaftReplicaState)
+			curLog := repState.Log // cast into raft.Status
 			if len(filterEntriesNoElection(curLog)) == num {
 				return true
 			}
@@ -107,8 +105,8 @@ func ExactEntriesInLogSpecific(r_id uint64, num int) types.RewardFuncSingle {
 		}
 
 		state := pS.ReplicaStates[r_id] // take the replica state of the specified replica_id
-		repState := state.(map[string]interface{})
-		curLog := repState["log"].([]pb.Entry) // cast into raft.Status
+		repState := state.(RaftReplicaState)
+		curLog := repState.Log // cast into raft.Status
 		return len(filterEntriesNoElection(curLog)) == num
 	}
 }
@@ -122,8 +120,8 @@ func EntriesInDifferentTermsInLog(uniqueTerms int) types.RewardFuncSingle {
 		}
 
 		for _, state := range pS.ReplicaStates { // for each replica state
-			repState := state.(map[string]interface{})
-			curLog := repState["log"].([]pb.Entry)         // cast into raft.Status
+			repState := state.(RaftReplicaState)
+			curLog := repState.Log                         // cast into raft.Status
 			terms := make(map[uint64]bool, 0)              // set of unique terms
 			filteredLog := filterEntriesNoElection(curLog) // remove dummy entries
 			for _, ent := range filteredLog {              // for each entry
