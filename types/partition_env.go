@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"math/rand"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/zeu5/raft-rl-test/util"
@@ -15,6 +16,16 @@ import (
 type Color interface {
 	Hash() string
 	Copy() Color
+}
+
+type InActiveColor struct{}
+
+func (i *InActiveColor) Hash() string {
+	return "Inactive"
+}
+
+func (i *InActiveColor) Copy() Color {
+	return &InActiveColor{}
 }
 
 // Accepts a replica state and colors it
@@ -54,6 +65,10 @@ type PartitionedSystemEnvironment interface {
 	DeliverMessage(Message) PartitionedSystemState
 	// Drop a message
 	DropMessage(Message) PartitionedSystemState
+	// Stop a node
+	Stop(uint64)
+	// Start a node
+	Start(uint64)
 }
 
 // A state of the partitioned environment
@@ -68,6 +83,10 @@ type Partition struct {
 	// Only this is used to hash (therefore indexed by RL)
 	Partition   [][]Color
 	RepeatCount int
+
+	// For crashes
+	WithCrashes bool
+	ActiveNodes map[uint64]bool
 }
 
 var _ State = &Partition{}
@@ -83,6 +102,17 @@ type KeepSamePartitionAction struct{}
 func (k *KeepSamePartitionAction) Hash() string {
 	return "KeepSamePartition"
 }
+
+type StopStartAction struct {
+	Node   uint64
+	Action string
+}
+
+func (s *StopStartAction) Hash() string {
+	return s.Action + "_" + strconv.Itoa(int(s.Node))
+}
+
+var _ Action = &StopStartAction{}
 
 // Partition slice used to pass to the sort function
 type PartitionSlice [][]Color
@@ -153,6 +183,15 @@ func (p *Partition) Actions() []Action {
 		}
 		partitionActions = append(partitionActions, &CreatePartitionAction{Partition: partition})
 	}
+	if p.WithCrashes {
+		for node := range p.ReplicaStates {
+			if _, ok := p.ActiveNodes[node]; ok {
+				partitionActions = append(partitionActions, &StopStartAction{Node: node, Action: "Stop"})
+			} else {
+				partitionActions = append(partitionActions, &StopStartAction{Node: node, Action: "Start"})
+			}
+		}
+	}
 	return partitionActions
 }
 
@@ -180,6 +219,8 @@ func copyPartition(p *Partition) *Partition {
 		ReplicaStates: make(map[uint64]ReplicaState),
 		PartitionMap:  make(map[uint64]int),
 		RepeatCount:   p.RepeatCount,
+		WithCrashes:   p.WithCrashes,
+		ActiveNodes:   make(map[uint64]bool),
 	}
 	for i, s := range p.ReplicaColors {
 		n.ReplicaColors[i] = s.Copy()
@@ -196,21 +237,22 @@ func copyPartition(p *Partition) *Partition {
 			n.Partition[i][j] = col.Copy()
 		}
 	}
+	for i := range p.ActiveNodes {
+		n.ActiveNodes[i] = p.ActiveNodes[i]
+	}
 	return n
 }
 
 // An environment that encodes ways to partition the replicas
 // Implements the "Environment" interface
 type PartitionEnv struct {
-	NumReplicas            int
-	underlyingEnv          PartitionedSystemEnvironment
-	painter                Painter
-	curPartition           *Partition
-	messages               map[string]Message
-	ticksBetweenPartitions int
-	maxMessagesPerTick     int
-	staySamePartitionBound int
-	rand                   *rand.Rand
+	NumReplicas   int
+	UnderlyingEnv PartitionedSystemEnvironment
+	painter       Painter
+	CurPartition  *Partition
+	messages      map[string]Message
+	config        PartitionEnvConfig
+	rand          *rand.Rand
 }
 
 var _ Environment = &PartitionEnv{}
@@ -222,26 +264,25 @@ type PartitionEnvConfig struct {
 	NumReplicas            int
 	MaxMessagesPerTick     int
 	StaySameStateUpto      int
+	WithCrashes            bool
 }
 
 func NewPartitionEnv(c PartitionEnvConfig) *PartitionEnv {
 	p := &PartitionEnv{
-		NumReplicas:            c.NumReplicas,
-		ticksBetweenPartitions: c.TicketBetweenPartition,
-		painter:                c.Painter,
-		underlyingEnv:          c.Env,
-		messages:               make(map[string]Message),
-		curPartition:           nil,
-		maxMessagesPerTick:     c.MaxMessagesPerTick,
-		staySamePartitionBound: c.StaySameStateUpto,
-		rand:                   rand.New(rand.NewSource(time.Now().UnixNano())),
+		NumReplicas:   c.NumReplicas,
+		painter:       c.Painter,
+		UnderlyingEnv: c.Env,
+		messages:      make(map[string]Message),
+		CurPartition:  nil,
+		config:        c,
+		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 	p.reset()
 	return p
 }
 
 func (p *PartitionEnv) reset() {
-	s := p.underlyingEnv.Reset() // takes the state given by the reset function of the underlying environment
+	s := p.UnderlyingEnv.Reset() // takes the state given by the reset function of the underlying environment
 	colors := make([]Color, p.NumReplicas)
 	curPartition := &Partition{
 		ReplicaColors: make(map[uint64]Color),
@@ -249,6 +290,8 @@ func (p *PartitionEnv) reset() {
 		ReplicaStates: make(map[uint64]ReplicaState),
 		Partition:     make([][]Color, 1),
 		RepeatCount:   0,
+		WithCrashes:   p.config.WithCrashes,
+		ActiveNodes:   make(map[uint64]bool),
 	}
 	for i := 0; i < p.NumReplicas; i++ {
 		id := uint64(i + 1)
@@ -258,10 +301,11 @@ func (p *PartitionEnv) reset() {
 		curPartition.ReplicaStates[id] = rs
 		curPartition.PartitionMap[id] = 0
 		curPartition.ReplicaColors[id] = color
+		curPartition.ActiveNodes[id] = true
 	}
 	sort.Sort(ColorSlice(colors))
 	curPartition.Partition[0] = colors
-	p.curPartition = curPartition
+	p.CurPartition = curPartition
 	p.messages = make(map[string]Message)
 	for k, m := range s.PendingMessages() {
 		p.messages[k] = m
@@ -270,31 +314,28 @@ func (p *PartitionEnv) reset() {
 
 func (p *PartitionEnv) Reset() State {
 	p.reset()
-	return copyPartition(p.curPartition)
+	return copyPartition(p.CurPartition)
 }
 
-func (p *PartitionEnv) Step(a Action) State {
-	// 1. Change partition
-	// 2. Perform ticks, delivering messages in between
-	// 3. Update states, partitions and return
-	_, keepSame := a.(*KeepSamePartitionAction)
-
-	nextState := &Partition{
-		ReplicaColors: make(map[uint64]Color),
-		PartitionMap:  make(map[uint64]int),
-		ReplicaStates: make(map[uint64]ReplicaState),
-		Partition:     make([][]Color, 0),
-		RepeatCount:   p.curPartition.RepeatCount,
-	}
-	newPartition := make([][]uint64, len(p.curPartition.Partition))
+func (p *PartitionEnv) updatePartition(a Action) ([][]uint64, map[uint64]int, bool) {
+	newPartition := make([][]uint64, len(p.CurPartition.Partition))
 	newPartitionMap := make(map[uint64]int)
 
-	if !keepSame {
+	switch a.(type) {
+	case *CreatePartitionAction:
+	case *KeepSamePartitionAction:
+	case *StopStartAction:
+
+	}
+
+	_, notKeepSame := a.(*CreatePartitionAction)
+
+	if notKeepSame {
 		ca, _ := a.(*CreatePartitionAction)
 
 		// 1. Change partition
 		coloredReplicas := make(map[string][]uint64)
-		for r, c := range p.curPartition.ReplicaColors {
+		for r, c := range p.CurPartition.ReplicaColors {
 			cHash := c.Hash()
 			if _, ok := coloredReplicas[cHash]; !ok {
 				coloredReplicas[cHash] = make([]uint64, 0)
@@ -313,23 +354,90 @@ func (p *PartitionEnv) Step(a Action) State {
 			}
 		}
 	} else {
-		for i := range p.curPartition.Partition {
+		for i := range p.CurPartition.Partition {
 			newPartition[i] = make([]uint64, 0)
 		}
-		for r, i := range p.curPartition.PartitionMap {
+		for r, i := range p.CurPartition.PartitionMap {
 			newPartition[i] = append(newPartition[i], r)
 			newPartitionMap[r] = i
 		}
-		newRepeatCount := p.curPartition.RepeatCount + 1
-		if newRepeatCount > p.staySamePartitionBound {
-			newRepeatCount = p.staySamePartitionBound
+	}
+	return newPartition, newPartitionMap, !notKeepSame
+}
+
+func (p *PartitionEnv) Step(a Action) State {
+	// 1. Change partition
+	// 2. Perform ticks, delivering messages in between
+	// 3. Update states, partitions and return
+
+	nextState := &Partition{
+		ReplicaColors: make(map[uint64]Color),
+		PartitionMap:  make(map[uint64]int),
+		ReplicaStates: make(map[uint64]ReplicaState),
+		Partition:     make([][]Color, 0),
+		RepeatCount:   p.CurPartition.RepeatCount,
+		WithCrashes:   p.config.WithCrashes,
+		ActiveNodes:   make(map[uint64]bool),
+	}
+
+	newPartition := make([][]uint64, len(p.CurPartition.Partition))
+	newPartitionMap := make(map[uint64]int)
+	newActive := make(map[uint64]bool)
+	for i := range p.CurPartition.ActiveNodes {
+		newActive[i] = true
+	}
+
+	ss, isStartStop := a.(*StopStartAction)
+	_, isChange := a.(*CreatePartitionAction)
+	_, isKeepSame := a.(*KeepSamePartitionAction)
+
+	if isStartStop {
+		_, isActive := p.CurPartition.ActiveNodes[ss.Node]
+		if ss.Action == "Stop" && isActive {
+			p.UnderlyingEnv.Stop(ss.Node)
+			delete(newActive, ss.Node)
+		} else if ss.Action == "Start" && !isActive {
+			p.UnderlyingEnv.Start(ss.Node)
+			newActive[ss.Node] = true
 		}
-		nextState.RepeatCount = newRepeatCount
+	}
+
+	if isChange {
+		ca, _ := a.(*CreatePartitionAction)
+
+		// 1. Change partition
+		coloredReplicas := make(map[string][]uint64)
+		for r, c := range p.CurPartition.ReplicaColors {
+			cHash := c.Hash()
+			if _, ok := coloredReplicas[cHash]; !ok {
+				coloredReplicas[cHash] = make([]uint64, 0)
+			}
+			coloredReplicas[cHash] = append(coloredReplicas[cHash], r)
+		}
+		newPartition = make([][]uint64, len(ca.Partition))
+		for i, p := range ca.Partition {
+			newPartition[i] = make([]uint64, len(p))
+			for j, c := range p {
+				cHash := c.Hash()
+				nextReplica := coloredReplicas[cHash][0]
+				coloredReplicas[cHash] = coloredReplicas[cHash][1:]
+				newPartition[i][j] = nextReplica
+				newPartitionMap[nextReplica] = i
+			}
+		}
+	} else {
+		for i := range p.CurPartition.Partition {
+			newPartition[i] = make([]uint64, 0)
+		}
+		for r, i := range p.CurPartition.PartitionMap {
+			newPartition[i] = append(newPartition[i], r)
+			newPartitionMap[r] = i
+		}
 	}
 
 	// 2. Perform ticks, delivering messages in between
-	var s PartitionedSystemState = nil              // is this the new state?
-	for i := 0; i < p.ticksBetweenPartitions; i++ { // for the specified number of ticks between two partitions (action of the agent)
+	var s PartitionedSystemState = nil                     // is this the new state?
+	for i := 0; i < p.config.TicketBetweenPartition; i++ { // for the specified number of ticks between two partitions (action of the agent)
 
 		messages := make([]Message, 0)
 		if s == nil {
@@ -347,7 +455,7 @@ func (p *PartitionEnv) Step(a Action) State {
 				messages[i], messages[j] = messages[j], messages[i]
 			})
 
-			mToDeliver := p.rand.Intn(p.maxMessagesPerTick) // randomly choose how many messages to deliver, up to specified bound
+			mToDeliver := p.rand.Intn(p.config.MaxMessagesPerTick) // randomly choose how many messages to deliver, up to specified bound
 			for j := 0; j < mToDeliver; j++ {
 				if len(messages) > 0 {
 					next := messages[0] // take the first message
@@ -355,15 +463,16 @@ func (p *PartitionEnv) Step(a Action) State {
 					// check if partitioning allows delivery
 					fromP, fromOk := newPartitionMap[next.From()]
 					toP, toOk := newPartitionMap[next.To()]
-					if !fromOk || !toOk || fromP == toP { // deliver it
-						p.underlyingEnv.DeliverMessage(next)
+					_, toActive := nextState.ActiveNodes[next.To()]
+					if (!fromOk || !toOk || fromP == toP) && toActive { // deliver it
+						p.UnderlyingEnv.DeliverMessage(next)
 					} else { // drop it
-						p.underlyingEnv.DropMessage(next)
+						p.UnderlyingEnv.DropMessage(next)
 					}
 				}
 			}
 		}
-		s = p.underlyingEnv.Tick() // make the tick pass on the environment
+		s = p.UnderlyingEnv.Tick() // make the tick pass on the environment
 	}
 
 	// 3. Update states, partitions and return
@@ -376,7 +485,10 @@ func (p *PartitionEnv) Step(a Action) State {
 	for i := 0; i < p.NumReplicas; i++ {
 		id := uint64(i + 1)
 		rs := s.GetReplicaState(id)
-		color := p.painter.Color(rs)
+		var color Color = &InActiveColor{}
+		if _, isActive := newActive[id]; isActive {
+			color = p.painter.Color(rs)
+		}
 		nextState.ReplicaColors[id] = color // abstraction
 		nextState.ReplicaStates[id] = rs    // actual replica state
 	}
@@ -394,7 +506,17 @@ func (p *PartitionEnv) Step(a Action) State {
 	sort.Sort(PartitionSlice(nextStatePartition))
 	nextState.Partition = nextStatePartition
 	nextState.PartitionMap = newPartitionMap
-	p.curPartition = copyPartition(nextState)
+	nextState.ActiveNodes = newActive
+	newRepeatCount := 0
+	if isSamePartition(nextState.Partition, p.CurPartition.Partition) && isKeepSame {
+		newRepeatCount = p.CurPartition.RepeatCount + 1
+		if newRepeatCount > p.config.StaySameStateUpto {
+			newRepeatCount = p.config.StaySameStateUpto
+		}
+	}
+	nextState.RepeatCount = newRepeatCount
+
+	p.CurPartition = copyPartition(nextState)
 
 	return nextState
 }
@@ -410,4 +532,21 @@ func PickKeepSame() func(actions []Action) (Action, bool) {
 		}
 		return nil, false
 	}
+}
+
+func isSamePartition(one [][]Color, two [][]Color) bool {
+	if len(one) != len(two) {
+		return false
+	}
+	for i, p := range one {
+		if len(p) != len(two[i]) {
+			return false
+		}
+		for j, v := range p {
+			if v.Hash() != two[i][j].Hash() {
+				return false
+			}
+		}
+	}
+	return true
 }

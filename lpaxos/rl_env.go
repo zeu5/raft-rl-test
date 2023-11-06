@@ -160,6 +160,14 @@ func (e *LPaxosEnv) makeNodes() {
 	e.curState = initState
 }
 
+func (e *LPaxosEnv) Start(node uint64) {
+	// TODO: Need to implement this
+}
+
+func (e *LPaxosEnv) Stop(node uint64) {
+	// TODO: Need to implement this
+}
+
 func (e *LPaxosEnv) Reset() types.State {
 	e.messages = make(map[string]Message)
 	for i := 0; i < e.config.Requests; i++ {

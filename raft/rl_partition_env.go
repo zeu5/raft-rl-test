@@ -272,8 +272,10 @@ func (p *RaftPartitionEnv) DeliverMessage(m types.Message) types.PartitionedSyst
 			delete(p.messages, messageKey)
 		}
 	} else {
-		node := p.nodes[rm.Message.To]
-		node.Step(rm.Message)
+		node, exists := p.nodes[rm.Message.To]
+		if exists {
+			node.Step(rm.Message)
+		}
 		delete(p.messages, msgKey(rm.Message))
 	}
 	newState := RaftState{

@@ -98,6 +98,14 @@ func (r *RedisRaftEnv) Reset() types.PartitionedSystemState {
 	return newState
 }
 
+func (r *RedisRaftEnv) Start(node uint64) {
+	// TODO: Need to implement this
+}
+
+func (r *RedisRaftEnv) Stop(node uint64) {
+	// TODO: Need to implement this
+}
+
 func (r *RedisRaftEnv) Cleanup() {
 	if r.cluster != nil {
 		r.cluster.Destroy()

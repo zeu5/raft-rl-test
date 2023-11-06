@@ -114,6 +114,14 @@ func (r *RSLPartitionEnv) Reset() types.PartitionedSystemState {
 	return newState
 }
 
+func (r *RSLPartitionEnv) Start(node uint64) {
+	// TODO: Need to implement this
+}
+
+func (r *RSLPartitionEnv) Stop(node uint64) {
+	// TODO: Need to implement this
+}
+
 // Moves clock of each process by one
 // Checks for messages after clock has advanced
 func (r *RSLPartitionEnv) Tick() types.PartitionedSystemState {

@@ -57,12 +57,21 @@ func RaftPart(episodes, horizon int, saveFile string) {
 
 func getRaftPartEnv(config raft.RaftEnvironmentConfig, colors []raft.RaftColorFunc) types.Environment {
 
+<<<<<<< HEAD
 	return types.NewPartitionEnv(types.PartitionEnvConfig{
 		Painter:                raft.NewRaftStatePainter(colors...),  // pass the abstraction to env
 		Env:                    raft.NewPartitionEnvironment(config), // actual environment
 		TicketBetweenPartition: 3,                                    // ticks between actions
 		MaxMessagesPerTick:     10,                                   // upper bound of random num of delivered messages
 		StaySameStateUpto:      4,                                    // counter to distinguish consecutive states
+=======
+	return types.NewPartitionEnv(types.PartitionEnvConfig{ // actual environment
+		Painter:                raft.NewRaftStatePainter(colors...), // pass the abstraction to env
+		Env:                    raft.NewPartitionEnvironment(config),
+		TicketBetweenPartition: 3, // ticks between actions
+		MaxMessagesPerTick:     3, // upper bound of random num of delivered messages
+		StaySameStateUpto:      2, // counter to distinguish consecutive states
+>>>>>>> 26af1a5f8acd71ccb71a0e7fe43aa18021985e6f
 		NumReplicas:            config.Replicas,
 	})
 }
