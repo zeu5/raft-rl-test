@@ -155,7 +155,43 @@ func DummyBug() func(*types.Trace) bool {
 					repState := elem.(map[string]interface{}) // cast into map
 					curLog := repState["log"].([]pb.Entry)    // cast "log" into list of pb.Entry
 
-					if len(curLog) > 4 { // check if log size decreased
+					if len(filterEntriesNoElection(curLog)) > 1 { // check if log size decreased
+						filteredLog := filterEntries(curLog)
+						differentTerms := make(map[uint64]bool, 0)
+						for _, ent := range filteredLog {
+							differentTerms[ent.Term] = true
+						}
+						if len(differentTerms) > 1 {
+							ffilteredLog := filterEntriesNoElection(curLog)
+							ddifferentTerms := make(map[uint64]bool, 0)
+							for _, ent := range ffilteredLog {
+								ddifferentTerms[ent.Term] = true
+							}
+							if len(ddifferentTerms) > 1 {
+								return true // BUG FOUND
+							}
+						}
+					}
+				}
+			}
+		}
+		return false
+	}
+}
+
+// MADE TO CHECK TRACE RECORDING -- checks if the log size of any replica is not empty
+func DummyBug2() func(*types.Trace) bool {
+	return func(t *types.Trace) bool {
+		for i := 0; i < t.Len(); i++ { // foreach (state, action, new_state, reward) in the trace
+			s, _, _, _ := t.Get(i) // take state s
+			pS, ok := s.(*types.Partition)
+			if ok {
+				for _, elem := range pS.ReplicaStates {
+					repState := elem.(map[string]interface{}) // cast into map
+					curLog := repState["log"].([]pb.Entry)    // cast "log" into list of pb.Entry
+
+					if len(filterEntries(curLog)) > 2 { // check if log size decreased
+						filterEntries(curLog)
 						return true // BUG FOUND
 					}
 				}

@@ -276,3 +276,25 @@ func ReadableReplicaState(state types.ReplicaState, id uint64) string {
 
 	return s
 }
+
+// filter a log and return only the NormalEntry typed entries (Ignore configuration change entries)
+func filterEntries(log []pb.Entry) []pb.Entry {
+	result := make([]pb.Entry, 0)
+	for _, entry := range log {
+		if entry.Type == 0 {
+			result = append(result, entry)
+		}
+	}
+	return result
+}
+
+// filter a log and return only the NormalEntry typed entries with non-zero length (Ignore configuration change entries)
+func filterEntriesNoElection(log []pb.Entry) []pb.Entry {
+	result := make([]pb.Entry, 0)
+	for _, entry := range log {
+		if entry.Type == 0 && len(entry.Data) > 0 {
+			result = append(result, entry)
+		}
+	}
+	return result
+}
