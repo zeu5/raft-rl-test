@@ -154,20 +154,26 @@ func DummyBug() func(*types.Trace) bool {
 					repState := elem.(RaftReplicaState) // cast into map
 					curLog := repState.Log              // cast "log" into list of pb.Entry
 
-					if len(filterEntries(curLog)) > 0 { // check if log size decreased
-						filteredLog := filterEntries(curLog)
-						differentTerms := make(map[uint64]bool, 0)
-						for _, ent := range filteredLog {
-							differentTerms[ent.Term] = true
-						}
-						if len(differentTerms) > 1 {
-							ffilteredLog := filterEntriesNoElection(curLog)
-							ddifferentTerms := make(map[uint64]bool, 0)
-							for _, ent := range ffilteredLog {
-								ddifferentTerms[ent.Term] = true
+					if len(curLog) > 0 {
+						if len(filterEntries(curLog)) > 0 { // check if log size decreased
+							filteredLog := filterEntries(curLog)
+							fl := filterEntriesNoElection(curLog)
+							if len(fl) > 0 {
+								fl = filterEntriesNoElection(curLog)
 							}
-							if len(ddifferentTerms) > 1 {
-								return true // BUG FOUND
+							differentTerms := make(map[uint64]bool, 0)
+							for _, ent := range filteredLog {
+								differentTerms[ent.Term] = true
+							}
+							if len(differentTerms) > 1 {
+								ffilteredLog := filterEntriesNoElection(curLog)
+								ddifferentTerms := make(map[uint64]bool, 0)
+								for _, ent := range ffilteredLog {
+									ddifferentTerms[ent.Term] = true
+								}
+								if len(ddifferentTerms) > 1 {
+									return true // BUG FOUND
+								}
 							}
 						}
 					}

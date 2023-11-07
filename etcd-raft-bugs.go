@@ -37,13 +37,17 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	PredHierarchy_1.AddState(raft.EmptyLogSpecific(3).And(raft.AtLeastOneLogNotEmpty()), "CommitWithEmptyLog(3)")                                        // 2nd ...
 
 	// elect a leader, commit a request and then elect another leader
-	PredHierarchy_2 := policies.NewRewardMachine((raft.LeaderElectedPredicateSpecific(3).Or(raft.LeaderElectedPredicateSpecific(2))).And(raft.AtLeastOneLogNotEmpty()))
-	PredHierarchy_2.AddState(raft.LeaderElectedPredicateSpecific(1), "LeaderElected(1)")
-	PredHierarchy_2.AddState(raft.LeaderElectedPredicateSpecific(1).And(raft.AtLeastOneLogNotEmpty()), "CommitWithLeaderElected(1)")
+	PredHierarchy_2 := policies.NewRewardMachine(raft.EntriesInDifferentTermsInLog(2))
+	PredHierarchy_2.AddState(raft.LeaderElectedPredicateState(), "LeaderElected")
+	PredHierarchy_2.AddState(raft.AtLeastOneLogOneEntry(), "OneEntryLog")
+	PredHierarchy_2.AddState(raft.AtLeastOneLogOneEntryPlusReplicaInHigherTerm(), "OneEntryLogAndReplicaInHigherTerm")
+	PredHierarchy_2.AddState(raft.AtLeastOneLogOneEntryPlusSubsequentLeaderElection(), "OneEntryLogAndSubsequentLeaderElection")
 
 	// elect a leader and commit a request
-	PredHierarchy_3 := policies.NewRewardMachine(raft.LeaderElectedPredicate().And(raft.AtLeastOneLogNotEmpty()))
-	PredHierarchy_3.AddState(raft.LeaderElectedPredicate(), "LeaderElected")
+	PredHierarchy_3 := policies.NewRewardMachine(raft.EntriesInDifferentTermsInLog(2))
+	PredHierarchy_3.AddState(raft.LeaderElectedPredicateState(), "LeaderElected")
+	PredHierarchy_3.AddState(raft.AtLeastOneLogNotEmpty().And(raft.StackSizeLowerBound(2)), "EntryCommitted And TwoAvailableRequests")
+	PredHierarchy_3.AddState(raft.AtLeastOneEntryANDSubsequentLeaderElection().And(raft.StackSizeLowerBound(2)), "OneEntryLogAndSubsequentLeaderElection And TwoAvailableRequests")
 
 	// elect a leader and commit a request
 	PredHierarchy_4 := policies.NewRewardMachine(raft.EntriesInDifferentTermsInLog(2))
@@ -68,7 +72,8 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 		types.BugDesc{Name: "DummyBug", Check: raft.DummyBug()},
 	), types.BugComparator(saveFile))
 
-	c.AddAnalysis("RewardMachine", policies.RewardMachineAnalyzer(PredHierarchy_4), policies.RewardMachineCoverageComparator(saveFile))
+	// c.AddAnalysis("CommitOnlyOneEntry", policies.RewardMachineAnalyzer(PredHierarchy_3), policies.RewardMachineCoverageComparator(saveFile))
+	c.AddAnalysis("CommitEntriesInDifferentTerms", policies.RewardMachineAnalyzer(PredHierarchy_3), policies.RewardMachineCoverageComparator(saveFile))
 
 	// here you add different policies with their parameters
 	// c.AddExperiment(types.NewExperiment("RL", &types.AgentConfig{
@@ -89,18 +94,27 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	// 	Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.05),
 	// 	Environment: getRaftPartEnv(raftConfig, colors),
 	// }))
-	c.AddExperiment(types.NewExperiment("PredHierarchy_4", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      policies.NewRewardMachinePolicy(PredHierarchy_1),
-		Environment: getRaftPartEnv(raftConfig, colors),
-	}))
-	// c.AddExperiment(types.NewExperiment("PredHierarchy_2", &types.AgentConfig{
+	// c.AddExperiment(types.NewExperiment("PredHierarchy_4", &types.AgentConfig{
 	// 	Episodes:    episodes,
 	// 	Horizon:     horizon,
-	// 	Policy:      policies.NewRewardMachinePolicy(PredHierarchy_2),
+	// 	Policy:      policies.NewRewardMachinePolicy(PredHierarchy_1),
 	// 	Environment: getRaftPartEnv(raftConfig, colors),
 	// }))
+
+	// strictPolicy := policies.NewStrictPolicy(types.NewRandomPolicy())
+	// strictPolicy.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
+	// c.AddExperiment(types.NewExperiment("Strict", &types.AgentConfig{
+	// 	Episodes:    episodes,
+	// 	Horizon:     horizon,
+	// 	Policy:      policies.NewStrictPolicy(strictPolicy),
+	// 	Environment: getRaftPartEnv(raftConfig, colors),
+	// }))
+	c.AddExperiment(types.NewExperiment("PredHierarchy_3", &types.AgentConfig{
+		Episodes:    episodes,
+		Horizon:     horizon,
+		Policy:      policies.NewRewardMachinePolicy(PredHierarchy_3),
+		Environment: getRaftPartEnv(raftConfig, colors),
+	}))
 	// c.AddExperiment(types.NewExperiment("PredHierarchy_3", &types.AgentConfig{
 	// 	Episodes:    episodes,
 	// 	Horizon:     horizon,

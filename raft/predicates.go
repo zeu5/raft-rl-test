@@ -7,7 +7,27 @@ import (
 // File contains predicates over etcd-raft states
 
 // return true if at least one of the replicas is in the leader state
-func LeaderElectedPredicate() types.RewardFuncSingle {
+func LeaderElectedPredicateState() types.RewardFuncSingle {
+	return func(s types.State) bool {
+		pS, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+
+		for _, state := range pS.ReplicaStates { // for each replica state
+			repState := state.(RaftReplicaState)
+			curState := repState.State // cast into raft.Status
+			if curState.BasicStatus.SoftState.RaftState.String() == "StateLeader" {
+				return true
+			}
+		}
+
+		return false
+	}
+}
+
+// return true if at least one of the replicas is in the leader state
+func LeaderElectedPredicateNumber(times int) types.RewardFuncSingle {
 	return func(s types.State) bool {
 		pS, ok := s.(*types.Partition)
 		if !ok {
@@ -52,8 +72,113 @@ func AtLeastOneLogNotEmpty() types.RewardFuncSingle {
 		for _, state := range pS.ReplicaStates { // for each replica state
 			repState := state.(RaftReplicaState)
 			curLog := repState.Log // cast into raft.Status
-			if len(filterEntries(curLog)) > 0 {
+			if len(filterEntriesNoElection(curLog)) > 0 {
 				return true
+			}
+		}
+
+		return false
+	}
+}
+
+// return true if there is at least one log with a single entry
+func AtLeastOneLogOneEntry() types.RewardFuncSingle {
+	return func(s types.State) bool {
+		pS, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+
+		for _, state := range pS.ReplicaStates { // for each replica state
+			repState := state.(RaftReplicaState)
+			curLog := repState.Log // cast into raft.Status
+			if len(filterEntriesNoElection(curLog)) == 1 {
+				return true
+			}
+		}
+
+		return false
+	}
+}
+
+// return true if there is at least one log with a single entry and a higher-term leader election entry
+func AtLeastOneLogOneEntryPlusSubsequentLeaderElection() types.RewardFuncSingle {
+	return func(s types.State) bool {
+		pS, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+
+		for _, state := range pS.ReplicaStates { // for each replica state
+			repState := state.(RaftReplicaState)
+			curLog := repState.Log // cast into raft.Status
+			if len(filterEntriesNoElection(curLog)) == 1 {
+				// take term of the committed entry
+				committedEntryTerm := filterEntriesNoElection((curLog))[0].Term
+
+				unfLog := filterEntries(curLog)
+				for _, ent := range unfLog { // for each entry, included leader elections
+					if ent.Term > committedEntryTerm {
+						return true
+					}
+				}
+			}
+		}
+
+		return false
+	}
+}
+
+// return true if there is a log with at least one entry and a higher-term leader election entry
+func AtLeastOneEntryANDSubsequentLeaderElection() types.RewardFuncSingle {
+	return func(s types.State) bool {
+		pS, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+
+		for _, state := range pS.ReplicaStates { // for each replica state
+			repState := state.(RaftReplicaState)
+			curLog := repState.Log // cast into raft.Status
+			if len(filterEntriesNoElection(curLog)) >= 1 {
+				// take term of the committed entry
+				committedEntryTerm := filterEntriesNoElection((curLog))[0].Term
+
+				unfLog := filterEntries(curLog)
+				for _, ent := range unfLog { // for each entry, included leader elections
+					if ent.Term > committedEntryTerm {
+						return true
+					}
+				}
+			}
+		}
+
+		return false
+	}
+}
+
+// return true if there is at least one log with a single entry and a replica with a term higher than the entry
+func AtLeastOneLogOneEntryPlusReplicaInHigherTerm() types.RewardFuncSingle {
+	return func(s types.State) bool {
+		pS, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+
+		for _, state := range pS.ReplicaStates { // for each replica state
+			repState := state.(RaftReplicaState)
+			curLog := repState.Log // cast into raft.Status
+			if len(filterEntriesNoElection(curLog)) == 1 {
+				// take term of the committed entry
+				committedEntryTerm := filterEntriesNoElection((curLog))[0].Term
+
+				for _, otherState := range pS.ReplicaStates { // check all replicas
+					otherRepState := otherState.(RaftReplicaState)
+
+					if otherRepState.State.Term > committedEntryTerm { // compare replica term with entry term
+						return true
+					}
+				}
 			}
 		}
 
@@ -133,5 +258,17 @@ func EntriesInDifferentTermsInLog(uniqueTerms int) types.RewardFuncSingle {
 		}
 
 		return false
+	}
+}
+
+// return true if there are at least the specified number of requests in the stack
+func StackSizeLowerBound(value int) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		pS, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+
+		return len(pS.PendingRequests) >= value
 	}
 }
