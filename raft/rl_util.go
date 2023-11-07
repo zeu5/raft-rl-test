@@ -281,7 +281,7 @@ func ReadableReplicaState(state types.ReplicaState, id uint64) string {
 func filterEntries(log []pb.Entry) []pb.Entry {
 	result := make([]pb.Entry, 0)
 	for _, entry := range log {
-		if entry.Type == 0 {
+		if entry.Type == pb.EntryNormal {
 			result = append(result, entry)
 		}
 	}
