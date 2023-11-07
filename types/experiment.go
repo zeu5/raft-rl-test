@@ -43,9 +43,13 @@ func (e *Experiment) hasProperties() bool {
 // Additionally, for each iteration, check if any of the properties have been satisfied
 func (e *Experiment) Run() {
 	agent := NewAgent(e.config)
+	// episodeTimes := make([]time.Duration, 0)
 	for i := 0; i < e.config.Episodes; i++ {
 		fmt.Printf("\rExperiment: %s, Episode: %d/%d", e.name, i+1, e.config.Episodes)
+		// start := time.Now()
 		trace := agent.runEpisode(i)
+		// dur := time.Since(start)
+		// episodeTimes = append(episodeTimes, dur)
 		agent.traces[i] = trace
 		if e.hasProperties() {
 			for i, prop := range e.Properties {
@@ -56,6 +60,12 @@ func (e *Experiment) Run() {
 		}
 	}
 	e.Result = agent.traces
+	// sumEpisodeTime := time.Duration(0)
+	// for _, d := range episodeTimes {
+	// 	sumEpisodeTime += d
+	// }
+	// avgEpisodeTime := time.Duration(int(sumEpisodeTime) / len(episodeTimes))
+	// fmt.Printf("\nAverage episode time: %s\n", avgEpisodeTime.String())
 	fmt.Println("")
 	if e.hasProperties() {
 		for i, count := range e.PropertiesStats {

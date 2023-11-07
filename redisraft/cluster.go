@@ -229,6 +229,10 @@ func (r *RedisNode) cluster(args ...string) error {
 }
 
 func (r *RedisNode) Info() (*RedisNodeState, error) {
+	if r.ctx == nil || r.process == nil {
+		return nil, errors.New("process stopped")
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	info, err := r.client.Info(ctx, "raft").Result()

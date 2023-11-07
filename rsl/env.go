@@ -188,8 +188,16 @@ func (r *RSLPartitionEnv) Tick() types.PartitionedSystemState {
 	return newState
 }
 
+func (l *RSLPartitionEnv) DeliverMessages(messages []types.Message) types.PartitionedSystemState {
+	var s types.PartitionedSystemState = nil
+	for _, m := range messages {
+		s = l.deliverMessage(m)
+	}
+	return s
+}
+
 // Deliver the message
-func (r *RSLPartitionEnv) DeliverMessage(m types.Message) types.PartitionedSystemState {
+func (r *RSLPartitionEnv) deliverMessage(m types.Message) types.PartitionedSystemState {
 	// Node that m is of type MessageWrapper
 	message := m.(MessageWrapper).m
 
@@ -228,8 +236,16 @@ func (r *RSLPartitionEnv) DeliverMessage(m types.Message) types.PartitionedSyste
 	return newState
 }
 
+func (l *RSLPartitionEnv) DropMessages(messages []types.Message) types.PartitionedSystemState {
+	var s types.PartitionedSystemState
+	for _, m := range messages {
+		s = l.dropMessage(m)
+	}
+	return s
+}
+
 // Remove the message from the pool
-func (r *RSLPartitionEnv) DropMessage(m types.Message) types.PartitionedSystemState {
+func (r *RSLPartitionEnv) dropMessage(m types.Message) types.PartitionedSystemState {
 	// Node that m is of type MessageWrapper
 	message := m.(MessageWrapper).m
 	delete(r.messages, message.Hash())
