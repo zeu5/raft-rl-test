@@ -192,12 +192,41 @@ func (r *RaftAction) Hash() string {
 
 var _ types.Action = &RaftAction{}
 
+// config of the raft environment
 type RaftEnvironmentConfig struct {
 	Replicas      int
 	ElectionTick  int
 	HeartbeatTick int
 	Timeouts      bool
 	Requests      int
+}
+
+func (r *RaftEnvironmentConfig) String() string {
+	result := "RaftEnvironmentConfig: \n"
+	result = fmt.Sprintf("%s Replicas: %d\n", result, r.Replicas)
+	result = fmt.Sprintf("%s ElectionTick: %d\n", result, r.ElectionTick)
+	result = fmt.Sprintf("%s HeartbeatTick: %d\n", result, r.HeartbeatTick)
+	result = fmt.Sprintf("%s Timeouts: %t\n", result, r.Timeouts)
+	result = fmt.Sprintf("%s Requests: %d\n\n", result, r.Requests)
+	return result
+}
+
+// config of the RL dynamics
+type RLConfig struct {
+	TicksBetweenPartition int  // ticks between two action
+	MaxMessagesPerTick    int  // upper bound of messages delivered per tick
+	StaySameStateUpTo     int  // amount of consecutive steps in the same partitioning to be considered different
+	WithCrashes           bool // enable crash actions
+}
+
+func (r *RLConfig) String() string {
+	result := "RLConfig: \n"
+	result = fmt.Sprintf("%s TicksBetweenPartition: %d\n", result, r.TicksBetweenPartition)
+	result = fmt.Sprintf("%s MaxMessagesPerTick: %d\n", result, r.MaxMessagesPerTick)
+	result = fmt.Sprintf("%s StaySameStateUpTo: %d\n", result, r.StaySameStateUpTo)
+	result = fmt.Sprintf("%s WithCrashes: %t\n\n", result, r.WithCrashes)
+
+	return result
 }
 
 // Implements "types.Environment"

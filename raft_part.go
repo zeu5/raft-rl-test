@@ -67,6 +67,19 @@ func getRaftPartEnv(config raft.RaftEnvironmentConfig, colors []raft.RaftColorFu
 	})
 }
 
+func getRaftPartEnvCfg(config raft.RaftEnvironmentConfig, colors []raft.RaftColorFunc, rlConfig raft.RLConfig) types.Environment {
+
+	return types.NewPartitionEnv(types.PartitionEnvConfig{
+		Painter:                raft.NewRaftStatePainter(colors...),  // pass the abstraction to env
+		Env:                    raft.NewPartitionEnvironment(config), // actual environment
+		TicketBetweenPartition: rlConfig.TicksBetweenPartition,       // ticks between actions
+		MaxMessagesPerTick:     rlConfig.MaxMessagesPerTick,          // upper bound of random num of delivered messages
+		StaySameStateUpto:      rlConfig.StaySameStateUpTo,           // counter to distinguish consecutive states
+		NumReplicas:            config.Replicas,                      // number of replicas
+		WithCrashes:            rlConfig.WithCrashes,                 // enable crash actions
+	})
+}
+
 func RaftPartCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use: "raft-part",

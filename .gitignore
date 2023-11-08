@@ -9,3 +9,4 @@ __pycache__
 result_*
 
 iter_run.sh
+.nfs*
