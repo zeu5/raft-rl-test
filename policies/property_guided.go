@@ -11,11 +11,14 @@ import (
 
 type QTable struct {
 	table map[string]map[string]float64
+
+	rand *rand.Rand
 }
 
 func NewQTable() *QTable {
 	return &QTable{
 		table: make(map[string]map[string]float64),
+		rand:  rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
@@ -46,18 +49,22 @@ func (q *QTable) Max(state string, def float64) (string, float64) {
 		q.table[state] = make(map[string]float64)
 		return "", def
 	}
-	maxAction := ""
+	maxActions := make([]string, 0)
 	maxVal := float64(math.MinInt)
 	for a, val := range q.table[state] { // for all the actions
 		if val > maxVal {
-			maxAction = a
+			maxActions = make([]string, 0)
 			maxVal = val
 		}
+		if val == maxVal {
+			maxActions = append(maxActions, a)
+		}
 	}
-	if maxAction == "" {
+	if len(maxActions) == 0 {
 		return "", def
 	}
-	return maxAction, maxVal
+	randAction := q.rand.Intn(len(maxActions))
+	return maxActions[randAction], maxVal
 }
 
 func (q *QTable) Exists(state string) bool {
