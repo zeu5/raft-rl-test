@@ -159,7 +159,7 @@ func (l *LPaxosPartitionEnv) Tick() types.PartitionedSystemState {
 	return newState
 }
 
-func (l *LPaxosPartitionEnv) DeliverMessage(m types.Message) types.PartitionedSystemState {
+func (l *LPaxosPartitionEnv) deliverMessage(m types.Message) types.PartitionedSystemState {
 	lm := m.(Message)
 	if lm.Type == CommandMessage {
 		haveLeader := false
@@ -199,7 +199,15 @@ func (l *LPaxosPartitionEnv) DeliverMessage(m types.Message) types.PartitionedSy
 	return newState
 }
 
-func (l *LPaxosPartitionEnv) DropMessage(m types.Message) types.PartitionedSystemState {
+func (l *LPaxosPartitionEnv) DeliverMessages(messages []types.Message) types.PartitionedSystemState {
+	var s types.PartitionedSystemState = nil
+	for _, m := range messages {
+		s = l.deliverMessage(m)
+	}
+	return s
+}
+
+func (l *LPaxosPartitionEnv) dropMessage(m types.Message) types.PartitionedSystemState {
 	delete(l.messages, m.Hash())
 	newState := &LPaxosState{
 		NodeStates:   copyNodeStates(l.curState.NodeStates),
@@ -209,4 +217,12 @@ func (l *LPaxosPartitionEnv) DropMessage(m types.Message) types.PartitionedSyste
 	}
 	l.curState = newState
 	return newState
+}
+
+func (l *LPaxosPartitionEnv) DropMessages(messages []types.Message) types.PartitionedSystemState {
+	var s types.PartitionedSystemState
+	for _, m := range messages {
+		s = l.dropMessage(m)
+	}
+	return s
 }

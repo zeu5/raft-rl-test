@@ -309,7 +309,6 @@ func (r *RaftEnvironment) makeNodes() {
 }
 
 func (r *RaftEnvironment) Start(node uint64) {
-	// TODO: need to implement this
 	_, exists := r.nodes[node]
 	if exists {
 		return
@@ -332,7 +331,6 @@ func (r *RaftEnvironment) Start(node uint64) {
 }
 
 func (r *RaftEnvironment) Stop(node uint64) {
-	// TODO: need to implement this
 	delete(r.nodes, node)
 }
 

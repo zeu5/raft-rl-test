@@ -41,6 +41,8 @@ func (a *Agent) runEpisode(episode int) *Trace {
 	trace := NewTrace()
 	actions := state.Actions()
 
+	// stepTimes := make(map[string][]time.Duration, 0)
+
 	for i := 0; i < a.config.Horizon; i++ {
 		if len(actions) == 0 {
 			break
@@ -49,7 +51,14 @@ func (a *Agent) runEpisode(episode int) *Trace {
 		if !ok {
 			break
 		}
+		// start := time.Now()
+		// actionName := reflect.TypeOf(nextAction).Elem().Name()
 		nextState := a.environment.Step(nextAction)
+		// dur := time.Since(start)
+		// if _, ok := stepTimes[actionName]; !ok {
+		// 	stepTimes[actionName] = make([]time.Duration, 0)
+		// }
+		// stepTimes[actionName] = append(stepTimes[actionName], dur)
 		a.policy.Update(i, state, nextAction, nextState)
 
 		trace.Append(i, state, nextAction, nextState)
@@ -57,6 +66,15 @@ func (a *Agent) runEpisode(episode int) *Trace {
 		actions = nextState.Actions()
 	}
 	a.policy.UpdateIteration(episode, trace)
+
+	// for name, times := range stepTimes {
+	// 	sum := time.Duration(0)
+	// 	for _, d := range times {
+	// 		sum += d
+	// 	}
+	// 	avg := time.Duration(int(sum) / len(times))
+	// 	fmt.Printf("Average step time for action:%s, %s\n", name, avg.String())
+	// }
 
 	return trace
 }

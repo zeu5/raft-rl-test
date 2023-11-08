@@ -291,8 +291,16 @@ func (p *RaftPartitionEnv) ReceiveRequest(r types.Request) types.PartitionedSyst
 	return newState
 }
 
+func (l *RaftPartitionEnv) DeliverMessages(messages []types.Message) types.PartitionedSystemState {
+	var s types.PartitionedSystemState = nil
+	for _, m := range messages {
+		s = l.deliverMessage(m)
+	}
+	return s
+}
+
 // deliver the specified message in the system and returns the subsequent state, no tick pass?
-func (p *RaftPartitionEnv) DeliverMessage(m types.Message) types.PartitionedSystemState {
+func (p *RaftPartitionEnv) deliverMessage(m types.Message) types.PartitionedSystemState {
 	rm := m.(RaftMessageWrapper)
 	node, exists := p.nodes[rm.Message.To]
 	if exists {
@@ -345,8 +353,16 @@ func (p *RaftPartitionEnv) DeliverMessage(m types.Message) types.PartitionedSyst
 	return newState
 }
 
+func (l *RaftPartitionEnv) DropMessages(messages []types.Message) types.PartitionedSystemState {
+	var s types.PartitionedSystemState
+	for _, m := range messages {
+		s = l.dropMessage(m)
+	}
+	return s
+}
+
 // drops the specified message in the system, no tick pass
-func (p *RaftPartitionEnv) DropMessage(m types.Message) types.PartitionedSystemState {
+func (p *RaftPartitionEnv) dropMessage(m types.Message) types.PartitionedSystemState {
 	newState := RaftState{
 		NodeStates:   copyNodeStates(p.curState.NodeStates),
 		Messages:     copyMessages(p.curState.Messages),

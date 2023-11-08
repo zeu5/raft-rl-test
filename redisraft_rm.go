@@ -12,7 +12,7 @@ import (
 	"github.com/zeu5/raft-rl-test/types"
 )
 
-func RedisRaftExploration(episodes, horizon int, saveFile string, ctx context.Context) {
+func RedisRaftRM(episodes, horizon int, saveFile string, ctx context.Context) {
 	env := redisraft.NewRedisRaftEnv(ctx, &redisraft.ClusterConfig{
 		NumNodes:            3,
 		BasePort:            5000,
@@ -20,6 +20,7 @@ func RedisRaftExploration(episodes, horizon int, saveFile string, ctx context.Co
 		ID:                  1,
 		InterceptListenAddr: "localhost:7074",
 		WorkingDir:          path.Join(saveFile, "tmp"),
+		NumRequests:         3,
 	})
 	colors := []redisraft.RedisRaftColorFunc{redisraft.ColorState(), redisraft.ColorCommit(), redisraft.ColorLeader(), redisraft.ColorVote(), redisraft.ColorBoundedTerm(5)}
 
@@ -30,12 +31,15 @@ func RedisRaftExploration(episodes, horizon int, saveFile string, ctx context.Co
 		MaxMessagesPerTick:     3,
 		StaySameStateUpto:      2,
 		NumReplicas:            3,
+		WithCrashes:            true,
 	})
 
 	c := types.NewComparison(runs)
 
 	c.AddAnalysis("plot", redisraft.CoverageAnalyzer(colors...), redisraft.CoverageComparator(saveFile))
 	c.AddAnalysis("bugs", redisraft.BugAnalyzer(saveFile), redisraft.BugComparator())
+
+	// rm :=
 
 	c.AddExperiment(types.NewExperiment("NegReward", &types.AgentConfig{
 		Episodes:    episodes,
@@ -62,9 +66,9 @@ func RedisRaftExploration(episodes, horizon int, saveFile string, ctx context.Co
 	env.Cleanup()
 }
 
-func RedisRaftCommand() *cobra.Command {
+func RedisRaftRMCommand() *cobra.Command {
 	return &cobra.Command{
-		Use: "redisraft",
+		Use: "redisraft-rm",
 		Run: func(cmd *cobra.Command, args []string) {
 			sigCh := make(chan os.Signal, 1)
 			signal.Notify(sigCh, os.Interrupt)
@@ -80,7 +84,7 @@ func RedisRaftCommand() *cobra.Command {
 				cancel()
 			}()
 
-			RedisRaftExploration(episodes, horizon, saveFile, ctx)
+			RedisRaftRM(episodes, horizon, saveFile, ctx)
 
 			close(doneCh)
 		},

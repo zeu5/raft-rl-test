@@ -21,7 +21,7 @@ func RaftPart(episodes, horizon int, saveFile string) {
 
 	// abstraction for both plot and RL
 	// colors is one abstraction definition
-	colors := []raft.RaftColorFunc{raft.ColorState(), raft.ColorCommit(), raft.ColorLeader(), raft.ColorVote(), raft.ColorBoundedTerm(5)}
+	colors := []raft.RaftColorFunc{raft.ColorState(), raft.ColorCommit(), raft.ColorLeader(), raft.ColorVote(), raft.ColorBoundedTerm(6)}
 
 	// c is general experiment
 	// colors ... , expanded list, can omit the argument
@@ -33,24 +33,34 @@ func RaftPart(episodes, horizon int, saveFile string) {
 	c.AddAnalysis("Plot", raft.RaftAnalyzer(saveFile, colors...), raft.RaftPlotComparator(saveFile))
 
 	// here you add different policies with their parameters
-	c.AddExperiment(types.NewExperiment("RL", &types.AgentConfig{
+	strict := policies.NewStrictPolicy(types.NewRandomPolicy())
+	strict.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
+
+	c.AddExperiment(types.NewExperiment("Strict", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
-		Policy:      policies.NewSoftMaxNegFreqPolicy(0.3, 0.7, 1),
+		Policy:      strict,
 		Environment: getRaftPartEnv(raftConfig, colors),
 	}))
-	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      types.NewRandomPolicy(),
-		Environment: getRaftPartEnv(raftConfig, colors),
-	}))
-	c.AddExperiment(types.NewExperiment("BonusMaxRL", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
-		Environment: getRaftPartEnv(raftConfig, colors),
-	}))
+
+	// c.AddExperiment(types.NewExperiment("RL", &types.AgentConfig{
+	// 	Episodes:    episodes,
+	// 	Horizon:     horizon,
+	// 	Policy:      policies.NewSoftMaxNegFreqPolicy(0.3, 0.7, 1),
+	// 	Environment: getRaftPartEnv(raftConfig, colors),
+	// }))
+	// c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
+	// 	Episodes:    episodes,
+	// 	Horizon:     horizon,
+	// 	Policy:      types.NewRandomPolicy(),
+	// 	Environment: getRaftPartEnv(raftConfig, colors),
+	// }))
+	// c.AddExperiment(types.NewExperiment("BonusMaxRL", &types.AgentConfig{
+	// 	Episodes:    episodes,
+	// 	Horizon:     horizon,
+	// 	Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
+	// 	Environment: getRaftPartEnv(raftConfig, colors),
+	// }))
 
 	c.Run()
 }
@@ -64,6 +74,7 @@ func getRaftPartEnv(config raft.RaftEnvironmentConfig, colors []raft.RaftColorFu
 		MaxMessagesPerTick:     10,                                   // upper bound of random num of delivered messages
 		StaySameStateUpto:      4,                                    // counter to distinguish consecutive states
 		NumReplicas:            config.Replicas,
+		WithCrashes:            true,
 	})
 }
 

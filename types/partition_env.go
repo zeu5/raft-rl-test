@@ -67,9 +67,9 @@ type PartitionedSystemEnvironment interface {
 	// Progress the clocks of all replicas by 1
 	Tick() PartitionedSystemState
 	// Deliver the message and return the resulting state
-	DeliverMessage(Message) PartitionedSystemState
+	DeliverMessages([]Message) PartitionedSystemState
 	// Drop a message
-	DropMessage(Message) PartitionedSystemState
+	DropMessages([]Message) PartitionedSystemState
 	// Receive a request
 	ReceiveRequest(Request) PartitionedSystemState
 	// Stop a node
@@ -500,20 +500,29 @@ func (p *PartitionEnv) handlePartition(a Action) *Partition {
 			})
 
 			mToDeliver := p.rand.Intn(p.config.MaxMessagesPerTick) // randomly choose how many messages to deliver, up to specified bound
+			messagesToDeliver := make([]Message, 0)
+			messagesToDrop := make([]Message, 0)
 			for j := 0; j < mToDeliver; j++ {
 				if len(messages) > 0 {
 					next := messages[0] // take the first message
 					messages = messages[1:]
-					// check if partitioning allows delivery
 					fromP, fromOk := newPartitionMap[next.From()]
 					toP, toOk := newPartitionMap[next.To()]
 					_, toActive := nextState.ActiveNodes[next.To()]
+					// check if partitioning allows delivery
 					if (!fromOk || !toOk || fromP == toP) && toActive { // deliver it
-						p.UnderlyingEnv.DeliverMessage(next)
+						messagesToDeliver = append(messagesToDeliver, next)
 					} else { // drop it
-						p.UnderlyingEnv.DropMessage(next)
+						messagesToDrop = append(messagesToDrop, next)
 					}
+
 				}
+			}
+			if len(messagesToDeliver) > 0 {
+				p.UnderlyingEnv.DeliverMessages(messagesToDeliver)
+			}
+			if len(messagesToDrop) > 0 {
+				p.UnderlyingEnv.DropMessages(messagesToDrop)
 			}
 		}
 		s = p.UnderlyingEnv.Tick() // make the tick pass on the environment
