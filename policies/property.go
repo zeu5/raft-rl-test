@@ -36,6 +36,9 @@ func (g *GuidedPolicy) Reset() {
 func (g *GuidedPolicy) UpdateIteration(iteration int, trace *types.Trace) {
 }
 
+func (g *GuidedPolicy) UpdateIterationRm(iteration int, trace *types.RmTrace) {
+}
+
 func (g *GuidedPolicy) NextAction(step int, state types.State, actions []types.Action) (types.Action, bool) {
 	if g.rand.Float64() < g.epsilon {
 		i := g.rand.Intn(len(actions))

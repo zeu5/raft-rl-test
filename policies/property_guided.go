@@ -42,13 +42,13 @@ func (q *QTable) HasState(state string) bool {
 }
 
 func (q *QTable) Max(state string, def float64) (string, float64) {
-	if _, ok := q.table[state]; !ok {
+	if _, ok := q.table[state]; !ok { // if state is not in the QTable at all, return default value
 		q.table[state] = make(map[string]float64)
 		return "", def
 	}
 	maxAction := ""
 	maxVal := float64(math.MinInt)
-	for a, val := range q.table[state] {
+	for a, val := range q.table[state] { // for all the actions
 		if val > maxVal {
 			maxAction = a
 			maxVal = val

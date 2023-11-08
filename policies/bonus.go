@@ -87,6 +87,18 @@ func (b *BonusPolicyGreedy) UpdateIteration(iteration int, trace *types.Trace) {
 
 }
 
+func (b *BonusPolicyGreedy) UpdateIterationRm(iteration int, trace *types.RmTrace) {
+	lastIndex := trace.Len() - 1
+
+	for i := lastIndex; i > -1; i-- { // going backwards in the segment
+		state, action, nextState, reward, outOfSpace, ok := trace.Get(i)
+		if ok {
+			b.UpdateRm(0, state, action, nextState, reward, outOfSpace)
+		}
+	}
+
+}
+
 func max(a, b float64) float64 {
 	if a > b {
 		return a

@@ -86,10 +86,10 @@ func (b *BonusPolicyGreedyReward) UpdateRm(step int, state types.State, action t
 		r = 1 / t
 	}
 
-	if out_of_space {
+	if out_of_space { // if getting out of the policy space, set default value of next state to be 0, it will never be updated
 		_, nextStateVal = b.qTable.Max(nextStateHash, 0)
-	} else {
-		_, nextStateVal = b.qTable.Max(nextStateHash, 1) // if you end out of the rm_state, value is always 1
+	} else { // else default is 1 in case it is a proper new state
+		_, nextStateVal = b.qTable.Max(nextStateHash, 1)
 	}
 
 	curVal := b.qTable.Get(stateHash, actionHash, 1)
@@ -100,6 +100,17 @@ func (b *BonusPolicyGreedyReward) UpdateRm(step int, state types.State, action t
 
 func (b *BonusPolicyGreedyReward) UpdateIteration(iteration int, trace *types.Trace) {
 
+}
+
+func (b *BonusPolicyGreedyReward) UpdateIterationRm(iteration int, trace *types.RmTrace) {
+	lastIndex := trace.Len() - 1
+
+	for i := lastIndex; i > -1; i-- { // going backwards in the segment
+		state, action, nextState, reward, outOfSpace, ok := trace.Get(i)
+		if ok {
+			b.UpdateRm(0, state, action, nextState, reward, outOfSpace)
+		}
+	}
 }
 
 // func max(a, b float64) float64 {
