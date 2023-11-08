@@ -49,22 +49,20 @@ func (q *QTable) Max(state string, def float64) (string, float64) {
 		q.table[state] = make(map[string]float64)
 		return "", def
 	}
-	maxActions := make([]string, 0)
+	maxAction := ""
 	maxVal := float64(math.MinInt)
 	for a, val := range q.table[state] { // for all the actions
 		if val > maxVal {
-			maxActions = make([]string, 0)
+			maxAction = a
 			maxVal = val
 		}
-		if val == maxVal {
-			maxActions = append(maxActions, a)
-		}
 	}
-	if len(maxActions) == 0 {
+
+	if maxAction == "" {
 		return "", def
 	}
-	randAction := q.rand.Intn(len(maxActions))
-	return maxActions[randAction], maxVal
+
+	return maxAction, maxVal
 }
 
 func (q *QTable) Exists(state string) bool {
@@ -76,7 +74,7 @@ func (q *QTable) MaxAmong(state string, actions []string, def float64) (string, 
 	if _, ok := q.table[state]; !ok {
 		q.table[state] = make(map[string]float64)
 	}
-	maxAction := ""
+	maxActions := make([]string, 0)
 	maxVal := float64(math.MinInt)
 	for _, a := range actions {
 		if _, ok := q.table[state][a]; !ok {
@@ -84,11 +82,16 @@ func (q *QTable) MaxAmong(state string, actions []string, def float64) (string, 
 		}
 		val := q.table[state][a]
 		if val > maxVal {
-			maxAction = a
+			maxActions = make([]string, 0)
 			maxVal = val
 		}
+		if val == maxVal {
+			maxActions = append(maxActions, a)
+		}
 	}
-	return maxAction, maxVal
+
+	randAction := q.rand.Intn(len(maxActions))
+	return maxActions[randAction], maxVal
 }
 
 type PropertyGuidedPolicy struct {
