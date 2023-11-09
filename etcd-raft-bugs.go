@@ -8,6 +8,7 @@ import (
 	"github.com/zeu5/raft-rl-test/policies"
 	"github.com/zeu5/raft-rl-test/raft"
 	"github.com/zeu5/raft-rl-test/types"
+	r "go.etcd.io/raft/v3"
 )
 
 func EtcdRaftBugs(episodes, horizon int, savePath string) {
@@ -88,6 +89,10 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	PredHierarchy_4.AddState(raft.LeaderElectedPredicateSpecific(1), "LeaderElected(1)")
 	PredHierarchy_4.AddState(raft.LeaderElectedPredicateSpecific(1).And(raft.ExactEntriesInLogSpecific(1, 1)), "CommitOneEntry(1)")
 	PredHierarchy_4.AddState(raft.LeaderElectedPredicateSpecific(2).And(raft.ExactEntriesInLogSpecific(1, 1)), "ChangeOfLeader(1->2)")
+
+	PredHierarchy_5 := policies.NewRewardMachine(raft.EntriesInDifferentTermsInLog(2))
+	PredHierarchy_5.AddState(raft.ExactEntriesInLog(1), "OneEntryCommitted")
+	PredHierarchy_5.AddState(raft.InStateWithCommittedEntries(r.StateLeader, 1), "Candidate withCommittedEntry")
 
 	// c is general experiment
 	// colors ... , expanded list, can omit the argument

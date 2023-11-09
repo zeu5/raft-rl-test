@@ -111,6 +111,18 @@ func ColorLeader() RedisRaftColorFunc {
 	}
 }
 
+func ColorIndex() RedisRaftColorFunc {
+	return func(s *RedisNodeState) (string, interface{}) {
+		return "index", s.Index
+	}
+}
+
+func ColorSnapshot() RedisRaftColorFunc {
+	return func(rns *RedisNodeState) (string, interface{}) {
+		return "snapshot", rns.Snapshot
+	}
+}
+
 type RedisRaftStatePainter struct {
 	paramFuncs []RedisRaftColorFunc
 }
