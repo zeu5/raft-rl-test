@@ -2,6 +2,7 @@ package raft
 
 import (
 	"github.com/zeu5/raft-rl-test/types"
+	"go.etcd.io/raft/v3"
 )
 
 // File contains predicates over etcd-raft states
@@ -296,5 +297,39 @@ func StackSizeLowerBound(value int) types.RewardFuncSingle {
 		}
 
 		return len(pS.PendingRequests) >= value
+	}
+}
+
+func InState(state raft.StateType) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		pS, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+		for _, rs := range pS.ReplicaStates {
+			repState := rs.(RaftReplicaState)
+			if repState.State.RaftState == state {
+				return true
+			}
+		}
+		return false
+	}
+}
+
+func InStateWithCommittedEntries(state raft.StateType, num int) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		pS, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+		for _, rs := range pS.ReplicaStates {
+			repState := rs.(RaftReplicaState)
+			curLog := repState.Log
+			filteredLog := filterEntriesNoElection(curLog)
+			if repState.State.RaftState == state && len(filteredLog) == num {
+				return true
+			}
+		}
+		return false
 	}
 }

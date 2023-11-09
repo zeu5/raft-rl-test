@@ -12,7 +12,29 @@ import (
 	"github.com/zeu5/raft-rl-test/types"
 )
 
-func RedisRaftRM(episodes, horizon int, saveFile string, ctx context.Context) {
+func getRedisPredicateHeirarchy(name string) (*policies.RewardMachine, bool) {
+	var machine *policies.RewardMachine = nil
+	switch name {
+	case "OnlyFollowersAndLeader":
+		machine = policies.NewRewardMachine(redisraft.OnlyFollowersAndLeader())
+	case "ElectLeader":
+		// This is always true. The system starts with a config where the leader is elected
+		machine = policies.NewRewardMachine(redisraft.LeaderElected())
+	case "Term2":
+		machine = policies.NewRewardMachine(redisraft.TermNumber(2))
+	case "IndexAtLeast4":
+		machine = policies.NewRewardMachine(redisraft.CurrentIndexAtLeast(4))
+	case "Bug1":
+		machine = policies.NewRewardMachine(redisraft.CurrentIndexAtLeast(9).And(redisraft.NumConnectedNodesInAny(3)))
+		machine.AddState(redisraft.OnlyFollowersAndLeader(), "OnlyFollowersAndLeader")
+		machine.AddState(redisraft.CurrentIndexAtLeast(6), "Atleast9Entries")
+		machine.AddState(redisraft.NumConnectedNodesInAny(3), "AnyNodeWithAllConnected")
+		machine.AddState(redisraft.InState("follower").And(redisraft.CurrentIndexAtLeast(6)), "FollowerAtLeastIndex6")
+	}
+	return machine, machine != nil
+}
+
+func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx context.Context) {
 	env := redisraft.NewRedisRaftEnv(ctx, &redisraft.ClusterConfig{
 		NumNodes:            3,
 		BasePort:            5000,
@@ -36,12 +58,12 @@ func RedisRaftRM(episodes, horizon int, saveFile string, ctx context.Context) {
 
 	c := types.NewComparison(runs)
 
-	// c.AddAnalysis("plot", redisraft.CoverageAnalyzer(colors...), redisraft.CoverageComparator(saveFile))
 	c.AddAnalysis("bugs", redisraft.BugAnalyzer(saveFile), redisraft.BugComparator())
-
-	// rm := policies.NewRewardMachine(redisraft.LeaderElected()) // This is always true. The system starts with a config where the leader is elected
-	rm := policies.NewRewardMachine(redisraft.TermNumber(2))
-	// rm := policies.NewRewardMachine(redisraft.OnlyFollowersAndLeader())
+	rm, ok := getRedisPredicateHeirarchy(machine)
+	if !ok {
+		env.Cleanup()
+		return
+	}
 
 	c.AddAnalysis("rm", policies.RewardMachineAnalyzer(rm), policies.RewardMachineCoverageComparator(saveFile))
 
@@ -58,7 +80,8 @@ func RedisRaftRM(episodes, horizon int, saveFile string, ctx context.Context) {
 
 func RedisRaftRMCommand() *cobra.Command {
 	return &cobra.Command{
-		Use: "redisraft-rm",
+		Use:  "redisraft-rm [machine]",
+		Args: cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			sigCh := make(chan os.Signal, 1)
 			signal.Notify(sigCh, os.Interrupt)
@@ -74,7 +97,7 @@ func RedisRaftRMCommand() *cobra.Command {
 				cancel()
 			}()
 
-			RedisRaftRM(episodes, horizon, saveFile, ctx)
+			RedisRaftRM(args[0], episodes, horizon, saveFile, ctx)
 
 			close(doneCh)
 		},

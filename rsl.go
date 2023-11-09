@@ -92,6 +92,7 @@ func GetRSLEnvironment(c rsl.RSLEnvConfig, colors []rsl.RSLColorFunc) types.Envi
 		TicketBetweenPartition: 3,
 		MaxMessagesPerTick:     3,
 		StaySameStateUpto:      5,
+		WithCrashes:            true,
 	})
 }
 

@@ -60,7 +60,7 @@ func RatisExploration(episodes, horizon int, saveFile string, ctx context.Contex
 
 func RatisExplorationCommand() *cobra.Command {
 	return &cobra.Command{
-		Use: "redisraft",
+		Use: "ratis",
 		Run: func(cmd *cobra.Command, args []string) {
 			sigCh := make(chan os.Signal, 1)
 			signal.Notify(sigCh, os.Interrupt)
