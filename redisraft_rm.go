@@ -16,20 +16,26 @@ func getRedisPredicateHeirarchy(name string) (*policies.RewardMachine, bool) {
 	var machine *policies.RewardMachine = nil
 	switch name {
 	case "OnlyFollowersAndLeader":
+		// This is always true initially
 		machine = policies.NewRewardMachine(redisraft.OnlyFollowersAndLeader())
 	case "ElectLeader":
-		// This is always true. The system starts with a config where the leader is elected
+		// This is also always true. The system starts with a config where the leader is elected
 		machine = policies.NewRewardMachine(redisraft.LeaderElected())
 	case "Term2":
 		machine = policies.NewRewardMachine(redisraft.TermNumber(2))
 	case "IndexAtLeast4":
 		machine = policies.NewRewardMachine(redisraft.CurrentIndexAtLeast(4))
+	case "ConnectedNodes":
+		// The leader node will always have connected nodes. Also always true
+		machine = policies.NewRewardMachine(redisraft.NumConnectedNodesInAny(3))
 	case "Bug1":
-		machine = policies.NewRewardMachine(redisraft.CurrentIndexAtLeast(9).And(redisraft.NumConnectedNodesInAny(3)))
+		machine = policies.NewRewardMachine(redisraft.CurrentIndexAtLeast(5).And(redisraft.NumConnectedNodesInAny(3)))
 		machine.AddState(redisraft.OnlyFollowersAndLeader(), "OnlyFollowersAndLeader")
-		machine.AddState(redisraft.CurrentIndexAtLeast(6), "Atleast9Entries")
-		machine.AddState(redisraft.NumConnectedNodesInAny(3), "AnyNodeWithAllConnected")
-		machine.AddState(redisraft.InState("follower").And(redisraft.CurrentIndexAtLeast(6)), "FollowerAtLeastIndex6")
+		machine.AddState(redisraft.CurrentIndexAtLeast(5), "Atleast9Entries")
+		machine.AddState(redisraft.InState("follower").And(redisraft.CurrentIndexAtLeast(5)), "FollowerAtLeastIndex6")
+	case "OutOfSync":
+		machine = policies.NewRewardMachine(redisraft.AllInSyncAtleast(4))
+		machine.AddState(redisraft.OutOfSyncBy(2), "OutOfSync")
 	}
 	return machine, machine != nil
 }
@@ -44,7 +50,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		WorkingDir:          path.Join(saveFile, "tmp"),
 		NumRequests:         3,
 	})
-	colors := []redisraft.RedisRaftColorFunc{redisraft.ColorState(), redisraft.ColorCommit(), redisraft.ColorLeader(), redisraft.ColorVote(), redisraft.ColorBoundedTerm(5)}
+	colors := []redisraft.RedisRaftColorFunc{redisraft.ColorState(), redisraft.ColorCommit(), redisraft.ColorLeader(), redisraft.ColorVote(), redisraft.ColorBoundedTerm(5), redisraft.ColorIndex(), redisraft.ColorSnapshot()}
 
 	partitionEnv := types.NewPartitionEnv(types.PartitionEnvConfig{
 		Painter:                redisraft.NewRedisRaftStatePainter(colors...),

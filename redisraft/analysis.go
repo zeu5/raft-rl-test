@@ -142,7 +142,12 @@ func BugAnalyzer(savePath string) types.Analyzer {
 					for nodeID, s := range pState.ReplicaStates {
 						logLines = append(logLines, fmt.Sprintf("logs for node: %d\n", nodeID))
 						rState := s.(*RedisNodeState)
-						logLines = append(logLines, "----- Stdout -----", rState.LogStdout, "----- Stderr -----", rState.LogStderr, "\n\n")
+						logLines = append(logLines, "----- Stdout -----", rState.LogStdout, "----- Stderr -----", rState.LogStderr, "\n")
+						logLines = append(logLines, fmt.Sprintf("state for node: %d\n", nodeID))
+						bs, err := json.Marshal(rState.Params)
+						if err != nil {
+							logLines = append(logLines, string(bs)+"\n\n")
+						}
 					}
 					logs = strings.Join(logLines, "\n")
 				}

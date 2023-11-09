@@ -1,6 +1,7 @@
 package redisraft
 
 import (
+	"math"
 	"strconv"
 
 	"github.com/zeu5/raft-rl-test/types"
@@ -136,10 +137,50 @@ func NumConnectedNodesInAny(n int) types.RewardFuncSingle {
 			if err != nil {
 				continue
 			}
-			if conn > n {
+			if conn >= n {
 				return true
 			}
 		}
 		return false
+	}
+}
+
+func OutOfSyncBy(diff int) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		ps, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+		maxTerm := math.MinInt
+		minTerm := math.MaxInt
+
+		for _, state := range ps.ReplicaStates {
+			repState := state.(*RedisNodeState)
+			if repState.Term > maxTerm {
+				maxTerm = repState.Term
+			}
+			if repState.Term < minTerm {
+				minTerm = repState.Term
+			}
+		}
+		return (maxTerm - minTerm) >= diff
+	}
+}
+
+func AllInSyncAtleast(minTerm int) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		ps, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+		allTerms := make(map[int]bool)
+		for _, state := range ps.ReplicaStates {
+			rState := state.(*RedisNodeState)
+			allTerms[rState.Term] = true
+			if rState.Term < minTerm {
+				return false
+			}
+		}
+		return len(allTerms) == 1
 	}
 }
