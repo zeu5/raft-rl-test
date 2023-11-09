@@ -42,13 +42,14 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	availableColors["snapshotTerm"] = raft.ColorSnapshotTerm()
 	availableColors["replicaID"] = raft.ColorReplicaID()
 	availableColors["logLength"] = raft.ColorLogLength()
+	availableColors["log"] = raft.ColorLog()
 
 	chosenColors := []string{
 		"state",
 		"commit",
 		"leader",
 		"vote",
-		"boundedTerm5",
+		"boundedTerm10",
 		"logLength",
 		// "replicaID",
 	}
@@ -122,6 +123,7 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 
 	// c.AddAnalysis("CommitOnlyOneEntry", policies.RewardMachineAnalyzer(PredHierarchy_3), policies.RewardMachineCoverageComparator(saveFile))
 	c.AddAnalysis("CommitEntriesInDifferentTerms", policies.RewardMachineAnalyzer(PredHierarchy_5), policies.RewardMachineCoverageComparator(saveFile))
+	c.AddAnalysis("PrintReadable", raft.RaftReadableAnalyzer(savePath), raft.RaftEmptyComparator())
 
 	// here you add different policies with their parameters
 	// c.AddExperiment(types.NewExperiment("RL", &types.AgentConfig{

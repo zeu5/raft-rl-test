@@ -189,6 +189,14 @@ func RaftPlotComparator(figPath string) types.Comparator {
 	}
 }
 
+// Plot coverage of different experiments
+func RaftEmptyComparator() types.Comparator {
+
+	return func(run int, names []string, datasets []types.DataSet) {
+
+	}
+}
+
 var _ types.Comparator = RaftComparator
 
 // NOT USEFUL
@@ -248,33 +256,100 @@ func (r *RaftGraphState) Hash() string {
 	return hex.EncodeToString(hash[:])
 }
 
+func RaftReadableAnalyzer(savePath string) types.Analyzer {
+	if _, err := os.Stat(savePath); err != nil { // make folder if not exist
+		os.Mkdir(savePath, os.ModePerm)
+	}
+	saveFolder := path.Join(savePath, "readable")
+	os.Mkdir(saveFolder, os.ModePerm)
+	// returns a function
+	return func(run int, name string, traces []*types.Trace) types.DataSet {
+		for j, trace := range traces { // for index, elem is equiv to foreach, can ignore index
+			readTrace := make([]string, 0)
+			for i := 0; i < trace.Len(); i++ {
+				readStep := make([]string, 0)
+
+				readStep = append(readStep, fmt.Sprintf("--- STEP: %d --- \n", i))
+				state, action, _, _ := trace.Get(i)   // state, action, next_state, reward
+				rState, _ := state.(*types.Partition) // .(*types.Partition) type cast into a concrete type - * pointer type - second arg is for safety OK (bool)
+
+				readState := ReadableState(*rState)
+				readStep = append(readStep, readState...)
+				readStep = append(readStep, "---------------- \n\n")
+
+				readAction := fmt.Sprintf("ACTION: %s\n\n", action.Hash())
+				readStep = append(readStep, readAction)
+
+				readTrace = append(readTrace, readStep...)
+			}
+			fileName := fmt.Sprintf("%06d.txt", j)
+			path := path.Join(saveFolder, fileName)
+			uniqueSt := ""
+			for _, st := range readTrace {
+				uniqueSt = fmt.Sprintf("%s%s", uniqueSt, st)
+			}
+			os.WriteFile(path, []byte(uniqueSt), 0644)
+		}
+		return nil
+	}
+}
+
 // takes a state of the system and returns a list of readable states, one for each replica
 func ReadableState(p types.Partition) []string {
-	result := make([]string, len(p.ReplicaStates))
-	for id, state := range p.ReplicaStates { // for each replica state
-		result = append(result, ReadableReplicaState(state, id))
+	result := make([]string, 0)
+
+	for i := 1; i < len(p.ReplicaStates)+1; i++ { // for each replica state
+		result = append(result, ReadableReplicaState(p.ReplicaStates[uint64(i)], uint64(i)))
 	}
+	result = append(result, "---\n")
+	partition := p.PartitionMap
+	result = append(result, ReadablePartitionMap(partition))
 
 	return result
 }
 
 // formats a replica state in a human-readable form
 func ReadableReplicaState(state types.ReplicaState, id uint64) string {
-	repState := state.(map[string]interface{})
+	repState := state.(RaftReplicaState)
 
-	repRaftState := repState["state"].(raft.Status)
-	repLog := repState["log"].([]pb.Entry)
+	repRaftState := repState.State
+	repLog := repState.Log
+	filteredLog := filterEntries(repLog)
 	strLog := ""
-	for _, entry := range repLog {
+	for _, entry := range filteredLog {
 		strLog = fmt.Sprintf("%s, %s", strLog, entry.String())
 	}
 
 	softState := repRaftState.BasicStatus.SoftState.RaftState.String()
 	Term := repRaftState.BasicStatus.HardState.Term
 
-	s := fmt.Sprintf("ID: %d | T:%d | S:%s | L:[%s] ", id, Term, softState, strLog)
+	s := fmt.Sprintf(" ID: %d | T:%d | S:%s | L:[%s] \n", id, Term, softState, strLog)
 
 	return s
+}
+
+// formats a partition map in a human-readable form
+func ReadablePartitionMap(m map[uint64]int) string {
+	revMap := make(map[int][]uint64)
+	for id, part := range m {
+		list, ok := revMap[part]
+		if !ok {
+			list = make([]uint64, 0)
+		}
+		revMap[part] = append(list, id)
+	}
+
+	result := ""
+	for _, part := range revMap {
+		result = fmt.Sprintf("%s [", result)
+		for _, replica := range part {
+			result = fmt.Sprintf("%s %d", result, replica)
+		}
+		result = fmt.Sprintf("%s ]", result)
+	}
+	result = fmt.Sprintf("%s\n", result)
+
+	return result
 }
 
 // filter a log and return only the NormalEntry typed entries (Ignore configuration change entries)

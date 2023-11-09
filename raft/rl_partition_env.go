@@ -114,11 +114,34 @@ func ColorReplicaID() RaftColorFunc {
 	}
 }
 
-// return the snapshot index of a replica
+// return the log length of a replica
 func ColorLogLength() RaftColorFunc {
 	return func(s RaftReplicaState) (string, interface{}) {
 		return "logLength", len(s.Log)
 	}
+}
+
+// return the log length of a replica
+func ColorLog() RaftColorFunc {
+	return func(s RaftReplicaState) (string, interface{}) {
+		result := make([]LogEntryAbs, 0)
+		curLog := filterEntries(s.Log)
+		for _, ent := range curLog {
+			e := LogEntryAbs{
+				Term:     ent.Term,
+				EntType:  ent.Type,
+				dataSize: len(ent.Data),
+			}
+			result = append(result, e)
+		}
+		return "log", result
+	}
+}
+
+type LogEntryAbs struct {
+	Term     uint64
+	EntType  pb.EntryType
+	dataSize int
 }
 
 type RaftStatePainter struct {
@@ -351,7 +374,6 @@ func (p *RaftPartitionEnv) deliverMessage(m types.Message) types.PartitionedSyst
 		lastIndex, _ := storage.LastIndex()
 		ents, err := storage.Entries(1, lastIndex+1, 1024*1024) // hardcoded value from link_env.go
 		if err == nil {
-			// TODO: copy logs instead of assigning directly
 			newState.Logs[id] = copyLog(ents)
 		}
 

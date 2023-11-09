@@ -100,11 +100,10 @@ func (t *Trace) Record(p string) {
 // 	init := "### TRACE START ###\n"
 
 // 	body := ""
-// 	for i, state := range t.states {
+// 	for i := range len(t.states) {
 // 		body = fmt.Sprintf("%s\n ---state %d--- \n", body, i)
 // 		pState := state.(*Partition)
-// 		replicaStates :=
-
+// 		replicaStates := pState.
 // 	}
 
 // 	end := "### TRACE END ###\n"

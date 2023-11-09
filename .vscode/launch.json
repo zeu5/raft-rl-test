@@ -83,7 +83,9 @@
                 "100",
                 "--horizon",
                 "100",
-                "etcd-raft-bugs"
+                "etcd-raft-bugs",
+                "--save",
+                "result_debug"
             ]
         },
         {
