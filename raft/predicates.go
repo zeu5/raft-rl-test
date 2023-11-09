@@ -3,10 +3,7 @@ package raft
 import (
 	"github.com/zeu5/raft-rl-test/types"
 	"go.etcd.io/raft/v3"
-<<<<<<< HEAD
-=======
 	"go.etcd.io/raft/v3/raftpb"
->>>>>>> 309cd0eb9d71885d76a6040fd6008ad2e5d45a3d
 )
 
 // File contains predicates over etcd-raft states
