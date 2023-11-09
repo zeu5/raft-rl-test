@@ -83,7 +83,7 @@ func (b *BonusPolicyGreedyReward) UpdateRm(step int, state types.State, action t
 	if rwd { // if reward, give 2 (value higher than any bonus)
 		r = 2
 	} else { // assign reward according to visits
-		r = 1 / t
+		r = 1 / (t + 1)
 	}
 
 	if out_of_space { // if getting out of the policy space, set default value of next state to be 0, it will never be updated
