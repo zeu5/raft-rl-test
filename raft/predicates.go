@@ -27,7 +27,34 @@ func LeaderElectedPredicateState() types.RewardFuncSingle {
 }
 
 // return true if at least one of the replicas is in the leader state
-func LeaderElectedPredicateNumber(times int) types.RewardFuncSingle {
+func LeaderElectedPredicateNumber(elections int) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		pS, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+
+		for _, state := range pS.ReplicaStates { // for each replica state
+			repState := state.(RaftReplicaState)
+			curLog := repState.Log               // cast into raft.Status
+			terms := make(map[uint64]bool, 0)    // set of unique terms
+			filteredLog := filterEntries(curLog) // remove dummy entries
+			for _, ent := range filteredLog {    // for each entry
+				if len(ent.Data) == 0 {
+					terms[ent.Term] = true // add its term to the set
+				}
+			}
+			if len(terms) >= elections { // check number of unique terms
+				return true
+			}
+		}
+
+		return false
+	}
+}
+
+// return true if all the replicas are not above the specified term number
+func HighestTermForReplicas(term uint64) types.RewardFuncSingle {
 	return func(s types.State) bool {
 		pS, ok := s.(*types.Partition)
 		if !ok {
@@ -37,12 +64,11 @@ func LeaderElectedPredicateNumber(times int) types.RewardFuncSingle {
 		for _, state := range pS.ReplicaStates { // for each replica state
 			repState := state.(RaftReplicaState)
 			curState := repState.State // cast into raft.Status
-			if curState.BasicStatus.SoftState.RaftState.String() == "StateLeader" {
-				return true
+			if curState.Term > term {
+				return false
 			}
 		}
-
-		return false
+		return true
 	}
 }
 

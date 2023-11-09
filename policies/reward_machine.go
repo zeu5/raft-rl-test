@@ -132,11 +132,11 @@ func (rp *RewardMachinePolicy) Update(step int, state types.State, action types.
 		rmState := rp.rm.states[i]
 		predicate, ok := rp.rm.predicates[rmState]
 		if ok && predicate(nextState) { // if current transition satisfies predicate for that rm_state
-			if i > curRmStatePos {
+			if i > curRmStatePos { // progressed in the machine
 				reward = true
 			}
 
-			if i != rp.curRmStatePos {
+			if i != rp.curRmStatePos { // changed the state
 				out_of_space = true
 			}
 

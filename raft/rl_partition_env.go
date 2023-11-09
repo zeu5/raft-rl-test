@@ -107,6 +107,13 @@ func ColorSnapshotTerm() RaftColorFunc {
 	}
 }
 
+// return the snapshot index of a replica
+func ColorReplicaID() RaftColorFunc {
+	return func(s RaftReplicaState) (string, interface{}) {
+		return "replicaID", s.State.ID
+	}
+}
+
 type RaftStatePainter struct {
 	paramFuncs []RaftColorFunc
 }
