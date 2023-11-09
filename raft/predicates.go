@@ -378,7 +378,7 @@ func InStateWithCommittedEntries(state raft.StateType, num int) types.RewardFunc
 		}
 		for _, rs := range pS.ReplicaStates {
 			repState := rs.(RaftReplicaState)
-			curLog := repState.Log
+			curLog := committedLog(repState.Log, repState.State)
 			filteredLog := filterEntriesNoElection(curLog)
 			if repState.State.RaftState == state && len(filteredLog) == num {
 				return true
