@@ -24,6 +24,7 @@ func main() {
 	// adding the subcommands here
 	rootCommand.AddCommand(RedisTestCommand())
 	rootCommand.AddCommand(RedisRaftCommand())
+	rootCommand.AddCommand(RedisRaftRMCommand())
 	rootCommand.AddCommand(RaftCommand())
 	rootCommand.AddCommand(RaftPartCommand())
 	rootCommand.AddCommand(EtcdRaftBugsCommand())

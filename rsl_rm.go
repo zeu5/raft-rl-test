@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"path"
 
 	"github.com/spf13/cobra"
 	"github.com/zeu5/raft-rl-test/policies"
@@ -37,6 +38,16 @@ func getRewardMachine(name string) (*policies.RewardMachine, bool) {
 		machine = policies.NewRewardMachine(rsl.InPreparedBallot(2))
 	case "NodeInPreparedBallot":
 		machine = policies.NewRewardMachine(rsl.NodeInPreparedBallot(1, 2))
+	case "DifferentBallotCommits":
+		machine = policies.NewRewardMachine(rsl.AtLeastDecided(2))
+		machine.AddState(rsl.InStateAndBallot(rsl.StateStablePrimary, 1), "Ballot1Primary")
+		machine.AddState(rsl.AtMostDecided(1), "AtMost1Decided")
+		machine.AddState(rsl.InStateAndBallot(rsl.StateStablePrimary, 2), "Ballot2Primary")
+	case "OutOfSync":
+		machine = policies.NewRewardMachine(rsl.AllInSync().And(rsl.AllAtLeastBallot(3)))
+		machine.AddState(rsl.OutSyncBallotBy(2).And(rsl.AllAtMostBallot(3)), "OutOfSync")
+		// case "CrashAndHeal":
+		// 	machine = policies.NewRewardMachine()
 	}
 	return machine, machine != nil
 }
@@ -71,6 +82,11 @@ func RSLRewardMachine(rewardMachine string) error {
 
 	c := types.NewComparison(runs)
 	c.AddAnalysis("rm", policies.RewardMachineAnalyzer(rm), policies.RewardMachineCoverageComparator(saveFile))
+	c.AddAnalysis("bugs", types.BugAnalyzer(
+		path.Join(saveFile, "bugs"),
+		types.BugDesc{Name: "InconsistentLogs", Check: rsl.InconsistentLogs()},
+		types.BugDesc{Name: "MultiplePrimaries", Check: rsl.MultiplePrimaries()},
+	), types.BugComparator(saveFile))
 
 	c.AddExperiment(types.NewExperiment(
 		"random",
@@ -81,18 +97,18 @@ func RSLRewardMachine(rewardMachine string) error {
 			Environment: GetRSLEnvironment(config, colors),
 		},
 	))
-	strictPolicy := policies.NewStrictPolicy(types.NewRandomPolicy())
-	strictPolicy.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
+	// strictPolicy := policies.NewStrictPolicy(types.NewRandomPolicy())
+	// strictPolicy.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
 
-	c.AddExperiment(types.NewExperiment(
-		"Strict",
-		&types.AgentConfig{
-			Episodes:    episodes,
-			Horizon:     horizon,
-			Policy:      policies.NewStrictPolicy(strictPolicy),
-			Environment: GetRSLEnvironment(config, colors),
-		},
-	))
+	// c.AddExperiment(types.NewExperiment(
+	// 	"Strict",
+	// 	&types.AgentConfig{
+	// 		Episodes:    episodes,
+	// 		Horizon:     horizon,
+	// 		Policy:      policies.NewStrictPolicy(strictPolicy),
+	// 		Environment: GetRSLEnvironment(config, colors),
+	// 	},
+	// ))
 	c.AddExperiment(types.NewExperiment(
 		"BonusMax",
 		&types.AgentConfig{
@@ -124,6 +140,6 @@ func RSLRewardMachineCommand() *cobra.Command {
 			return RSLRewardMachine(args[0])
 		},
 	}
-	cmd.PersistentFlags().IntVarP(&requests, "requests", "r", 1, "Number of requests to run with")
+	cmd.PersistentFlags().IntVarP(&requests, "requests", "r", 3, "Number of requests to run with")
 	return cmd
 }

@@ -22,9 +22,11 @@ type RedisNodeState struct {
 	State     string
 	Term      int
 	Commit    int
+	Index     int
 	Applied   int
 	Vote      int
 	Lead      int
+	Snapshot  int
 }
 
 func (r *RedisNodeState) Copy() *RedisNodeState {
@@ -34,6 +36,7 @@ func (r *RedisNodeState) Copy() *RedisNodeState {
 		LogStderr: r.LogStderr,
 		State:     r.State,
 		Term:      r.Term,
+		Index:     r.Index,
 		Commit:    r.Commit,
 		Applied:   r.Applied,
 		Vote:      r.Vote,
@@ -122,8 +125,12 @@ func (r *RedisNode) Create() {
 
 	r.ctx = ctx
 	r.cancel = cancel
-	r.stdout = new(bytes.Buffer)
-	r.stderr = new(bytes.Buffer)
+	if r.stdout == nil {
+		r.stdout = new(bytes.Buffer)
+	}
+	if r.stderr == nil {
+		r.stderr = new(bytes.Buffer)
+	}
 	r.process.Stdout = r.stdout
 	r.process.Stderr = r.stderr
 }

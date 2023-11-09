@@ -34,7 +34,11 @@ type RSLPartitionState struct {
 }
 
 func (p *RSLPartitionState) GetReplicaState(node uint64) types.ReplicaState {
-	return p.ReplicaStates[node].Copy()
+	s, ok := p.ReplicaStates[node]
+	if !ok {
+		return EmptyLocalState()
+	}
+	return s.Copy()
 }
 
 func (p *RSLPartitionState) PendingMessages() map[string]types.Message {
@@ -129,18 +133,28 @@ func (r *RSLPartitionEnv) Reset() types.PartitionedSystemState {
 	}
 	for _, c := range r.config.AdditionalCommands {
 		cmd := Message{Type: MessageCommand, Command: c.Copy()}
-		r.messages[cmd.Hash()] = cmd
+		newState.Requests = append(newState.Requests, cmd)
 	}
 	r.curState = newState
 	return newState
 }
 
-func (r *RSLPartitionEnv) Start(node uint64) {
-	// TODO: Need to implement this
+func (r *RSLPartitionEnv) Start(nodeID uint64) {
+	_, ok := r.nodes[nodeID]
+	if ok {
+		// Node already started
+		return
+	}
+	cfg := r.config.NodeConfig.Copy()
+	cfg.ID = nodeID
+	node := NewNode(&cfg)
+	r.nodes[nodeID] = node
+
+	node.Start()
 }
 
 func (r *RSLPartitionEnv) Stop(node uint64) {
-	// TODO: Need to implement this
+	delete(r.nodes, node)
 }
 
 func (r *RSLPartitionEnv) ReceiveRequest(req types.Request) types.PartitionedSystemState {

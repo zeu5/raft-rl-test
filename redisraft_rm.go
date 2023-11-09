@@ -36,29 +36,19 @@ func RedisRaftRM(episodes, horizon int, saveFile string, ctx context.Context) {
 
 	c := types.NewComparison(runs)
 
-	c.AddAnalysis("plot", redisraft.CoverageAnalyzer(colors...), redisraft.CoverageComparator(saveFile))
+	// c.AddAnalysis("plot", redisraft.CoverageAnalyzer(colors...), redisraft.CoverageComparator(saveFile))
 	c.AddAnalysis("bugs", redisraft.BugAnalyzer(saveFile), redisraft.BugComparator())
 
-	// rm :=
+	// rm := policies.NewRewardMachine(redisraft.LeaderElected()) // This is always true. The system starts with a config where the leader is elected
+	rm := policies.NewRewardMachine(redisraft.TermNumber(2))
+	// rm := policies.NewRewardMachine(redisraft.OnlyFollowersAndLeader())
 
-	c.AddExperiment(types.NewExperiment("NegReward", &types.AgentConfig{
+	c.AddAnalysis("rm", policies.RewardMachineAnalyzer(rm), policies.RewardMachineCoverageComparator(saveFile))
+
+	c.AddExperiment(types.NewExperiment("RM", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
-		Policy:      policies.NewSoftMaxNegFreqPolicy(0.1, 0.99, 1),
-		Environment: partitionEnv,
-	}))
-
-	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      types.NewRandomPolicy(),
-		Environment: partitionEnv,
-	}))
-
-	c.AddExperiment(types.NewExperiment("BonusMax", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
+		Policy:      policies.NewRewardMachinePolicy(rm),
 		Environment: partitionEnv,
 	}))
 
