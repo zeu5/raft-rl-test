@@ -7,15 +7,24 @@ type Entry struct {
 	Command  Command
 }
 
+func (e Entry) Copy() Entry {
+	return Entry{
+		Accepted: e.Accepted,
+		Ballot:   e.Ballot.Copy(),
+		Decree:   e.Decree,
+		Command:  e.Command.Copy(),
+	}
+}
+
 type Log struct {
 	entries []Entry
-	decided []Command
+	Decided []Command
 }
 
 func NewLog() *Log {
 	return &Log{
 		entries: make([]Entry, 0),
-		decided: make([]Command, 0),
+		Decided: make([]Command, 0),
 	}
 }
 
@@ -24,9 +33,20 @@ func (l *Log) Add(e Entry) {
 }
 
 func (l *Log) AddDecided(c Command) {
-	l.decided = append(l.decided, c.Copy())
+	l.Decided = append(l.Decided, c.Copy())
 }
 
 func (l *Log) NumDecided() int {
-	return len(l.decided)
+	return len(l.Decided)
+}
+
+func (l *Log) Copy() *Log {
+	out := NewLog()
+	for _, e := range l.entries {
+		out.Add(e.Copy())
+	}
+	for _, c := range l.Decided {
+		out.AddDecided(c.Copy())
+	}
+	return out
 }

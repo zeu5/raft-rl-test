@@ -57,6 +57,18 @@ func ParseInfo(info string) *RedisNodeState {
 			r.Vote = vote
 		}
 	}
+	if snapS, ok := r.Params["snapshot_last_idx"]; ok {
+		snap, err := strconv.Atoi(snapS)
+		if err == nil {
+			r.Snapshot = snap
+		}
+	}
+	if curIndexS, ok := r.Params["current_index"]; ok {
+		curIndex, err := strconv.Atoi(curIndexS)
+		if err == nil {
+			r.Index = curIndex
+		}
+	}
 
 	return r
 }

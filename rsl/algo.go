@@ -8,6 +8,8 @@ package rsl
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"math"
 	"math/rand"
 	"time"
@@ -33,6 +35,11 @@ func (c Command) Copy() Command {
 	return Command{
 		Data: bytes.Clone(c.Data),
 	}
+}
+
+func (c Command) Hash() string {
+	hash := sha256.Sum256(c.Data)
+	return hex.EncodeToString(hash[:])
 }
 
 func (c Command) Eq(other Command) bool {
@@ -74,6 +81,14 @@ type LocalState struct {
 	OldFreshestProposal Proposal
 	Decided             int
 	PeerConfig          RSLConfig
+	Log                 *Log
+}
+
+func EmptyLocalState() LocalState {
+	return LocalState{
+		State: StateInactive,
+		Log:   NewLog(),
+	}
 }
 
 func (l LocalState) Copy() LocalState {
@@ -84,6 +99,7 @@ func (l LocalState) Copy() LocalState {
 		OldFreshestProposal: l.OldFreshestProposal.Copy(),
 		Decided:             l.Decided,
 		PeerConfig:          l.PeerConfig.Copy(),
+		Log:                 l.Log.Copy(),
 	}
 }
 
@@ -99,7 +115,6 @@ type Node struct {
 	LocalState
 
 	config *NodeConfig
-	log    *Log
 
 	commandQ       []Command
 	proposalQ      []Proposal
@@ -159,9 +174,8 @@ func NewNode(c *NodeConfig) *Node {
 
 	return &Node{
 		ID:                    c.ID,
-		LocalState:            LocalState{State: StateInactive, PeerConfig: initialConfig},
+		LocalState:            LocalState{State: StateInactive, PeerConfig: initialConfig, Log: NewLog()},
 		config:                c,
-		log:                   NewLog(),
 		commandQ:              make([]Command, 0),
 		proposalQ:             make([]Proposal, 0),
 		readyToPropose:        false,
@@ -395,7 +409,7 @@ func (n *Node) handleStatusResponse(m Message) {
 }
 
 func (n *Node) isMajority(count int) bool {
-	return count >= len(n.config.Peers)/2
+	return count >= n.PeerConfig.QuorumSize()
 }
 
 func (n *Node) learnVotes(toLearnFrom uint64) {
@@ -429,12 +443,12 @@ func (n *Node) addtoExecutionQueue(p Proposal) {
 		}
 	}
 
-	n.log.AddDecided(p.Command.Copy())
-	n.Decided = n.log.NumDecided()
+	n.Log.AddDecided(p.Command.Copy())
+	n.Decided = n.Log.NumDecided()
 }
 
 func (n *Node) logProposal(p Proposal) {
-	n.log.Add(Entry{
+	n.Log.Add(Entry{
 		Accepted: true,
 		Ballot:   p.Ballot.Copy(),
 		Decree:   p.Decree,
@@ -475,7 +489,7 @@ func (n *Node) prepare() {
 			Num:  n.MaxPreparedBallot.Num + 1,
 			Node: n.ID,
 		}
-		n.log.Add(Entry{
+		n.Log.Add(Entry{
 			Ballot: n.MaxPreparedBallot.Copy(),
 		})
 		n.nextElectionTime = n.ticks + n.config.NewLeaderGracePeriod
@@ -506,7 +520,7 @@ func (n *Node) handlePrepareRequest(m Message) {
 	} else if n.LocalState.State != StateInitializing {
 		if m.Ballot.Num > n.MaxPreparedBallot.Num {
 			n.MaxPreparedBallot = m.Ballot.Copy()
-			n.log.Add(Entry{
+			n.Log.Add(Entry{
 				Accepted: false,
 				Ballot:   m.Ballot.Copy(),
 			})
@@ -663,7 +677,7 @@ func (n *Node) handleNotAccept(m Message) {
 			n.initialize()
 		} else if m.Ballot.Num > n.MaxPreparedBallot.Num {
 			n.MaxPreparedBallot = m.Ballot.Copy()
-			n.log.Add(Entry{
+			n.Log.Add(Entry{
 				Accepted: false,
 				Ballot:   m.Ballot.Copy(),
 			})
@@ -699,7 +713,7 @@ func (n *Node) handleAcceptResponse(m Message) {
 
 func (n *Node) handleFetchRequest(m Message) {
 	validProposals := make([]Proposal, 0)
-	for _, e := range n.log.entries {
+	for _, e := range n.Log.entries {
 		if e.Accepted && e.Decree >= m.Decree {
 			validProposals = append(validProposals, Proposal{
 				Decree:  e.Decree,

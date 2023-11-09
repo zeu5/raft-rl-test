@@ -234,13 +234,17 @@ func (p *RaftPartitionEnv) Tick() types.PartitionedSystemState {
 
 		// add log
 		newState.Logs[id] = make([]pb.Entry, 0)
-		ents, err := p.storages[id].Entries(1, status.Commit+1, 1024*1024) // hardcoded value from link_env.go
+
+		storage := p.storages[id]
+		lastIndex, _ := storage.LastIndex()
+		ents, err := storage.Entries(1, lastIndex+1, 1024*1024) // hardcoded value from link_env.go
 		if err == nil {
+			// TODO: copy logs instead of assigning directly
 			newState.Logs[id] = ents
 		}
 
 		// add snapshot
-		snapshot, err := p.storages[id].Snapshot()
+		snapshot, err := storage.Snapshot()
 		if err == nil {
 			newState.Snapshots[id] = snapshot.Metadata
 		}
@@ -329,13 +333,16 @@ func (p *RaftPartitionEnv) deliverMessage(m types.Message) types.PartitionedSyst
 
 		// add log
 		newState.Logs[id] = make([]pb.Entry, 0)
-		ents, err := p.storages[id].Entries(1, status.Commit+1, 1024*1024) // hardcoded value from link_env.go
+		storage := p.storages[id]
+		lastIndex, _ := storage.LastIndex()
+		ents, err := storage.Entries(1, lastIndex+1, 1024*1024) // hardcoded value from link_env.go
 		if err == nil {
+			// TODO: copy logs instead of assigning directly
 			newState.Logs[id] = ents
 		}
 
 		// add snapshot
-		snapshot, err := p.storages[id].Snapshot()
+		snapshot, err := storage.Snapshot()
 		if err == nil {
 			newState.Snapshots[id] = snapshot.Metadata
 		}

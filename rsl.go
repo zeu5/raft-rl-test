@@ -1,6 +1,8 @@
 package main
 
 import (
+	"path"
+
 	"github.com/spf13/cobra"
 	"github.com/zeu5/raft-rl-test/policies"
 	"github.com/zeu5/raft-rl-test/rsl"
@@ -31,6 +33,11 @@ func RSLExploration() {
 
 	c := types.NewComparison(runs)
 	c.AddAnalysis("Plot", rsl.CoverageAnalyzer(colors...), rsl.CoverageComparator(saveFile))
+	c.AddAnalysis("Bugs", types.BugAnalyzer(
+		path.Join(saveFile, "bugs"),
+		types.BugDesc{Name: "InconsistentLogs", Check: rsl.InconsistentLogs()},
+		types.BugDesc{Name: "MultiplePrimaries", Check: rsl.MultiplePrimaries()},
+	), types.BugComparator(saveFile))
 	// Random exploration
 	c.AddExperiment(types.NewExperiment(
 		"Random",

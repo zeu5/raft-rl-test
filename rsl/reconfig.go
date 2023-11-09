@@ -12,6 +12,10 @@ type RSLConfig struct {
 	Members       map[uint64]bool
 }
 
+func (r RSLConfig) QuorumSize() int {
+	return (len(r.Members)+1)/2 + 1
+}
+
 func (r RSLConfig) Copy() RSLConfig {
 	n := RSLConfig{
 		Number:        r.Number,

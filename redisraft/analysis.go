@@ -117,17 +117,26 @@ func BugAnalyzer(savePath string) types.Analyzer {
 	return func(i int, s string, t []*types.Trace) types.DataSet {
 		occurrences := make([]int, 0)
 		for iter, trace := range t {
+			haveBugInTrace := false
+			logs := ""
+
 			for i := 0; i < trace.Len(); i++ {
 				state, _, _, _ := trace.Get(i)
 				pState := state.(*types.Partition)
-				hasBug := false
+				haveBug := false
 				for _, s := range pState.ReplicaStates {
 					rState := s.(*RedisNodeState)
-					if strings.Contains(rState.LogStdout, "redis bug report") || strings.Contains(rState.LogStderr, "redis bug report") {
-						hasBug = true
+					if rState.LogStdout == "" && rState.LogStderr == "" {
+						continue
+					}
+					stdout := strings.ToLower(rState.LogStdout)
+					stderr := strings.ToLower(rState.LogStderr)
+					if strings.Contains(stdout, "redis bug report") || strings.Contains(stderr, "redis bug report") {
+						haveBugInTrace = true
+						haveBug = true
 					}
 				}
-				if hasBug {
+				if haveBug {
 					occurrences = append(occurrences, iter)
 					logLines := []string{}
 					for nodeID, s := range pState.ReplicaStates {
@@ -135,10 +144,13 @@ func BugAnalyzer(savePath string) types.Analyzer {
 						rState := s.(*RedisNodeState)
 						logLines = append(logLines, "----- Stdout -----", rState.LogStdout, "----- Stderr -----", rState.LogStderr, "\n\n")
 					}
-					allLogs := strings.Join(logLines, "\n")
-					logFilePath := path.Join(savePath, s+"_"+strconv.Itoa(i)+"_"+strconv.Itoa(iter)+".log")
-					os.WriteFile(logFilePath, []byte(allLogs), 0644)
+					logs = strings.Join(logLines, "\n")
 				}
+			}
+			if haveBugInTrace {
+				occurrences = append(occurrences, iter)
+				logFilePath := path.Join(savePath, s+"_"+strconv.Itoa(i)+"_"+strconv.Itoa(iter)+".log")
+				os.WriteFile(logFilePath, []byte(logs), 0644)
 			}
 		}
 		return occurrences

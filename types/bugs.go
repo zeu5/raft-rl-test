@@ -20,18 +20,20 @@ func BugAnalyzer(savePath string, bugs ...BugDesc) Analyzer {
 	}
 	os.MkdirAll(savePath, 0777)
 	return func(run int, s string, traces []*Trace) DataSet {
-		occurrences := make(map[string]int)
+		firstOccurrence := make(map[string]int)
 		for i, t := range traces {
 			for _, b := range bugs {
-				_, ok := occurrences[b.Name]
-				if b.Check(t) && !ok { // swapped order just to debug
-					occurrences[b.Name] = i
+				_, ok := firstOccurrence[b.Name]
+				if b.Check(t) { // swapped order just to debug
+					if !ok {
+						firstOccurrence[b.Name] = i
+					}
 					bugPath := path.Join(savePath, strconv.Itoa(run)+"_"+s+"_"+b.Name+"_"+strconv.Itoa(i)+"_bug.json")
 					t.Record(bugPath)
 				}
 			}
 		}
-		return occurrences
+		return firstOccurrence
 	}
 }
 
