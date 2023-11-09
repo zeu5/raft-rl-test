@@ -15,7 +15,7 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	// requests = 3
 	raftConfig := raft.RaftEnvironmentConfig{
 		Replicas:      3,
-		ElectionTick:  6, // lower bound for a process to try to go to new term (starting an election) - double of this is upperbound
+		ElectionTick:  7, // lower bound for a process to try to go to new term (starting an election) - double of this is upperbound
 		HeartbeatTick: 3, // frequency of heartbeats
 		Timeouts:      timeouts,
 		Requests:      3,
@@ -23,8 +23,8 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 
 	rlConfig := raft.RLConfig{
 		TicksBetweenPartition: 3,
-		MaxMessagesPerTick:    5,
-		StaySameStateUpTo:     4,
+		MaxMessagesPerTick:    10,
+		StaySameStateUpTo:     5,
 		WithCrashes:           false,
 	}
 
@@ -40,6 +40,7 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	availableColors["snapshotIndex"] = raft.ColorSnapshotIndex()
 	availableColors["snapshotTerm"] = raft.ColorSnapshotTerm()
 	availableColors["replicaID"] = raft.ColorReplicaID()
+	availableColors["logLength"] = raft.ColorLogLength()
 
 	chosenColors := []string{
 		"state",
@@ -47,6 +48,7 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 		"leader",
 		"vote",
 		"boundedTerm5",
+		"logLength",
 		// "replicaID",
 	}
 
@@ -69,6 +71,13 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	PredHierarchy_MultipleLeaderElections3 := policies.NewRewardMachine(raft.LeaderElectedPredicateNumber(3)) // final predicate - target space
 	PredHierarchy_MultipleLeaderElections3.AddState(raft.LeaderElectedPredicateNumber(1), "OneElection")      // 1st step
 	PredHierarchy_MultipleLeaderElections3.AddState(raft.LeaderElectedPredicateNumber(2), "TwoElections")     // 2nd ...
+
+	PredHierarchy_MultipleLeaderElections := policies.NewRewardMachine(raft.LeaderElectedPredicateNumberWithTerms(3, []uint64{2, 3, 4})) // final predicate - target space
+	PredHierarchy_MultipleLeaderElections.AddState(raft.LeaderElectedPredicateStateWithTerm(2), "FirstElection")                         // 1st step
+	PredHierarchy_MultipleLeaderElections.AddState(raft.LeaderElectedPredicateNumberWithTerms(1, []uint64{2}), "FirstElectionCommit")
+	PredHierarchy_MultipleLeaderElections.AddState(raft.LeaderElectedPredicateStateWithTerm(3).And(raft.LeaderElectedPredicateNumberWithTerms(1, []uint64{2})), "SecondElection") // 1st step
+	PredHierarchy_MultipleLeaderElections.AddState(raft.LeaderElectedPredicateNumberWithTerms(2, []uint64{2, 3}), "SecondElectionCommit")
+	PredHierarchy_MultipleLeaderElections.AddState(raft.LeaderElectedPredicateStateWithTerm(4).And(raft.LeaderElectedPredicateNumberWithTerms(2, []uint64{2, 3})), "ThirdElection") // 1st step
 
 	// elect a leader, commit a request and then elect another leader
 	PredHierarchy_EntriesInDifferentTermsInLogNoStack := policies.NewRewardMachine(raft.EntriesInDifferentTermsInLog(2))
@@ -107,7 +116,7 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	), types.BugComparator(saveFile))
 
 	// c.AddAnalysis("CommitOnlyOneEntry", policies.RewardMachineAnalyzer(PredHierarchy_3), policies.RewardMachineCoverageComparator(saveFile))
-	c.AddAnalysis("CommitEntriesInDifferentTerms", policies.RewardMachineAnalyzer(PredHierarchy_EntriesInDifferentTermsInLogNoStack), policies.RewardMachineCoverageComparator(saveFile))
+	c.AddAnalysis("CommitEntriesInDifferentTerms", policies.RewardMachineAnalyzer(PredHierarchy_MultipleLeaderElections), policies.RewardMachineCoverageComparator(saveFile))
 
 	// here you add different policies with their parameters
 	// c.AddExperiment(types.NewExperiment("RL", &types.AgentConfig{
@@ -143,10 +152,10 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	// 	Policy:      policies.NewStrictPolicy(strictPolicy),
 	// 	Environment: getRaftPartEnv(raftConfig, colors),
 	// }))
-	c.AddExperiment(types.NewExperiment("PredHierarchy_EntriesInDifferentTermsInLogNoStack", &types.AgentConfig{
+	c.AddExperiment(types.NewExperiment("PredHierarchy_MultipleLeaderElections", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
-		Policy:      policies.NewRewardMachinePolicy(PredHierarchy_EntriesInDifferentTermsInLogNoStack),
+		Policy:      policies.NewRewardMachinePolicy(PredHierarchy_MultipleLeaderElections),
 		Environment: getRaftPartEnvCfg(raftConfig, colors, rlConfig),
 	}))
 	// c.AddExperiment(types.NewExperiment("PredHierarchy_3", &types.AgentConfig{

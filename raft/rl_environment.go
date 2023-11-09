@@ -538,6 +538,21 @@ func copyLogs(logs map[uint64][]pb.Entry) map[uint64][]pb.Entry {
 	return c
 }
 
+// copy a log (list of pb.Entry structs in the raft code)
+func copyLog(log []pb.Entry) []pb.Entry {
+	newLog := make([]pb.Entry, len(log))
+	for i, entry := range log {
+		newLog[i] = pb.Entry{
+			Term:  entry.Term,
+			Index: entry.Index,
+			Type:  entry.Type,
+			Data:  entry.Data,
+		}
+	}
+
+	return newLog
+}
+
 // copy the snapshots hashmap
 func copySnapshots(snapshots map[uint64]pb.SnapshotMetadata) map[uint64]pb.SnapshotMetadata {
 	c := make(map[uint64]pb.SnapshotMetadata)
