@@ -101,7 +101,7 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 
 	PredHierarchy_5 := policies.NewRewardMachine(raft.EntriesInDifferentTermsInLog(2))
 	PredHierarchy_5.AddState(raft.ExactEntriesInLog(1), "OneEntryCommitted")
-	PredHierarchy_5.AddState(raft.InStateWithCommittedEntries(r.StateLeader, 1), "Candidate withCommittedEntry")
+	PredHierarchy_5.AddState(raft.InStateWithCommittedEntries(r.StateCandidate, 1), "Candidate withCommittedEntry")
 
 	// c is general experiment
 	// colors ... , expanded list, can omit the argument
@@ -121,7 +121,7 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	), types.BugComparator(saveFile))
 
 	// c.AddAnalysis("CommitOnlyOneEntry", policies.RewardMachineAnalyzer(PredHierarchy_3), policies.RewardMachineCoverageComparator(saveFile))
-	c.AddAnalysis("CommitEntriesInDifferentTerms", policies.RewardMachineAnalyzer(PredHierarchy_MultipleLeaderElections), policies.RewardMachineCoverageComparator(saveFile))
+	c.AddAnalysis("CommitEntriesInDifferentTerms", policies.RewardMachineAnalyzer(PredHierarchy_5), policies.RewardMachineCoverageComparator(saveFile))
 
 	// here you add different policies with their parameters
 	// c.AddExperiment(types.NewExperiment("RL", &types.AgentConfig{
@@ -157,10 +157,10 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	// 	Policy:      policies.NewStrictPolicy(strictPolicy),
 	// 	Environment: getRaftPartEnv(raftConfig, colors),
 	// }))
-	c.AddExperiment(types.NewExperiment("PredHierarchy_MultipleLeaderElections", &types.AgentConfig{
+	c.AddExperiment(types.NewExperiment("PredHierarchy_5", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
-		Policy:      policies.NewRewardMachinePolicy(PredHierarchy_MultipleLeaderElections),
+		Policy:      policies.NewRewardMachinePolicy(PredHierarchy_5),
 		Environment: getRaftPartEnvCfg(raftConfig, colors, rlConfig),
 	}))
 	// c.AddExperiment(types.NewExperiment("PredHierarchy_3", &types.AgentConfig{

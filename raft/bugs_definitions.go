@@ -30,8 +30,8 @@ func ReducedLog() func(*types.Trace) bool {
 			pS, ok := s.(*types.Partition)
 			if ok {
 				for replica_id, elem := range pS.ReplicaStates {
-					repState := elem.(RaftReplicaState) // cast into map
-					curLog := repState.Log              // cast "log" into list of pb.Entry
+					repState := elem.(RaftReplicaState)                  // cast into map
+					curLog := committedLog(repState.Log, repState.State) // cast "log" into list of pb.Entry
 
 					if _, ok := replicasLogs[replica_id]; !ok { // init empty list if previous replica log is not present
 						replicasLogs[replica_id] = make([]pb.Entry, 0)
@@ -59,8 +59,8 @@ func ModifiedLog() func(*types.Trace) bool {
 			pS, ok := s.(*types.Partition)
 			if ok {
 				for replica_id, elem := range pS.ReplicaStates {
-					repState := elem.(RaftReplicaState) // cast into map
-					curLog := repState.Log              // cast "log" into list of pb.Entry
+					repState := elem.(RaftReplicaState)                  // cast into map
+					curLog := committedLog(repState.Log, repState.State) // cast "log" into list of pb.Entry
 
 					if _, ok := replicasLogs[replica_id]; !ok { // init empty list if previous replica log is not present
 						replicasLogs[replica_id] = make([]pb.Entry, 0)
@@ -91,7 +91,7 @@ func InconsistentLogs() func(*types.Trace) bool {
 				logsList := make([][]pb.Entry, 0, len(pS.ReplicaStates))
 				for _, value := range pS.ReplicaStates {
 					state := value.(RaftReplicaState)
-					log := state.Log
+					log := committedLog(state.Log, state.State)
 					logsList = append(logsList, log)
 				}
 
@@ -151,8 +151,8 @@ func DummyBug() func(*types.Trace) bool {
 			pS, ok := s.(*types.Partition)
 			if ok {
 				for _, elem := range pS.ReplicaStates {
-					repState := elem.(RaftReplicaState) // cast into map
-					curLog := repState.Log              // cast "log" into list of pb.Entry
+					repState := elem.(RaftReplicaState)                  // cast into map
+					curLog := committedLog(repState.Log, repState.State) // cast "log" into list of pb.Entry
 
 					if len(curLog) > 0 {
 						if len(filterEntries(curLog)) > 0 { // check if log size decreased

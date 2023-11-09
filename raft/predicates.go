@@ -328,9 +328,9 @@ func EntriesInDifferentTermsInLog(uniqueTerms int) types.RewardFuncSingle {
 		for _, state := range pS.ReplicaStates { // for each replica state
 			repState := state.(RaftReplicaState)
 			curLog := committedLog(repState.Log, repState.State)
-			terms := make(map[uint64]bool, 0)              // set of unique terms
-			filteredLog := filterEntriesNoElection(curLog) // remove dummy entries
-			for _, ent := range filteredLog {              // for each entry
+			terms := make(map[uint64]bool, 0)    // set of unique terms
+			filteredLog := filterEntries(curLog) // remove dummy entries
+			for _, ent := range filteredLog {    // for each entry
 				terms[ent.Term] = true // add its term to the set
 			}
 			if len(terms) >= uniqueTerms { // check number of unique terms
