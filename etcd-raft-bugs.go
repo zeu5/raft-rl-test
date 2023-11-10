@@ -17,14 +17,14 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	raftConfig := raft.RaftEnvironmentConfig{
 		Replicas:      3,
 		ElectionTick:  7, // lower bound for a process to try to go to new term (starting an election) - double of this is upperbound
-		HeartbeatTick: 3, // frequency of heartbeats
+		HeartbeatTick: 2, // frequency of heartbeats
 		Timeouts:      timeouts,
 		Requests:      3,
 	}
 
 	rlConfig := raft.RLConfig{
 		TicksBetweenPartition: 3,
-		MaxMessagesPerTick:    10,
+		MaxMessagesPerTick:    100,
 		StaySameStateUpTo:     5,
 		WithCrashes:           false,
 	}
@@ -122,7 +122,7 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	), types.BugComparator(saveFile))
 
 	// c.AddAnalysis("CommitOnlyOneEntry", policies.RewardMachineAnalyzer(PredHierarchy_3), policies.RewardMachineCoverageComparator(saveFile))
-	c.AddAnalysis("CommitEntriesInDifferentTerms", policies.RewardMachineAnalyzer(PredHierarchy_5), policies.RewardMachineCoverageComparator(saveFile))
+	c.AddAnalysis("CommitEntriesInDifferentTerms", policies.RewardMachineAnalyzer(PredHierarchy_EntriesInDifferentTermsInLog), policies.RewardMachineCoverageComparator(saveFile))
 	c.AddAnalysis("PrintReadable", raft.RaftReadableAnalyzer(savePath), raft.RaftEmptyComparator())
 
 	// here you add different policies with their parameters
@@ -159,10 +159,10 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	// 	Policy:      policies.NewStrictPolicy(strictPolicy),
 	// 	Environment: getRaftPartEnv(raftConfig, colors),
 	// }))
-	c.AddExperiment(types.NewExperiment("PredHierarchy_5", &types.AgentConfig{
+	c.AddExperiment(types.NewExperiment("PredHierarchy_EntriesInDifferentTermsInLog", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
-		Policy:      policies.NewRewardMachinePolicy(PredHierarchy_5),
+		Policy:      policies.NewRewardMachinePolicy(PredHierarchy_EntriesInDifferentTermsInLog),
 		Environment: getRaftPartEnvCfg(raftConfig, colors, rlConfig),
 	}))
 	// c.AddExperiment(types.NewExperiment("PredHierarchy_3", &types.AgentConfig{

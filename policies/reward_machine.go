@@ -26,7 +26,7 @@ func NewRewardMachine(pred types.RewardFuncSingle) *RewardMachine {
 		states:     make([]string, 0),
 	}
 	rm.policies[FinalState] = NewBonusPolicyGreedy(0.1, 0.99, 0.05)
-	rm.policies[InitState] = NewBonusPolicyGreedyReward(0.1, 0.99, 0.05)
+	rm.policies[InitState] = NewBonusPolicyGreedyReward(0.3, 0.9, 0.1)
 	rm.states = append(rm.states, InitState)
 	rm.states = append(rm.states, FinalState)
 
@@ -45,7 +45,7 @@ func (rm *RewardMachine) AddState(pred types.RewardFuncSingle, name string) *Rew
 	// modify second-last element, insert the new state
 	rm.states[index] = name
 	rm.predicates[name] = pred
-	rm.policies[name] = NewBonusPolicyGreedyReward(0.1, 0.99, 0.05)
+	rm.policies[name] = NewBonusPolicyGreedyReward(0.3, 0.9, 0.1)
 
 	return rm
 }

@@ -81,7 +81,7 @@ func (b *BonusPolicyGreedyReward) UpdateRm(step int, state types.State, action t
 	b.visits.Set(stateHash, actionHash, t)
 
 	if rwd { // if reward, give 2 (value higher than any bonus)
-		r = 2
+		r = 2 + 1/(t+1)
 	} else { // assign reward according to visits
 		r = 1 / (t + 1)
 	}

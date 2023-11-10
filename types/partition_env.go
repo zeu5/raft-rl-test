@@ -499,7 +499,7 @@ func (p *PartitionEnv) handlePartition(a Action) *Partition {
 				messages[i], messages[j] = messages[j], messages[i]
 			})
 
-			mToDeliver := p.rand.Intn(p.config.MaxMessagesPerTick) // randomly choose how many messages to deliver, up to specified bound
+			mToDeliver := min(len(messages), p.config.MaxMessagesPerTick) // randomly choose how many messages to deliver, up to specified bound
 			messagesToDeliver := make([]Message, 0)
 			messagesToDrop := make([]Message, 0)
 			for j := 0; j < mToDeliver; j++ {
@@ -670,4 +670,11 @@ func isSamePartition(one [][]Color, two [][]Color) bool {
 		}
 	}
 	return true
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
