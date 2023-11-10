@@ -194,7 +194,6 @@ func (r RaftMessageWrapper) Copy() RaftMessageWrapper {
 		Term:       r.Message.Term,
 		LogTerm:    r.Message.LogTerm,
 		Index:      r.Message.Index,
-		Entries:    make([]pb.Entry, len(r.Message.Entries)),
 		Commit:     r.Message.Commit,
 		Vote:       r.Message.Vote,
 		Snapshot:   r.Message.Snapshot,
@@ -203,12 +202,15 @@ func (r RaftMessageWrapper) Copy() RaftMessageWrapper {
 		Context:    r.Message.Context,
 		Responses:  r.Message.Responses,
 	}
-	for i, entry := range r.Message.Entries {
-		newMessage.Entries[i] = pb.Entry{
-			Term:  entry.Term,
-			Index: entry.Index,
-			Type:  entry.Type,
-			Data:  entry.Data,
+	if len(r.Message.Entries) != 0 {
+		newMessage.Entries = make([]pb.Entry, len(r.Message.Entries))
+		for i, entry := range r.Message.Entries {
+			newMessage.Entries[i] = pb.Entry{
+				Term:  entry.Term,
+				Index: entry.Index,
+				Type:  entry.Type,
+				Data:  entry.Data,
+			}
 		}
 	}
 	return RaftMessageWrapper{
@@ -260,7 +262,8 @@ func (p *RaftPartitionEnv) Tick() types.PartitionedSystemState {
 				p.storages[id].Append(ready.Entries)
 			}
 			for _, message := range ready.Messages {
-				p.messages[msgKey(message)] = message
+				msgK := msgKey(message)
+				p.messages[msgK] = message
 			}
 			node.Advance(ready)
 		}
@@ -337,10 +340,11 @@ func (l *RaftPartitionEnv) DeliverMessages(messages []types.Message) types.Parti
 func (p *RaftPartitionEnv) deliverMessage(m types.Message) types.PartitionedSystemState {
 	rm := m.(RaftMessageWrapper)
 	node, exists := p.nodes[rm.Message.To]
+	msgK := msgKey(rm.Message)
 	if exists {
 		node.Step(rm.Message)
 	}
-	delete(p.messages, msgKey(rm.Message))
+	delete(p.messages, msgK)
 
 	newState := RaftState{
 		NodeStates:   make(map[uint64]raft.Status),
@@ -360,7 +364,8 @@ func (p *RaftPartitionEnv) deliverMessage(m types.Message) types.PartitionedSyst
 				p.storages[id].Append(ready.Entries)
 			}
 			for _, message := range ready.Messages {
-				p.messages[msgKey(message)] = message
+				msgK := msgKey(message)
+				p.messages[msgK] = message
 			}
 			node.Advance(ready)
 		}
@@ -399,6 +404,7 @@ func (l *RaftPartitionEnv) DropMessages(messages []types.Message) types.Partitio
 
 // drops the specified message in the system, no tick pass
 func (p *RaftPartitionEnv) dropMessage(m types.Message) types.PartitionedSystemState {
+	delete(p.messages, m.Hash())
 	newState := RaftState{
 		NodeStates:   copyNodeStates(p.curState.NodeStates),
 		Messages:     copyMessages(p.curState.Messages),

@@ -184,3 +184,19 @@ func AllInSyncAtleast(minTerm int) types.RewardFuncSingle {
 		return len(allTerms) == 1
 	}
 }
+
+func AllInTermAtleast(minTerm int) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		ps, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+		for _, state := range ps.ReplicaStates {
+			rState := state.(*RedisNodeState)
+			if rState.Term < minTerm {
+				return false
+			}
+		}
+		return true
+	}
+}

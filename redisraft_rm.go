@@ -35,6 +35,12 @@ func getRedisPredicateHeirarchy(name string) (*policies.RewardMachine, bool) {
 		machine.AddState(redisraft.InState("follower").And(redisraft.CurrentIndexAtLeast(5)), "FollowerAtLeastIndex6")
 	case "AllInSync":
 		machine = policies.NewRewardMachine(redisraft.AllInSyncAtleast(2))
+		machine.AddState(redisraft.TermNumber(2), "ReachTerm2")
+		machine.AddState(redisraft.AllInTermAtleast(2), "AllReachTerm2")
+	case "MinTerm":
+		machine = policies.NewRewardMachine(redisraft.AllInTermAtleast(2))
+		machine.AddState(redisraft.AllInTermAtleast(1), "MinTerm1")
+		machine.AddState(redisraft.InState("candidate").And(redisraft.AllInTermAtleast(1)), "Candidate")
 	case "OutOfSync":
 		machine = policies.NewRewardMachine(redisraft.AllInSyncAtleast(3))
 		machine.AddState(redisraft.OutOfSyncBy(2), "OutOfSync")

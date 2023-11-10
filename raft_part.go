@@ -33,22 +33,22 @@ func RaftPart(episodes, horizon int, saveFile string) {
 	c.AddAnalysis("Plot", raft.RaftAnalyzer(saveFile, colors...), raft.RaftPlotComparator(saveFile))
 
 	// here you add different policies with their parameters
-	strict := policies.NewStrictPolicy(types.NewRandomPolicy())
-	strict.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
+	// strict := policies.NewStrictPolicy(types.NewRandomPolicy())
+	// strict.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
 
-	c.AddExperiment(types.NewExperiment("Strict", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      strict,
-		Environment: getRaftPartEnv(raftConfig, colors),
-	}))
-
-	// c.AddExperiment(types.NewExperiment("RL", &types.AgentConfig{
+	// c.AddExperiment(types.NewExperiment("Strict", &types.AgentConfig{
 	// 	Episodes:    episodes,
 	// 	Horizon:     horizon,
-	// 	Policy:      policies.NewSoftMaxNegFreqPolicy(0.3, 0.7, 1),
+	// 	Policy:      strict,
 	// 	Environment: getRaftPartEnv(raftConfig, colors),
 	// }))
+
+	c.AddExperiment(types.NewExperiment("RL", &types.AgentConfig{
+		Episodes:    episodes,
+		Horizon:     horizon,
+		Policy:      policies.NewSoftMaxNegFreqPolicy(0.3, 0.7, 1),
+		Environment: getRaftPartEnv(raftConfig, colors),
+	}))
 	// c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
 	// 	Episodes:    episodes,
 	// 	Horizon:     horizon,

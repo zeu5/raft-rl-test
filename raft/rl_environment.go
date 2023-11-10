@@ -460,7 +460,6 @@ func copyMessage(m pb.Message) pb.Message {
 		Term:       m.Term,
 		LogTerm:    m.LogTerm,
 		Index:      m.Index,
-		Entries:    make([]pb.Entry, len(m.Entries)),
 		Commit:     m.Commit,
 		Vote:       m.Vote,
 		Snapshot:   m.Snapshot,
@@ -469,12 +468,15 @@ func copyMessage(m pb.Message) pb.Message {
 		Context:    m.Context,
 		Responses:  m.Responses,
 	}
-	for i, entry := range m.Entries {
-		newMessage.Entries[i] = pb.Entry{
-			Term:  entry.Term,
-			Index: entry.Index,
-			Type:  entry.Type,
-			Data:  entry.Data,
+	if len(m.Entries) != 0 {
+		newMessage.Entries = make([]pb.Entry, len(m.Entries))
+		for i, entry := range m.Entries {
+			newMessage.Entries[i] = pb.Entry{
+				Term:  entry.Term,
+				Index: entry.Index,
+				Type:  entry.Type,
+				Data:  entry.Data,
+			}
 		}
 	}
 	return newMessage
@@ -498,7 +500,6 @@ func copyMessages(messages map[string]pb.Message) map[string]pb.Message {
 			Term:       m.Term,
 			LogTerm:    m.LogTerm,
 			Index:      m.Index,
-			Entries:    make([]pb.Entry, len(m.Entries)),
 			Commit:     m.Commit,
 			Vote:       m.Vote,
 			Snapshot:   m.Snapshot,
@@ -507,12 +508,15 @@ func copyMessages(messages map[string]pb.Message) map[string]pb.Message {
 			Context:    m.Context,
 			Responses:  m.Responses,
 		}
-		for i, entry := range m.Entries {
-			newMessage.Entries[i] = pb.Entry{
-				Term:  entry.Term,
-				Index: entry.Index,
-				Type:  entry.Type,
-				Data:  entry.Data,
+		if len(m.Entries) != 0 {
+			newMessage.Entries = make([]pb.Entry, len(m.Entries))
+			for i, entry := range m.Entries {
+				newMessage.Entries[i] = pb.Entry{
+					Term:  entry.Term,
+					Index: entry.Index,
+					Type:  entry.Type,
+					Data:  entry.Data,
+				}
 			}
 		}
 		c[k] = newMessage

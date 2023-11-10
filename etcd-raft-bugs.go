@@ -102,7 +102,10 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 
 	PredHierarchy_5 := policies.NewRewardMachine(raft.EntriesInDifferentTermsInLog(2))
 	PredHierarchy_5.AddState(raft.ExactEntriesInLog(1), "OneEntryCommitted")
-	PredHierarchy_5.AddState(raft.InStateWithCommittedEntries(r.StateCandidate, 1), "Candidate withCommittedEntry")
+	PredHierarchy_5.AddState(raft.InStateWithCommittedEntries(r.StateCandidate, 1), "CandidateWithCommittedEntry")
+	PredHierarchy_5.AddState(raft.InStateWithCommittedEntries(r.StateLeader, 1), "NoPartitionWithCandidate")
+
+	// PredHierarchy_6 := policies.NewRewardMachine(raft.EntriesInDifferentTermsInLog(2))
 
 	// c is general experiment
 	// colors ... , expanded list, can omit the argument
