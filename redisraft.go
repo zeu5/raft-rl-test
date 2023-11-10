@@ -14,13 +14,15 @@ import (
 
 func RedisRaftExploration(episodes, horizon int, saveFile string, ctx context.Context) {
 	env := redisraft.NewRedisRaftEnv(ctx, &redisraft.ClusterConfig{
-		NumNodes:            3,
-		BasePort:            5000,
-		BaseInterceptPort:   2023,
-		ID:                  1,
-		InterceptListenAddr: "localhost:7074",
-		WorkingDir:          path.Join(saveFile, "tmp"),
-		NumRequests:         3,
+		NumNodes:              3,
+		BasePort:              5000,
+		BaseInterceptPort:     2023,
+		ID:                    1,
+		InterceptListenAddr:   "localhost:7074",
+		WorkingDir:            path.Join(saveFile, "tmp"),
+		NumRequests:           3,
+		RaftModulePath:        "/home/snagendra/go/src/github.com/zeu5/raft-rl-test/redisraft/redisraft.so",
+		RedisServerBinaryPath: "/home/snagendra/go/src/github.com/zeu5/raft-rl-test/redisraft/redis-server",
 	})
 	colors := []redisraft.RedisRaftColorFunc{redisraft.ColorState(), redisraft.ColorCommit(), redisraft.ColorLeader(), redisraft.ColorVote(), redisraft.ColorBoundedTerm(5)}
 

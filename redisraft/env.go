@@ -264,7 +264,7 @@ func (r *RedisRaftEnv) Cleanup() {
 }
 
 func (r *RedisRaftEnv) Tick() types.PartitionedSystemState {
-	time.Sleep(50 * time.Microsecond)
+	time.Sleep(20 * time.Millisecond)
 	newState := &RedisClusterState{
 		NodeStates: r.cluster.GetNodeStates(),
 		Messages:   r.network.GetAllMessages(),

@@ -15,8 +15,23 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+type RedisEntry struct {
+	ID      string
+	Term    int
+	DataLen int
+}
+
+func (r RedisEntry) Copy() RedisEntry {
+	return RedisEntry{
+		ID:      r.ID,
+		Term:    r.Term,
+		DataLen: r.DataLen,
+	}
+}
+
 type RedisNodeState struct {
 	Params    map[string]string
+	Logs      []RedisEntry
 	LogStdout string
 	LogStderr string
 	State     string
@@ -32,6 +47,7 @@ type RedisNodeState struct {
 func (r *RedisNodeState) Copy() *RedisNodeState {
 	new := &RedisNodeState{
 		Params:    make(map[string]string),
+		Logs:      make([]RedisEntry, len(r.Logs)),
 		LogStdout: r.LogStdout,
 		LogStderr: r.LogStderr,
 		State:     r.State,
@@ -41,15 +57,19 @@ func (r *RedisNodeState) Copy() *RedisNodeState {
 		Applied:   r.Applied,
 		Vote:      r.Vote,
 		Lead:      r.Lead,
+		Snapshot:  r.Snapshot,
 	}
 	for k, v := range r.Params {
 		new.Params[k] = v
+	}
+	for i, e := range r.Logs {
+		new.Logs[i] = e.Copy()
 	}
 	return new
 }
 
 func EmptyRedisNodeState() *RedisNodeState {
-	return &RedisNodeState{Params: make(map[string]string)}
+	return &RedisNodeState{Params: make(map[string]string), Logs: make([]RedisEntry, 0)}
 }
 
 type RedisNodeConfig struct {

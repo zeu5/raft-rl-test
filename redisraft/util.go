@@ -1,6 +1,7 @@
 package redisraft
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -8,6 +9,7 @@ import (
 func ParseInfo(info string) *RedisNodeState {
 	r := &RedisNodeState{
 		Params: make(map[string]string),
+		Logs:   make([]RedisEntry, 0),
 	}
 
 	for _, line := range strings.Split(info, "\r\n") {
@@ -67,6 +69,42 @@ func ParseInfo(info string) *RedisNodeState {
 		curIndex, err := strconv.Atoi(curIndexS)
 		if err == nil {
 			r.Index = curIndex
+		}
+	}
+
+	if logEntriesS, ok := r.Params["log_entries"]; ok {
+		numEntries, err := strconv.Atoi(logEntriesS)
+		if err == nil {
+			for i := 0; i < numEntries; i++ {
+				eS, ok := r.Params[fmt.Sprintf("entry%d", i)]
+				if !ok {
+					continue
+				}
+				newEntry := RedisEntry{}
+				for _, keyVal := range strings.Split(eS, ",") {
+					splits := strings.Split(keyVal, "=")
+					if len(splits) != 2 {
+						continue
+					}
+					key := splits[0]
+					val := splits[1]
+					switch key {
+					case "id":
+						newEntry.ID = val
+					case "term":
+						term, err := strconv.Atoi(val)
+						if err == nil {
+							newEntry.Term = term
+						}
+					case "data_len":
+						dataLen, err := strconv.Atoi(val)
+						if err == nil {
+							newEntry.DataLen = dataLen
+						}
+					}
+				}
+				r.Logs = append(r.Logs, newEntry)
+			}
 		}
 	}
 
