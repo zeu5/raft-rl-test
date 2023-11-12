@@ -36,6 +36,8 @@ type RaftState struct {
 	Requests []pb.Message
 	// Boolean to indicate if the actions include dropping messages
 	WithTimeouts bool
+
+	ticks int
 }
 
 // State of a replica in the Raft environment
@@ -194,11 +196,12 @@ var _ types.Action = &RaftAction{}
 
 // config of the raft environment
 type RaftEnvironmentConfig struct {
-	Replicas      int
-	ElectionTick  int
-	HeartbeatTick int
-	Timeouts      bool
-	Requests      int
+	Replicas          int
+	ElectionTick      int
+	HeartbeatTick     int
+	Timeouts          bool
+	Requests          int
+	SnapshotFrequency int
 }
 
 func (r *RaftEnvironmentConfig) String() string {
@@ -207,7 +210,8 @@ func (r *RaftEnvironmentConfig) String() string {
 	result = fmt.Sprintf("%s ElectionTick: %d\n", result, r.ElectionTick)
 	result = fmt.Sprintf("%s HeartbeatTick: %d\n", result, r.HeartbeatTick)
 	result = fmt.Sprintf("%s Timeouts: %t\n", result, r.Timeouts)
-	result = fmt.Sprintf("%s Requests: %d\n\n", result, r.Requests)
+	result = fmt.Sprintf("%s Requests: %d\n", result, r.Requests)
+	result = fmt.Sprintf("%s Snapshot frequency: %d\n\n", result, r.SnapshotFrequency)
 	return result
 }
 
@@ -290,6 +294,7 @@ func (r *RaftEnvironment) makeNodes() {
 		Snapshots:    make(map[uint64]pb.SnapshotMetadata),
 		WithTimeouts: r.config.Timeouts,
 		Requests:     make([]pb.Message, r.config.Requests),
+		ticks:        0,
 	}
 	for i := 0; i < r.config.Requests; i++ {
 		initState.Requests[i] = pb.Message{

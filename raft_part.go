@@ -12,11 +12,12 @@ import (
 func RaftPart(episodes, horizon int, saveFile string) {
 	// config of the running system
 	raftConfig := raft.RaftEnvironmentConfig{
-		Replicas:      3,
-		ElectionTick:  10, // lower bound for a process to try to go to new term (starting an election) - double of this is upperbound
-		HeartbeatTick: 3,  // frequency of heartbeats
-		Timeouts:      timeouts,
-		Requests:      requests,
+		Replicas:          3,
+		ElectionTick:      10, // lower bound for a process to try to go to new term (starting an election) - double of this is upperbound
+		HeartbeatTick:     3,  // frequency of heartbeats
+		Timeouts:          timeouts,
+		Requests:          requests,
+		SnapshotFrequency: 5,
 	}
 
 	// abstraction for both plot and RL

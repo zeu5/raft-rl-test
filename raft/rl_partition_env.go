@@ -251,7 +251,9 @@ func (p *RaftPartitionEnv) Tick() types.PartitionedSystemState {
 		WithTimeouts: p.config.Timeouts,
 		Logs:         make(map[uint64][]pb.Entry), // guess this should be added also here?
 		Snapshots:    make(map[uint64]pb.SnapshotMetadata),
+		ticks:        p.curState.ticks + 1,
 	}
+
 	for id, node := range p.nodes {
 		if node.HasReady() {
 			ready := node.Ready()
@@ -281,6 +283,26 @@ func (p *RaftPartitionEnv) Tick() types.PartitionedSystemState {
 		if err == nil {
 			// TODO: copy logs instead of assigning directly
 			newState.Logs[id] = copyLog(ents)
+		}
+
+		if p.config.SnapshotFrequency != 0 && newState.ticks > 0 && newState.ticks%p.config.SnapshotFrequency == 0 {
+			voters := make([]uint64, p.config.Replicas)
+			for i := 0; i < p.config.Replicas; i++ {
+				voters[i] = uint64(i + 1)
+			}
+			cfg := &pb.ConfState{Voters: voters}
+			if status.Applied > 2+uint64(p.config.Replicas) {
+				data := make([]byte, 0)
+				for _, e := range ents {
+					if e.Type == pb.EntryNormal && e.Index < status.Applied && len(e.Data) > 0 {
+						data = append(data, e.Data...)
+					}
+				}
+				storage.CreateSnapshot(status.Applied-1, cfg, data)
+
+				// Not sure if log should be compacted
+				// p.storages[id].Compact(status.Applied - 1)
+			}
 		}
 
 		// add snapshot
