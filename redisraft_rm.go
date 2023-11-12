@@ -78,13 +78,14 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		env.Cleanup()
 		return
 	}
+	RMPolicy := policies.NewRewardMachinePolicy(rm, false)
 
-	c.AddAnalysis("rm", policies.RewardMachineAnalyzer(rm), policies.RewardMachineCoverageComparator(saveFile))
+	c.AddAnalysis("rm", policies.RewardMachineAnalyzer(RMPolicy), policies.RewardMachineCoverageComparator(saveFile))
 
 	c.AddExperiment(types.NewExperiment("RM", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
-		Policy:      policies.NewRewardMachinePolicy(rm),
+		Policy:      RMPolicy,
 		Environment: partitionEnv,
 	}))
 

@@ -78,10 +78,12 @@ func RSLRewardMachine(rewardMachine string) error {
 		return fmt.Errorf("cannot find reward machine: %s", rewardMachine)
 	}
 
+	RMPolicy := policies.NewRewardMachinePolicy(rm, false)
+
 	colors := []rsl.RSLColorFunc{rsl.ColorState(), rsl.ColorDecree(), rsl.ColorDecided(), rsl.ColorBoundedBallot(5)}
 
 	c := types.NewComparison(runs)
-	c.AddAnalysis("rm", policies.RewardMachineAnalyzer(rm), policies.RewardMachineCoverageComparator(saveFile))
+	c.AddAnalysis("rm", policies.RewardMachineAnalyzer(RMPolicy), policies.RewardMachineCoverageComparator(saveFile))
 	c.AddAnalysis("bugs", types.BugAnalyzer(
 		path.Join(saveFile, "bugs"),
 		types.BugDesc{Name: "InconsistentLogs", Check: rsl.InconsistentLogs()},
@@ -123,7 +125,7 @@ func RSLRewardMachine(rewardMachine string) error {
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
-			Policy:      policies.NewRewardMachinePolicy(rm),
+			Policy:      RMPolicy,
 			Environment: GetRSLEnvironment(config, colors),
 		},
 	))

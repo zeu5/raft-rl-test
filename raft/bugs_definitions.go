@@ -66,7 +66,7 @@ func ModifiedLog() func(*types.Trace) bool {
 						replicasLogs[replica_id] = make([]pb.Entry, 0)
 					}
 
-					for j := 0; j < len(replicasLogs[replica_id]); j++ { // for the size of the old log (ignore newly appended entries)
+					for j := 0; j < min(len(replicasLogs[replica_id]), len(curLog)); j++ { // for the size of the old log (ignore newly appended entries)
 						if !eq_entry(curLog[j], replicasLogs[replica_id][j]) { // check if they are equal
 							return true // BUG FOUND
 						}
@@ -192,11 +192,11 @@ func DummyBug2() func(*types.Trace) bool {
 			pS, ok := s.(*types.Partition)
 			if ok {
 				for _, elem := range pS.ReplicaStates {
-					repState := elem.(map[string]interface{}) // cast into map
-					curLog := repState["log"].([]pb.Entry)    // cast "log" into list of pb.Entry
+					repState := elem.(RaftReplicaState) // cast into map
+					// curLog := repState.Log    // cast "log" into list of pb.Entry
+					curSnapshot := repState.Snapshot
 
-					if len(filterEntries(curLog)) > 2 { // check if log size decreased
-						filterEntries(curLog)
+					if curSnapshot.Index > 0 || curSnapshot.Term > 0 { // check if log size decreased
 						return true // BUG FOUND
 					}
 				}

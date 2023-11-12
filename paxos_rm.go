@@ -77,7 +77,7 @@ func PaxosRewardMachine(episodes, horizon int) {
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
-			Policy:      policies.NewRewardMachinePolicy(guideRM),
+			Policy:      policies.NewRewardMachinePolicy(guideRM, false),
 			Environment: getLPaxosPartEnv(lPaxosConfig, true),
 		},
 	))

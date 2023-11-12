@@ -99,7 +99,7 @@ func GridRewardMachine(episodes, horizon int, height, width, grids int, runs int
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
-			Policy:      policies.NewRewardMachinePolicy(rm),
+			Policy:      policies.NewRewardMachinePolicy(rm, false),
 			Environment: grid.NewGridEnvironment(height, width, grids, doors...),
 		},
 	))

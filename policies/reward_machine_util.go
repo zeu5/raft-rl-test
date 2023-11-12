@@ -21,8 +21,9 @@ type RewardMachineDataset struct {
 // Each trace is segmented based on the predicates to jump to
 // The last segment contains the explored states
 
-func RewardMachineAnalyzer(rm *RewardMachine) types.Analyzer {
+func RewardMachineAnalyzer(rmp *RewardMachinePolicy) types.Analyzer {
 	return func(run int, s string, traces []*types.Trace) types.DataSet {
+		rm := rmp.rm
 		ds := &RewardMachineDataset{
 			RMStateVisits:                  make(map[string]int),
 			FinalPredicateStates:           make(map[string]bool),
@@ -33,7 +34,7 @@ func RewardMachineAnalyzer(rm *RewardMachine) types.Analyzer {
 		finalPredicate := rm.GetFinalPredicate()
 		numTracesFinalReached := 0
 
-		for traceNo, t := range traces {
+		for traceNo, t := range traces { // for each episode trace
 			finalPredicateReached := false
 
 			traceRMStatesVisited := make(map[string]bool)
@@ -67,7 +68,7 @@ func RewardMachineAnalyzer(rm *RewardMachine) types.Analyzer {
 						break
 					}
 				}
-				if finalPredicateReached && finalPredicate(nexState) {
+				if finalPredicateReached && (rmp.oneTime || finalPredicate(nexState)) { // count unique final states explored, either still in predicate or oneTime machine
 					nextStateHash := nexState.Hash()
 					if _, ok := ds.FinalPredicateStates[nextStateHash]; !ok {
 						ds.FinalPredicateStates[nextStateHash] = true
