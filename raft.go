@@ -10,6 +10,7 @@ import (
 var timeouts bool
 var requests int
 var abstracter string
+var hierarchy string
 
 func Raft(episodes, horizon int, saveFile string) {
 	raftConfig := raft.RaftEnvironmentConfig{

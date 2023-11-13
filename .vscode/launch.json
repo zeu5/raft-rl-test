@@ -85,7 +85,9 @@
                 "100",
                 "etcd-raft-bugs",
                 "--save",
-                "result_debug"
+                "result_debug",
+                "-p",
+                "OutdatedLog2"
             ]
         },
         {

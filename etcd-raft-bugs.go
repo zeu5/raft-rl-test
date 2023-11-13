@@ -11,56 +11,38 @@ import (
 	r "go.etcd.io/raft/v3"
 )
 
-// func getRewardMachine(name string) (*policies.RewardMachine, bool) {
-// 	var machine *policies.RewardMachine = nil
-// 	switch name {
-// 	case "InStatePrimary":
-// 		machine = policies.NewRewardMachine(rsl.InState(rsl.StateStablePrimary))
-// 	case "SinglePrimary":
-// 		machine = policies.NewRewardMachine(rsl.NodePrimary(1))
-// 	case "NumDecided":
-// 		machine = policies.NewRewardMachine(rsl.NumDecided(2))
-// 	case "ChangePrimary":
-// 		m2 := policies.NewRewardMachine(rsl.NodePrimary(2))
-// 		m2.AddState(rsl.NodePrimary(1), "OnePrimary")
-// 		machine = m2
-// 	case "NodeDecidedAndPrimary":
-// 		machine = policies.NewRewardMachine(rsl.NodeNumDecided(1, 2).And(rsl.NodePrimary(1)))
-// 	case "NodeDecidedAfterPrimary":
-// 		m4 := policies.NewRewardMachine(rsl.NodeNumDecided(1, 2))
-// 		m4.AddState(rsl.NodePrimary(1).And(rsl.NumDecided(0)), "NodeOnePrimary")
-// 		machine = m4
-// 	case "InBallot":
-// 		machine = policies.NewRewardMachine(rsl.InBallot(2))
-// 	case "NodeInBallot":
-// 		machine = policies.NewRewardMachine(rsl.NodeInBallot(1, 2))
-// 	case "InPreparedBallot":
-// 		machine = policies.NewRewardMachine(rsl.InPreparedBallot(2))
-// 	case "NodeInPreparedBallot":
-// 		machine = policies.NewRewardMachine(rsl.NodeInPreparedBallot(1, 2))
-// 	case "DifferentBallotCommits":
-// 		machine = policies.NewRewardMachine(rsl.AtLeastDecided(2))
-// 		machine.AddState(rsl.InStateAndBallot(rsl.StateStablePrimary, 1), "Ballot1Primary")
-// 		machine.AddState(rsl.AtMostDecided(1), "AtMost1Decided")
-// 		machine.AddState(rsl.InStateAndBallot(rsl.StateStablePrimary, 2), "Ballot2Primary")
-// 	case "OutOfSync":
-// 		machine = policies.NewRewardMachine(rsl.AllInSync().And(rsl.AllAtLeastBallot(3)))
-// 		machine.AddState(rsl.OutSyncBallotBy(2).And(rsl.AllAtMostBallot(3)), "OutOfSync")
-// 		// case "CrashAndHeal":
-// 		// 	machine = policies.NewRewardMachine()
-// 	}
-// 	return machine, machine != nil
-// }
+func getPredHierEtcd(name string) (*policies.RewardMachine, bool, bool) {
+	var machine *policies.RewardMachine = nil
+	oneTime := false
+
+	switch name {
+	case "MultipleLeaderElections3":
+		PredHierarchy_MultipleLeaderElections3 := policies.NewRewardMachine(raft.LeaderElectedPredicateNumber(3)) // final predicate - target space
+		PredHierarchy_MultipleLeaderElections3.AddState(raft.LeaderElectedPredicateNumber(1), "OneElection")      // 1st step
+		PredHierarchy_MultipleLeaderElections3.AddState(raft.LeaderElectedPredicateNumber(2), "TwoElections")     // 2nd ...
+		machine = PredHierarchy_MultipleLeaderElections3
+		oneTime = true
+	case "OutdatedLog2":
+		PredHierarchy_OutdatedLog2 := policies.NewRewardMachine(raft.LeaderElectedPredicateNumber(2).And(raft.AtLeastOneLogEmpty().And(raft.AtLeastOneLogNotEmpty()).And(raft.StackSizeLowerBound(1)))) // final predicate - target space
+		PredHierarchy_OutdatedLog2.AddState(raft.LeaderElectedPredicateNumber(1).And(raft.AtLeastOneLogEmpty().And(raft.StackSizeLowerBound(1))), "OneElection")                                        // 1st step
+		PredHierarchy_OutdatedLog2.AddState(raft.LeaderElectedPredicateNumber(1).And(raft.AtLeastOneLogNotEmpty().And(raft.AtLeastOneLogEmpty()).And(raft.StackSizeLowerBound(1))), "TwoElections")     // 2nd ...
+		machine = PredHierarchy_OutdatedLog2
+		oneTime = true
+	}
+
+	return machine, oneTime, machine != nil
+}
 
 func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	// config of the running system
 	// requests = 3
 	raftConfig := raft.RaftEnvironmentConfig{
-		Replicas:      3,
-		ElectionTick:  7, // lower bound for a process to try to go to new term (starting an election) - double of this is upperbound
-		HeartbeatTick: 2, // frequency of heartbeats
-		Timeouts:      timeouts,
-		Requests:      3,
+		Replicas:          3,
+		ElectionTick:      7, // lower bound for a process to try to go to new term (starting an election) - double of this is upperbound
+		HeartbeatTick:     2, // frequency of heartbeats
+		Timeouts:          timeouts,
+		Requests:          3,
+		SnapshotFrequency: 0,
 	}
 
 	rlConfig := raft.RLConfig{
@@ -111,9 +93,6 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 
 	// build a machine with sequence of predicates
 	// elect a leader, commit with one replica not updated, elect that replica as leader
-	PredHierarchy_MultipleLeaderElections3 := policies.NewRewardMachine(raft.LeaderElectedPredicateNumber(3)) // final predicate - target space
-	PredHierarchy_MultipleLeaderElections3.AddState(raft.LeaderElectedPredicateNumber(1), "OneElection")      // 1st step
-	PredHierarchy_MultipleLeaderElections3.AddState(raft.LeaderElectedPredicateNumber(2), "TwoElections")     // 2nd ...
 
 	PredHierarchy_MultipleLeaderElections := policies.NewRewardMachine(raft.LeaderElectedPredicateNumberWithTerms(3, []uint64{2, 3, 4})) // final predicate - target space
 	PredHierarchy_MultipleLeaderElections.AddState(raft.LeaderElectedPredicateStateWithTerm(2), "FirstElection")                         // 1st step
@@ -148,8 +127,9 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 
 	// PredHierarchy_6 := policies.NewRewardMachine(raft.EntriesInDifferentTermsInLog(2))
 
-	RMPolicyName := "PredHierarchy_EntriesInDifferentTermsInLog"
-	RMPolicy := policies.NewRewardMachinePolicy(PredHierarchy_EntriesInDifferentTermsInLog, true)
+	PredHier, oneTime, _ := getPredHierEtcd(hierarchy)
+	PredHierName := hierarchy
+	PHPolicy := policies.NewRewardMachinePolicy(PredHier, oneTime)
 
 	// c is general experiment
 	// colors ... , expanded list, can omit the argument
@@ -165,11 +145,11 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 		types.BugDesc{Name: "ReducedLog", Check: raft.ReducedLog()},
 		types.BugDesc{Name: "ModifiedLog", Check: raft.ModifiedLog()},
 		types.BugDesc{Name: "InconsistentLogs", Check: raft.InconsistentLogs()},
-		types.BugDesc{Name: "DummyBug2", Check: raft.DummyBug2()},
+		// types.BugDesc{Name: "DummyBug2", Check: raft.DummyBug2()},
 	), types.BugComparator(saveFile))
 
 	// c.AddAnalysis("CommitOnlyOneEntry", policies.RewardMachineAnalyzer(PredHierarchy_3), policies.RewardMachineCoverageComparator(saveFile))
-	c.AddAnalysis("CommitEntriesInDifferentTerms", policies.RewardMachineAnalyzer(RMPolicy), policies.RewardMachineCoverageComparator(saveFile))
+	c.AddAnalysis("CommitEntriesInDifferentTerms", policies.RewardMachineAnalyzer(PHPolicy), policies.RewardMachineCoverageComparator(saveFile))
 	// c.AddAnalysis("PrintReadable", raft.RaftReadableAnalyzer(savePath), raft.RaftEmptyComparator())
 
 	// here you add different policies with their parameters
@@ -179,18 +159,18 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	// 	Policy:      policies.NewSoftMaxNegFreqPolicy(0.3, 0.7, 1),
 	// 	Environment: getRaftPartEnv(raftConfig, colors),
 	// }))
-	// c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
-	// 	Episodes:    episodes,
-	// 	Horizon:     horizon,
-	// 	Policy:      types.NewRandomPolicy(),
-	// 	Environment: getRaftPartEnv(raftConfig, colors),
-	// }))
-	// c.AddExperiment(types.NewExperiment("BonusMaxRL", &types.AgentConfig{
-	// 	Episodes:    episodes,
-	// 	Horizon:     horizon,
-	// 	Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.05),
-	// 	Environment: getRaftPartEnv(raftConfig, colors),
-	// }))
+	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
+		Episodes:    episodes,
+		Horizon:     horizon,
+		Policy:      types.NewRandomPolicy(),
+		Environment: getRaftPartEnv(raftConfig, colors),
+	}))
+	c.AddExperiment(types.NewExperiment("BonusMaxRL", &types.AgentConfig{
+		Episodes:    episodes,
+		Horizon:     horizon,
+		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.05),
+		Environment: getRaftPartEnv(raftConfig, colors),
+	}))
 	// c.AddExperiment(types.NewExperiment("PredHierarchy_1", &types.AgentConfig{
 	// 	Episodes:    episodes,
 	// 	Horizon:     horizon,
@@ -206,10 +186,10 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	// 	Policy:      policies.NewStrictPolicy(strictPolicy),
 	// 	Environment: getRaftPartEnv(raftConfig, colors),
 	// }))
-	c.AddExperiment(types.NewExperiment(RMPolicyName, &types.AgentConfig{
+	c.AddExperiment(types.NewExperiment(PredHierName, &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
-		Policy:      RMPolicy,
+		Policy:      PHPolicy,
 		Environment: getRaftPartEnvCfg(raftConfig, colors, rlConfig),
 	}))
 	// c.AddExperiment(types.NewExperiment("PredHierarchy_3", &types.AgentConfig{
@@ -234,6 +214,7 @@ func EtcdRaftBugsCommand() *cobra.Command {
 		},
 	}
 	cmd.PersistentFlags().IntVarP(&requests, "requests", "r", 3, "Number of requests to run with")
+	cmd.PersistentFlags().StringVarP(&hierarchy, "phierarchy", "p", "none", "Specify the predicate hierarchy to use")
 	return cmd
 }
 

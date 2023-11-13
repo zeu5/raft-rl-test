@@ -66,7 +66,7 @@ func LeaderElectedPredicateNumber(elections int) types.RewardFuncSingle {
 					terms[ent.Term] = true // add its term to the set
 				}
 			}
-			if len(terms) >= elections { // check number of unique terms
+			if len(terms) == elections { // check number of unique terms
 				return true
 			}
 		}
@@ -154,6 +154,26 @@ func AtLeastOneLogNotEmpty() types.RewardFuncSingle {
 			repState := state.(RaftReplicaState)
 			curLog := committedLog(repState.Log, repState.State)
 			if len(filterEntriesNoElection(curLog)) > 0 {
+				return true
+			}
+		}
+
+		return false
+	}
+}
+
+// return true if there is at least one empty replica log
+func AtLeastOneLogEmpty() types.RewardFuncSingle {
+	return func(s types.State) bool {
+		pS, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+
+		for _, state := range pS.ReplicaStates { // for each replica state
+			repState := state.(RaftReplicaState)
+			curLog := committedLog(repState.Log, repState.State)
+			if len(filterEntriesNoElection(curLog)) == 0 {
 				return true
 			}
 		}
