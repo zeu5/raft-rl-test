@@ -3,7 +3,11 @@ package ratis
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"strconv"
 	"sync"
@@ -56,7 +60,7 @@ func (m Message) Hash() string {
 var _ types.Message = Message{}
 
 type InterceptNetwork struct {
-	Addr   string
+	Port   int
 	ctx    context.Context
 	server *http.Server
 
@@ -66,10 +70,10 @@ type InterceptNetwork struct {
 	messages map[string]Message
 }
 
-func NewInterceptNetwork(ctx context.Context, addr string) *InterceptNetwork {
+func NewInterceptNetwork(ctx context.Context, port int) *InterceptNetwork {
 
 	f := &InterceptNetwork{
-		Addr:     addr,
+		Port:     port,
 		ctx:      ctx,
 		lock:     new(sync.Mutex),
 		nodes:    make(map[uint64]string),
@@ -82,7 +86,7 @@ func NewInterceptNetwork(ctx context.Context, addr string) *InterceptNetwork {
 	r.POST("/event", dummyHandler)
 	r.POST("/message", f.handleMessage)
 	f.server = &http.Server{
-		Addr:    addr,
+		Addr:    fmt.Sprintf("localhost:%d", port),
 		Handler: r,
 	}
 
@@ -109,8 +113,14 @@ func (n *InterceptNetwork) handleMessage(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to unmarshal request"})
 		return
 	}
+	data, err := base64.StdEncoding.DecodeString(m.Data)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to unmarshal request"})
+		return
+	}
+	fmt.Println("Received message of type: " + m.Type)
 	parsedMessage := make(map[string]interface{})
-	if err := json.Unmarshal([]byte(m.Data), &parsedMessage); err != nil {
+	if err := json.Unmarshal(data, &parsedMessage); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to unmarshal request"})
 		return
 	}
@@ -220,7 +230,23 @@ func (n *InterceptNetwork) SendMessage(id string) {
 	if err != nil {
 		return
 	}
-	http.Post("http://"+nodeAddr+"/message", "application/json", bytes.NewBuffer(bs))
+	client := &http.Client{
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout:   5 * time.Second,
+				KeepAlive: 5 * time.Second,
+			}).DialContext,
+			TLSHandshakeTimeout:   5 * time.Second,
+			ResponseHeaderTimeout: 5 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			DisableKeepAlives:     true,
+		},
+	}
+	resp, err := client.Post("http://"+nodeAddr+"/message", "application/json", bytes.NewBuffer(bs))
+	if err == nil {
+		io.ReadAll(resp.Body)
+		resp.Body.Close()
+	}
 
 	n.lock.Lock()
 	delete(n.messages, id)

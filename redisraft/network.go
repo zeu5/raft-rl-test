@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
+	"net"
 	"net/http"
 	"strconv"
 	"sync"
@@ -220,7 +222,23 @@ func (n *InterceptNetwork) SendMessage(id string) {
 	if err != nil {
 		return
 	}
-	http.Post("http://"+nodeAddr+"/message", "application/json", bytes.NewBuffer(bs))
+	client := &http.Client{
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout:   5 * time.Second,
+				KeepAlive: 5 * time.Second,
+			}).DialContext,
+			TLSHandshakeTimeout:   5 * time.Second,
+			ResponseHeaderTimeout: 5 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			DisableKeepAlives:     true,
+		},
+	}
+	resp, err := client.Post("http://"+nodeAddr+"/message", "application/json", bytes.NewBuffer(bs))
+	if err == nil {
+		io.ReadAll(resp.Body)
+		resp.Body.Close()
+	}
 
 	n.lock.Lock()
 	delete(n.messages, id)

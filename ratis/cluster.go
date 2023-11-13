@@ -74,6 +74,7 @@ func (r *RatisNode) Create() {
 		strconv.Itoa(r.config.ID),
 		r.config.Peers,
 		r.config.GroupID,
+		"0",
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
