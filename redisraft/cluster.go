@@ -19,6 +19,7 @@ type RedisEntry struct {
 	ID      string
 	Term    int
 	DataLen int
+	Index   int
 }
 
 func (r RedisEntry) Copy() RedisEntry {
@@ -26,6 +27,7 @@ func (r RedisEntry) Copy() RedisEntry {
 		ID:      r.ID,
 		Term:    r.Term,
 		DataLen: r.DataLen,
+		Index:   r.Index,
 	}
 }
 

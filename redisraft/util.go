@@ -80,7 +80,9 @@ func ParseInfo(info string) *RedisNodeState {
 				if !ok {
 					continue
 				}
-				newEntry := RedisEntry{}
+				newEntry := RedisEntry{
+					Index: i,
+				}
 				for _, keyVal := range strings.Split(eS, ",") {
 					splits := strings.Split(keyVal, "=")
 					if len(splits) != 2 {

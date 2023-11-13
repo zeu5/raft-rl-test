@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -36,8 +37,11 @@ func (r *RatisNodeState) Copy() *RatisNodeState {
 type RatisNodeConfig struct {
 	ID                  int
 	JarPath             string
-	InterceptAddr       string
-	InterceptListenAddr string
+	InterceptPort       int
+	InterceptListenPort int
+	Peers               string
+	GroupID             string
+	WorkingDir          string
 }
 
 type RatisNode struct {
@@ -60,10 +64,21 @@ func NewRatisNode(config *RatisNodeConfig) *RatisNode {
 
 func (r *RatisNode) Create() {
 	// Todo: add command arguments here to instantiate the ratis node
-	serverArgs := []string{}
+	serverArgs := []string{
+		"-cp",
+		r.config.JarPath,
+		"org.apache.ratis.examples.counter.server.CounterServer",
+		strconv.Itoa(r.config.ID),
+		strconv.Itoa(r.config.InterceptPort),
+		strconv.Itoa(r.config.InterceptListenPort),
+		strconv.Itoa(r.config.ID),
+		r.config.Peers,
+		r.config.GroupID,
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	r.process = exec.CommandContext(ctx, "java", serverArgs...)
+	r.process.Dir = r.config.WorkingDir
 
 	r.ctx = ctx
 	r.cancel = cancel
@@ -132,15 +147,25 @@ type RatisClusterConfig struct {
 	RatisJarPath        string
 	BasePort            int
 	BaseInterceptPort   int
-	InterceptListenAddr string
+	InterceptListenPort int
+	GroupID             string
+	WorkingDir          string
 }
 
 func (c *RatisClusterConfig) GetNodeConfig(id int) *RatisNodeConfig {
+	peers := make([]string, 0)
+	for i := 1; i < c.NumNodes+1; i++ {
+		peers = append(peers, fmt.Sprintf("localhost:%d", c.BasePort+i))
+	}
+
 	return &RatisNodeConfig{
 		ID:                  id,
-		InterceptAddr:       c.InterceptListenAddr,
-		InterceptListenAddr: fmt.Sprintf("localhost:%d", c.BaseInterceptPort+id),
+		InterceptPort:       c.InterceptListenPort,
+		InterceptListenPort: c.BaseInterceptPort + id,
 		JarPath:             c.RatisJarPath,
+		Peers:               strings.Join(peers, ","),
+		GroupID:             c.GroupID,
+		WorkingDir:          c.WorkingDir,
 	}
 }
 
