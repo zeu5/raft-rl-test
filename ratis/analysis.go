@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"strings"
 
 	"github.com/zeu5/raft-rl-test/types"
 	"gonum.org/v1/plot"
@@ -146,5 +147,39 @@ func BugComparator() types.Comparator {
 			}
 			fmt.Printf("\nFor run: %d, benchmark: %s, first bug occurrence: %d\n", i, s[j], smallest)
 		}
+	}
+}
+
+func LogAnalyzer(savePath string) types.Analyzer {
+	return func(i int, s string, t []*types.Trace) types.DataSet {
+		for iter, trace := range t {
+
+			haveBugInTrace := false
+			logs := ""
+
+			for i := 0; i < trace.Len(); i++ {
+				s, _, _, _ := trace.Get(i)
+				pState := s.(*types.Partition)
+
+				logLines := make([]string, 0)
+				for nodeID, rs := range pState.ReplicaStates {
+					rState := rs.(*RatisNodeState)
+					if len(rState.LogStdout) != 0 || len(rState.LogStderr) != 0 {
+						logLines = append(logLines, fmt.Sprintf("logs for node: %d\n", nodeID))
+						logLines = append(logLines, "----- Stdout -----", rState.LogStdout, "----- Stderr -----", rState.LogStderr, "\n")
+					}
+				}
+				if len(logLines) > 0 {
+					logs = strings.Join(logLines, "\n")
+					haveBugInTrace = true
+				}
+			}
+
+			if haveBugInTrace {
+				logFilePath := path.Join(savePath, s+"_"+strconv.Itoa(i)+"_"+strconv.Itoa(iter)+".log")
+				os.WriteFile(logFilePath, []byte(logs), 0644)
+			}
+		}
+		return nil
 	}
 }

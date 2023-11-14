@@ -6,17 +6,20 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"path"
 	"strconv"
 	"strings"
 )
 
 type RatisNodeState struct {
-	State   string
-	Term    int
-	Commit  int
-	Applied int
-	Vote    int
-	Lead    int
+	State     string
+	Term      int
+	Commit    int
+	Applied   int
+	Vote      int
+	Lead      int
+	LogStdout string
+	LogStderr string
 }
 
 func EmptyRatisNodeState() *RatisNodeState {
@@ -31,6 +34,9 @@ func (r *RatisNodeState) Copy() *RatisNodeState {
 		Applied: r.Applied,
 		Vote:    r.Vote,
 		Lead:    r.Lead,
+
+		LogStdout: r.LogStdout,
+		LogStderr: r.LogStderr,
 	}
 }
 
@@ -65,6 +71,7 @@ func NewRatisNode(config *RatisNodeConfig) *RatisNode {
 func (r *RatisNode) Create() {
 	// Todo: add command arguments here to instantiate the ratis node
 	serverArgs := []string{
+		"-Dlog4j.configuration=file:" + path.Join(r.config.WorkingDir, "ratis-examples/src/main/resources/log4j.properties"),
 		"-cp",
 		r.config.JarPath,
 		"org.apache.ratis.examples.counter.server.CounterServer",
@@ -83,8 +90,12 @@ func (r *RatisNode) Create() {
 
 	r.ctx = ctx
 	r.cancel = cancel
-	r.stdout = new(bytes.Buffer)
-	r.stderr = new(bytes.Buffer)
+	if r.stdout == nil {
+		r.stdout = new(bytes.Buffer)
+	}
+	if r.stderr == nil {
+		r.stderr = new(bytes.Buffer)
+	}
 	r.process.Stdout = r.stdout
 	r.process.Stderr = r.stderr
 }
@@ -140,7 +151,10 @@ func (r *RatisNode) GetLogs() (string, string) {
 
 func (r *RatisNode) Info() (*RatisNodeState, error) {
 	// Todo: figure out how to get the node state
-	return nil, errors.New("not implemented")
+	return &RatisNodeState{
+		LogStdout: r.stdout.String(),
+		LogStderr: r.stderr.String(),
+	}, nil
 }
 
 type RatisClusterConfig struct {

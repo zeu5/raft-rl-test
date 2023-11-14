@@ -195,6 +195,8 @@ func (r *RedisRaftEnv) Reset() types.PartitionedSystemState {
 	r.cluster = NewCluster(r.clusterConfig)
 	r.cluster.Start()
 
+	r.network.WaitForNodes(r.clusterConfig.NumNodes)
+
 	newState := &RedisClusterState{
 		NodeStates: r.cluster.GetNodeStates(),
 		Messages:   r.network.GetAllMessages(),

@@ -128,6 +128,8 @@ func (r *RatisRaftEnv) Reset() types.PartitionedSystemState {
 	r.cluster = NewCluster(r.clusterConfig)
 	r.cluster.Start()
 
+	r.network.WaitForNodes(r.clusterConfig.NumNodes)
+
 	newState := &RatisClusterState{
 		NodeStates: r.cluster.GetNodeStates(),
 		Messages:   r.network.GetAllMessages(),

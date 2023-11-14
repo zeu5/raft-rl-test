@@ -171,6 +171,8 @@ func (n *InterceptNetwork) handleReplica(c *gin.Context) {
 	n.nodes[uint64(nodeID)] = nodeAddr
 	n.lock.Unlock()
 
+	fmt.Println("Received replica")
+
 	c.JSON(http.StatusOK, gin.H{"message": "ok"})
 }
 
@@ -215,14 +217,14 @@ func (n *InterceptNetwork) WaitForNodes(numNodes int) bool {
 
 func (n *InterceptNetwork) SendMessage(id string) {
 	n.lock.Lock()
-	m, ok1 := n.messages[id]
+	m, ok := n.messages[id]
 	nodeAddr := ""
-	if ok1 {
+	if ok {
 		nodeAddr = n.nodes[m.To()]
 	}
 	n.lock.Unlock()
 
-	if !ok1 {
+	if !ok {
 		return
 	}
 

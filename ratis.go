@@ -6,7 +6,6 @@ import (
 	"os/signal"
 
 	"github.com/spf13/cobra"
-	"github.com/zeu5/raft-rl-test/policies"
 	"github.com/zeu5/raft-rl-test/ratis"
 	"github.com/zeu5/raft-rl-test/types"
 )
@@ -37,13 +36,14 @@ func RatisExploration(episodes, horizon int, saveFile string, ctx context.Contex
 
 	c.AddAnalysis("plot", ratis.CoverageAnalyzer(colors...), ratis.CoverageComparator(saveFile))
 	c.AddAnalysis("bugs", ratis.BugAnalyzer(saveFile), ratis.BugComparator())
+	c.AddAnalysis("logs", ratis.LogAnalyzer(saveFile), types.NoopComparator())
 
-	c.AddExperiment(types.NewExperiment("NegReward", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      policies.NewSoftMaxNegFreqPolicy(0.1, 0.99, 1),
-		Environment: partitionEnv,
-	}))
+	// c.AddExperiment(types.NewExperiment("NegReward", &types.AgentConfig{
+	// 	Episodes:    episodes,
+	// 	Horizon:     horizon,
+	// 	Policy:      policies.NewSoftMaxNegFreqPolicy(0.1, 0.99, 1),
+	// 	Environment: partitionEnv,
+	// }))
 
 	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
 		Episodes:    episodes,
@@ -52,12 +52,12 @@ func RatisExploration(episodes, horizon int, saveFile string, ctx context.Contex
 		Environment: partitionEnv,
 	}))
 
-	c.AddExperiment(types.NewExperiment("BonusMax", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
-		Environment: partitionEnv,
-	}))
+	// c.AddExperiment(types.NewExperiment("BonusMax", &types.AgentConfig{
+	// 	Episodes:    episodes,
+	// 	Horizon:     horizon,
+	// 	Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
+	// 	Environment: partitionEnv,
+	// }))
 
 	c.Run()
 	env.Cleanup()
