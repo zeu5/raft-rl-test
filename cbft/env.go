@@ -52,7 +52,7 @@ func (r *CometClusterState) CanDeliverRequest() bool {
 func (r *CometClusterState) PendingRequests() []types.Request {
 	out := make([]types.Request, len(r.Requests))
 	for i, r := range r.Requests {
-		out[i] = r
+		out[i] = r.Copy()
 	}
 	return out
 }

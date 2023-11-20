@@ -199,9 +199,7 @@
             "program": "${workspaceFolder}",
             "args": [
                 "-e",
-                "1",
-                "--horizon",
-                "150",
+                "100",
                 "comet"
             ]
         },
