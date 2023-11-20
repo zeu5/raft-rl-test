@@ -1,0 +1,90 @@
+package benchmarks
+
+import (
+	"context"
+	"os"
+	"os/signal"
+
+	"github.com/spf13/cobra"
+	"github.com/zeu5/raft-rl-test/cbft"
+	"github.com/zeu5/raft-rl-test/policies"
+	"github.com/zeu5/raft-rl-test/types"
+)
+
+func getCometPredicateHeirarchy(name string) (*policies.RewardMachine, bool) {
+	var machine *policies.RewardMachine = nil
+	switch name {
+	case "Round2":
+		machine = policies.NewRewardMachine(cbft.AnyReachedRound(2))
+	}
+	return machine, machine != nil
+}
+
+func CometRM(machine string, episodes, horizon int, saveFile string, ctx context.Context) {
+	env := cbft.NewCometEnv(ctx, &cbft.CometClusterConfig{
+		CometBinaryPath:     "/home/snagendra/go/src/github.com/zeu5/cometbft/build/cometbft",
+		InterceptListenPort: 7074,
+		BaseRPCPort:         26756,
+		BaseWorkingDir:      "/home/snagendra/go/src/github.com/zeu5/raft-rl-test/results/tmp",
+		NumNodes:            4,
+	})
+	colors := []cbft.CometColorFunc{cbft.ColorHRS(), cbft.ColorProposal(), cbft.ColorNumVotes(), cbft.ColorProposer()}
+
+	partitionEnv := types.NewPartitionEnv(types.PartitionEnvConfig{
+		Painter:                cbft.NewCometStatePainter(colors...),
+		Env:                    env,
+		TicketBetweenPartition: 3,
+		MaxMessagesPerTick:     20,
+		StaySameStateUpto:      2,
+		NumReplicas:            4,
+		WithCrashes:            false,
+	})
+
+	c := types.NewComparison(runs)
+
+	c.AddAnalysis("bugs", cbft.CrashesAnalyzer(saveFile), types.NoopComparator())
+	rm, ok := getCometPredicateHeirarchy(machine)
+	if !ok {
+		env.Cleanup()
+		return
+	}
+	RMPolicy := policies.NewRewardMachinePolicy(rm, false)
+
+	c.AddAnalysis("rm", policies.RewardMachineAnalyzer(RMPolicy), policies.RewardMachineCoverageComparator(saveFile))
+
+	c.AddExperiment(types.NewExperiment("RM", &types.AgentConfig{
+		Episodes:    episodes,
+		Horizon:     horizon,
+		Policy:      RMPolicy,
+		Environment: partitionEnv,
+	}))
+
+	c.Run()
+	env.Cleanup()
+}
+
+func CometRMCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:  "comet-rm [machine]",
+		Args: cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			sigCh := make(chan os.Signal, 1)
+			signal.Notify(sigCh, os.Interrupt)
+
+			doneCh := make(chan struct{})
+
+			ctx, cancel := context.WithCancel(context.Background())
+			go func() {
+				select {
+				case <-sigCh:
+				case <-doneCh:
+				}
+				cancel()
+			}()
+
+			CometRM(args[0], episodes, horizon, saveFile, ctx)
+
+			close(doneCh)
+		},
+	}
+}
