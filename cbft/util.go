@@ -73,7 +73,11 @@ func ColorVotes() CometColorFunc {
 
 func ColorProposer() CometColorFunc {
 	return func(s *CometNodeState) (string, interface{}) {
-		return "proposer", s.Proposer.Index
+		proposerIndex := 0
+		if s.Proposer != nil {
+			proposerIndex = s.Proposer.Index
+		}
+		return "proposer", proposerIndex
 	}
 }
 

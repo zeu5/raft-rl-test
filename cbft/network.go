@@ -3,7 +3,6 @@ package cbft
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,19 +16,19 @@ import (
 )
 
 type Message struct {
-	FromAlias     string          `json:"from"`
-	ToAlias       string          `json:"to"`
-	Data          string          `json:"data"`
-	Type          string          `json:"type"`
-	ID            string          `json:"id"`
-	ParsedMessage *WrappedEnvelop `json:"-"`
-	FromID        int             `json:"-"`
-	ToID          int             `json:"-"`
+	FromAlias     string           `json:"from"`
+	ToAlias       string           `json:"to"`
+	Data          []byte           `json:"data"`
+	Type          string           `json:"type"`
+	ID            string           `json:"id"`
+	ParsedMessage *WrappedEnvelope `json:"-"`
+	FromID        int              `json:"-"`
+	ToID          int              `json:"-"`
 }
 
-type WrappedEnvelop struct {
-	ChanID byte
-	Msg    []byte
+type WrappedEnvelope struct {
+	ChanID byte   `json:"chid"`
+	Msg    []byte `json:"msg"`
 }
 
 func (m Message) To() uint64 {
@@ -51,7 +50,7 @@ func (m Message) Copy() Message {
 		ToID:      m.ToID,
 	}
 	if m.ParsedMessage != nil {
-		n.ParsedMessage = &WrappedEnvelop{
+		n.ParsedMessage = &WrappedEnvelope{
 			ChanID: m.ParsedMessage.ChanID,
 			Msg:    make([]byte, len(m.ParsedMessage.Msg)),
 		}
@@ -133,14 +132,9 @@ func (n *InterceptNetwork) handleMessage(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to unmarshal request"})
 		return
 	}
-	data, err := base64.StdEncoding.DecodeString(m.Data)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to unmarshal request"})
-		return
-	}
-	fmt.Println("Received message of type: " + m.Type)
-	we := &WrappedEnvelop{}
-	if err := json.Unmarshal(data, we); err != nil {
+
+	we := &WrappedEnvelope{}
+	if err := json.Unmarshal(m.Data, we); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to unmarshal request"})
 		return
 	}
@@ -166,8 +160,6 @@ func (n *InterceptNetwork) handleReplica(c *gin.Context) {
 	n.nodes[nodeI.ID] = nodeI
 	n.aliasMap[nodeI.Alias] = nodeI.ID
 	n.lock.Unlock()
-
-	fmt.Println("Received replica")
 
 	c.JSON(http.StatusOK, gin.H{"message": "ok"})
 }

@@ -126,7 +126,7 @@ func (r *CometEnv) Reset() types.PartitionedSystemState {
 		r.cluster.Destroy()
 	}
 	r.network.Reset()
-	r.cluster = NewCluster(r.clusterConfig)
+	r.cluster, _ = NewCluster(r.clusterConfig)
 	r.cluster.Start()
 
 	r.network.WaitForNodes(r.clusterConfig.NumNodes)

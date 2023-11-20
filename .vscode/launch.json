@@ -192,6 +192,20 @@
             ]
         },
         {
+            "name": "Run comet exploration",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "-e",
+                "1",
+                "--horizon",
+                "150",
+                "comet"
+            ]
+        },
+        {
             "name": "Graph analysis",
             "type": "python",
             "request": "launch",

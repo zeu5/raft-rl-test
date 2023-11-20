@@ -13,7 +13,11 @@ import (
 
 func CometExploration(episodes, horizon int, saveFile string, ctx context.Context) {
 	env := cbft.NewCometEnv(ctx, &cbft.CometClusterConfig{
-		NumNodes: 3,
+		CometBinaryPath:     "/Users/srinidhin/Local/go/src/github.com/zeu5/cometbft/build/cometbft",
+		InterceptListenPort: 7074,
+		BaseRPCPort:         26756,
+		BaseWorkingDir:      "/Users/srinidhin/Local/go/src/github.com/zeu5/raft-rl-test/results/tmp",
+		NumNodes:            4,
 	})
 	colors := []cbft.CometColorFunc{cbft.ColorHRS(), cbft.ColorProposal(), cbft.ColorVotes(), cbft.ColorProposer()}
 
@@ -23,34 +27,46 @@ func CometExploration(episodes, horizon int, saveFile string, ctx context.Contex
 		TicketBetweenPartition: 3,
 		MaxMessagesPerTick:     3,
 		StaySameStateUpto:      2,
-		NumReplicas:            3,
-		WithCrashes:            true,
+		NumReplicas:            4,
+		WithCrashes:            false,
 	})
 
 	c := types.NewComparison(runs)
 
 	c.AddAnalysis("plot", cbft.CoverageAnalyzer(colors...), cbft.CoverageComparator(saveFile))
+	c.AddAnalysis("logs", cbft.RecordLogsAnalyzer(saveFile), types.NoopComparator())
+	c.AddAnalysis("state_trace", cbft.RecordStateTraceAnalyzer(saveFile), types.NoopComparator())
 
-	c.AddExperiment(types.NewExperiment("NegReward", &types.AgentConfig{
+	// c.AddExperiment(types.NewExperiment("NegReward", &types.AgentConfig{
+	// 	Episodes:    episodes,
+	// 	Horizon:     horizon,
+	// 	Policy:      policies.NewSoftMaxNegFreqPolicy(0.1, 0.99, 1),
+	// 	Environment: partitionEnv,
+	// }))
+
+	// c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
+	// 	Episodes:    episodes,
+	// 	Horizon:     horizon,
+	// 	Policy:      types.NewRandomPolicy(),
+	// 	Environment: partitionEnv,
+	// }))
+
+	strict := policies.NewStrictPolicy(types.NewRandomPolicy())
+	strict.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
+
+	c.AddExperiment(types.NewExperiment("Strict", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
-		Policy:      policies.NewSoftMaxNegFreqPolicy(0.1, 0.99, 1),
+		Policy:      strict,
 		Environment: partitionEnv,
 	}))
 
-	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      types.NewRandomPolicy(),
-		Environment: partitionEnv,
-	}))
-
-	c.AddExperiment(types.NewExperiment("BonusMax", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
-		Environment: partitionEnv,
-	}))
+	// c.AddExperiment(types.NewExperiment("BonusMax", &types.AgentConfig{
+	// 	Episodes:    episodes,
+	// 	Horizon:     horizon,
+	// 	Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
+	// 	Environment: partitionEnv,
+	// }))
 
 	c.Run()
 	env.Cleanup()
@@ -74,7 +90,7 @@ func CometCommand() *cobra.Command {
 				cancel()
 			}()
 
-			RedisRaftExploration(episodes, horizon, saveFile, ctx)
+			CometExploration(episodes, horizon, saveFile, ctx)
 
 			close(doneCh)
 		},

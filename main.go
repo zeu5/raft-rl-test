@@ -36,6 +36,7 @@ func main() {
 	rootCommand.AddCommand(RSLExplorationCommand())
 	rootCommand.AddCommand(RSLRewardMachineCommand())
 	rootCommand.AddCommand(RatisExplorationCommand())
+	rootCommand.AddCommand(CometCommand())
 
 	if err := rootCommand.Execute(); err != nil {
 		fmt.Println(err)

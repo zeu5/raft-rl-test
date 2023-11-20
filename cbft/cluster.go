@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -33,15 +34,48 @@ func (p *ProposerInfo) Copy() *ProposerInfo {
 }
 
 type CometNodeState struct {
-	HeightRoundStep   string        `json:"height/round/step"`
-	ProposalBlockHash []byte        `json:"proposal_block_hash"`
-	LockedBlockHash   []byte        `json:"locked_block_hash"`
-	ValidBlockHash    []byte        `json:"valid_block_hash"`
-	Votes             []byte        `json:"height_vote_set"`
-	Proposer          *ProposerInfo `json:"proposer"`
+	HeightRoundStep   string            `json:"height/round/step"`
+	ProposalBlockHash string            `json:"proposal_block_hash"`
+	LockedBlockHash   string            `json:"locked_block_hash"`
+	ValidBlockHash    string            `json:"valid_block_hash"`
+	Votes             []*CometNodeVotes `json:"height_vote_set"`
+	Proposer          *ProposerInfo     `json:"proposer"`
 
 	LogStdout string `json:"-"`
 	LogStderr string `json:"-"`
+}
+
+type CometNodeVotes struct {
+	Round              int      `json:"round"`
+	Prevotes           []string `json:"prevotes"`
+	PrevotesBitArray   string   `json:"prevotes_bit_array"`
+	Precommits         []string `json:"precommits"`
+	PrecommitsBitArray string   `json:"precommits_bit_array"`
+}
+
+func (c *CometNodeVotes) Copy() *CometNodeVotes {
+	out := &CometNodeVotes{
+		Round:              c.Round,
+		PrevotesBitArray:   c.PrevotesBitArray,
+		PrecommitsBitArray: c.PrecommitsBitArray,
+	}
+	if c.Precommits != nil {
+		out.Precommits = make([]string, len(c.Precommits))
+		copy(out.Precommits, c.Precommits)
+	}
+	if c.Prevotes != nil {
+		out.Prevotes = make([]string, len(c.Prevotes))
+		copy(out.Prevotes, c.Prevotes)
+	}
+	return out
+}
+
+type rawNodeState struct {
+	Result *rawResultState `json:"result"`
+}
+
+type rawResultState struct {
+	RoundState *CometNodeState `json:"round_state"`
 }
 
 func EmptyCometNodeState() *CometNodeState {
@@ -50,25 +84,18 @@ func EmptyCometNodeState() *CometNodeState {
 
 func (r *CometNodeState) Copy() *CometNodeState {
 	out := &CometNodeState{
-		HeightRoundStep: r.HeightRoundStep,
-		LogStdout:       r.LogStdout,
-		LogStderr:       r.LogStderr,
-	}
-	if r.ProposalBlockHash != nil {
-		out.ProposalBlockHash = make([]byte, len(r.ProposalBlockHash))
-		copy(out.ProposalBlockHash, r.ProposalBlockHash)
-	}
-	if r.LockedBlockHash != nil {
-		out.LockedBlockHash = make([]byte, len(r.LockedBlockHash))
-		copy(out.LockedBlockHash, r.LockedBlockHash)
-	}
-	if r.ValidBlockHash != nil {
-		out.ValidBlockHash = make([]byte, len(r.ValidBlockHash))
-		copy(out.ValidBlockHash, r.ValidBlockHash)
+		HeightRoundStep:   r.HeightRoundStep,
+		ProposalBlockHash: r.ProposalBlockHash,
+		LockedBlockHash:   r.LockedBlockHash,
+		ValidBlockHash:    r.ValidBlockHash,
+		LogStdout:         r.LogStdout,
+		LogStderr:         r.LogStderr,
 	}
 	if r.Votes != nil {
-		out.Votes = make([]byte, len(r.Votes))
-		copy(out.Votes, r.Votes)
+		out.Votes = make([]*CometNodeVotes, len(r.Votes))
+		for i, v := range r.Votes {
+			out.Votes[i] = v.Copy()
+		}
 	}
 	if r.Proposer != nil {
 		out.Proposer = r.Proposer.Copy()
@@ -103,7 +130,7 @@ func NewCometNode(config *CometNodeConfig) *CometNode {
 
 func (r *CometNode) Create() {
 	serverArgs := []string{
-		"-home", r.config.WorkingDir,
+		"--home", r.config.WorkingDir,
 		"istart",
 	}
 
@@ -155,14 +182,14 @@ func (r *CometNode) Stop() error {
 }
 
 func (r *CometNode) Terminate() error {
-	r.Stop()
+	err := r.Stop()
 	r.Cleanup()
 
 	// stdout := strings.ToLower(r.stdout.String())
 	// stderr := strings.ToLower(r.stderr.String())
 
 	// Todo: check for bugs in the logs
-	return nil
+	return err
 }
 
 func (r *CometNode) GetLogs() (string, string) {
@@ -186,6 +213,7 @@ func (r *CometNode) Info() (*CometNodeState, error) {
 			DisableKeepAlives:     true,
 		},
 	}
+
 	resp, err := client.Get("http://" + r.config.RPCAddress + "/consensus_state")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read state from node: %s", err)
@@ -197,11 +225,13 @@ func (r *CometNode) Info() (*CometNodeState, error) {
 		return nil, fmt.Errorf("failed to read state from node: %s", err)
 	}
 
-	newState := &CometNodeState{}
-	err = json.Unmarshal(stateBS, newState)
+	stateRaw := &rawNodeState{}
+	err = json.Unmarshal(stateBS, &stateRaw)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read state from node: %s", err)
 	}
+
+	newState := stateRaw.Result.RoundState.Copy()
 	newState.LogStdout = r.stdout.String()
 	newState.LogStderr = r.stderr.String()
 
@@ -230,7 +260,7 @@ type CometCluster struct {
 	config *CometClusterConfig
 }
 
-func NewCluster(config *CometClusterConfig) *CometCluster {
+func NewCluster(config *CometClusterConfig) (*CometCluster, error) {
 	c := &CometCluster{
 		config: config,
 		Nodes:  make(map[int]*CometNode),
@@ -241,7 +271,28 @@ func NewCluster(config *CometClusterConfig) *CometCluster {
 		c.Nodes[i] = NewCometNode(nConfig)
 	}
 
-	return c
+	if _, err := os.Stat(config.BaseWorkingDir); err != nil {
+		os.MkdirAll(config.BaseWorkingDir, 0750)
+	}
+
+	testnetArgs := []string{
+		"itestnet",
+		"--o", c.config.BaseWorkingDir,
+		"--v", strconv.Itoa(c.config.NumNodes),
+	}
+
+	cmd := exec.Command(config.CometBinaryPath, testnetArgs...)
+	stdout := new(bytes.Buffer)
+	cmd.Stdout = stdout
+	stderr := new(bytes.Buffer)
+	cmd.Stderr = stderr
+	if err := cmd.Run(); err != nil {
+		fmt.Println(stdout.String())
+		fmt.Println(stderr.String())
+		return nil, fmt.Errorf("error creating config: %s", err)
+	}
+
+	return c, nil
 }
 
 func (c *CometCluster) GetNodeStates() map[uint64]*CometNodeState {
@@ -249,7 +300,11 @@ func (c *CometCluster) GetNodeStates() map[uint64]*CometNodeState {
 	for id, node := range c.Nodes {
 		state, err := node.Info()
 		if err != nil {
-			out[uint64(id)] = EmptyCometNodeState()
+			e := EmptyCometNodeState()
+			e.LogStdout = node.stdout.String()
+			e.LogStderr = node.stderr.String()
+
+			out[uint64(id)] = e
 			continue
 		}
 		out[uint64(id)] = state.Copy()
@@ -270,7 +325,10 @@ func (c *CometCluster) Start() error {
 func (c *CometCluster) Destroy() error {
 	var err error = nil
 	for _, node := range c.Nodes {
-		err = node.Terminate()
+		e := node.Terminate()
+		if e != nil {
+			err = e
+		}
 	}
 	return err
 }
