@@ -65,9 +65,17 @@ func ColorValidValue() CometColorFunc {
 	}
 }
 
+func ColorNumVotes() CometColorFunc {
+	return func(s *CometNodeState) (string, interface{}) {
+		return "num_votes", len(s.Votes)
+	}
+}
+
 func ColorVotes() CometColorFunc {
 	return func(s *CometNodeState) (string, interface{}) {
-		return "votes", s.Votes
+		bs, _ := json.Marshal(s.Votes)
+		hash := sha256.Sum256(bs)
+		return "votes", hex.EncodeToString(hash[:])
 	}
 }
 

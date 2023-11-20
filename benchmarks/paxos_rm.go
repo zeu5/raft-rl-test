@@ -1,4 +1,4 @@
-package main
+package benchmarks
 
 import (
 	"path"
@@ -9,7 +9,7 @@ import (
 	"github.com/zeu5/raft-rl-test/types"
 )
 
-func PaxosRewardMachine(episodes, horizon int) {
+func PaxosRewardMachine(episodes, horizon, runs int, saveFile string) {
 	lPaxosConfig := lpaxos.LPaxosEnvConfig{
 		Replicas: 3,
 		Requests: requests,
@@ -88,7 +88,7 @@ func PaxosRewardMachineCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use: "paxos-reward-rm",
 		Run: func(cmd *cobra.Command, args []string) {
-			PaxosRewardMachine(episodes, horizon)
+			PaxosRewardMachine(episodes, horizon, runs, saveFile)
 		},
 	}
 	cmd.PersistentFlags().IntVarP(&requests, "requests", "r", 1, "Number of requests to run with")

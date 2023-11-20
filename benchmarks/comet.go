@@ -1,4 +1,4 @@
-package main
+package benchmarks
 
 import (
 	"context"
@@ -13,19 +13,19 @@ import (
 
 func CometExploration(episodes, horizon int, saveFile string, ctx context.Context) {
 	env := cbft.NewCometEnv(ctx, &cbft.CometClusterConfig{
-		CometBinaryPath:     "/Users/srinidhin/Local/go/src/github.com/zeu5/cometbft/build/cometbft",
+		CometBinaryPath:     "/home/snagendra/go/src/github.com/zeu5/cometbft/build/cometbft",
 		InterceptListenPort: 7074,
 		BaseRPCPort:         26756,
-		BaseWorkingDir:      "/Users/srinidhin/Local/go/src/github.com/zeu5/raft-rl-test/results/tmp",
+		BaseWorkingDir:      "/home/snagendra/go/src/github.com/zeu5/raft-rl-test/results/tmp",
 		NumNodes:            4,
 	})
-	colors := []cbft.CometColorFunc{cbft.ColorHRS(), cbft.ColorProposal(), cbft.ColorVotes(), cbft.ColorProposer()}
+	colors := []cbft.CometColorFunc{cbft.ColorHRS(), cbft.ColorProposal(), cbft.ColorNumVotes(), cbft.ColorProposer()}
 
 	partitionEnv := types.NewPartitionEnv(types.PartitionEnvConfig{
 		Painter:                cbft.NewCometStatePainter(colors...),
 		Env:                    env,
 		TicketBetweenPartition: 3,
-		MaxMessagesPerTick:     3,
+		MaxMessagesPerTick:     20,
 		StaySameStateUpto:      2,
 		NumReplicas:            4,
 		WithCrashes:            false,
@@ -52,22 +52,22 @@ func CometExploration(episodes, horizon int, saveFile string, ctx context.Contex
 	// 	Environment: partitionEnv,
 	// }))
 
-	// strict := policies.NewStrictPolicy(types.NewRandomPolicy())
-	// strict.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
+	strict := policies.NewStrictPolicy(types.NewRandomPolicy())
+	strict.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
 
-	// c.AddExperiment(types.NewExperiment("Strict", &types.AgentConfig{
-	// 	Episodes:    episodes,
-	// 	Horizon:     horizon,
-	// 	Policy:      strict,
-	// 	Environment: partitionEnv,
-	// }))
-
-	c.AddExperiment(types.NewExperiment("BonusMax", &types.AgentConfig{
+	c.AddExperiment(types.NewExperiment("Strict", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
-		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
+		Policy:      strict,
 		Environment: partitionEnv,
 	}))
+
+	// c.AddExperiment(types.NewExperiment("BonusMax", &types.AgentConfig{
+	// 	Episodes:    episodes,
+	// 	Horizon:     horizon,
+	// 	Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
+	// 	Environment: partitionEnv,
+	// }))
 
 	c.Run()
 	env.Cleanup()
