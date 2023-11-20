@@ -116,6 +116,7 @@ type CometNode struct {
 	config  *CometNodeConfig
 	ctx     context.Context
 	cancel  context.CancelFunc
+	active  bool
 
 	stdout *bytes.Buffer
 	stderr *bytes.Buffer
@@ -131,6 +132,7 @@ func NewCometNode(config *CometNodeConfig) *CometNode {
 func (r *CometNode) Create() {
 	serverArgs := []string{
 		"--home", r.config.WorkingDir,
+		"--proxy_app", "persistent_kvstore",
 		"istart",
 	}
 
@@ -156,6 +158,7 @@ func (r *CometNode) Start() error {
 	}
 
 	r.Create()
+	r.active = true
 	return r.process.Start()
 }
 
@@ -174,6 +177,7 @@ func (r *CometNode) Stop() error {
 	}
 	r.cancel()
 	err := r.process.Wait()
+	r.active = false
 	r.ctx = nil
 	r.cancel = func() {}
 	r.process = nil
@@ -238,12 +242,39 @@ func (r *CometNode) Info() (*CometNodeState, error) {
 	return newState, nil
 }
 
+func (r *CometNode) IsActive() bool {
+	return r.active
+}
+
+func (r *CometNode) SendRequest(req string) error {
+	client := &http.Client{
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout:   5 * time.Second,
+				KeepAlive: 5 * time.Second,
+			}).DialContext,
+			TLSHandshakeTimeout:   5 * time.Second,
+			ResponseHeaderTimeout: 5 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			DisableKeepAlives:     true,
+		},
+	}
+	resp, err := client.Get("http://" + r.config.RPCAddress + "/" + req)
+	if err != nil {
+		return fmt.Errorf("error sending request: %s", err)
+	}
+	defer resp.Body.Close()
+	io.ReadAll(resp.Body)
+	return nil
+}
+
 type CometClusterConfig struct {
 	NumNodes            int
 	CometBinaryPath     string
 	InterceptListenPort int
 	BaseRPCPort         int
 	BaseWorkingDir      string
+	NumRequests         int
 }
 
 func (c *CometClusterConfig) GetNodeConfig(id int) *CometNodeConfig {
@@ -346,4 +377,20 @@ func (c *CometCluster) GetLogs() string {
 		logLines = append(logLines, "----- Stdout -----", stdout, "----- Stderr -----", stderr, "\n\n")
 	}
 	return strings.Join(logLines, "\n")
+}
+
+func (c *CometCluster) Execute(req string) error {
+	var activeNode *CometNode = nil
+	for i := 1; i <= c.config.NumNodes; i++ {
+		node, ok := c.Nodes[i]
+		if ok && node.IsActive() {
+			activeNode = node
+			break
+		}
+	}
+	if activeNode == nil {
+		return errors.New("no active node")
+	}
+
+	return activeNode.SendRequest(req)
 }

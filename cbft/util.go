@@ -106,3 +106,11 @@ func (p *CometStatePainter) Color(s types.ReplicaState) types.Color {
 }
 
 var _ types.Painter = &CometStatePainter{}
+
+func copyRequests(in []CometRequest) []CometRequest {
+	out := make([]CometRequest, len(in))
+	for i, r := range in {
+		out[i] = r.Copy()
+	}
+	return out
+}

@@ -28,7 +28,7 @@ func CometExploration(episodes, horizon int, saveFile string, ctx context.Contex
 		MaxMessagesPerTick:     3,
 		StaySameStateUpto:      2,
 		NumReplicas:            4,
-		WithCrashes:            false,
+		WithCrashes:            true,
 	})
 
 	c := types.NewComparison(runs)
@@ -36,6 +36,7 @@ func CometExploration(episodes, horizon int, saveFile string, ctx context.Contex
 	c.AddAnalysis("plot", cbft.CoverageAnalyzer(colors...), cbft.CoverageComparator(saveFile))
 	c.AddAnalysis("logs", cbft.RecordLogsAnalyzer(saveFile), types.NoopComparator())
 	c.AddAnalysis("state_trace", cbft.RecordStateTraceAnalyzer(saveFile), types.NoopComparator())
+	// c.AddAnalysis("crashes", cbft.CrashesAnalyzer(saveFile), types.NoopComparator())
 
 	// c.AddExperiment(types.NewExperiment("NegReward", &types.AgentConfig{
 	// 	Episodes:    episodes,
