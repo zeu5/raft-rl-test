@@ -379,7 +379,9 @@ func (c *Cluster) GetNodeStates() map[uint64]*RedisNodeState {
 	for id, node := range c.Nodes {
 		state, err := node.Info()
 		if err != nil {
-			out[uint64(id)] = EmptyRedisNodeState()
+			e := EmptyRedisNodeState()
+			e.LogStdout, e.LogStderr = node.GetLogs()
+			out[uint64(id)] = e
 			continue
 		}
 		out[uint64(id)] = state.Copy()
