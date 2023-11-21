@@ -188,7 +188,9 @@
                 "-e",
                 "10",
                 "redisraft-rm",
-                "MinTerm",
+                "Term2",
+                "--save",
+                "result_debug",
             ]
         },
         {

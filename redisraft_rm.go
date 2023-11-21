@@ -58,6 +58,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		WorkingDir:          path.Join(saveFile, "tmp"),
 		NumRequests:         3,
 	})
+	defer env.Cleanup()
 	colors := []redisraft.RedisRaftColorFunc{redisraft.ColorState(), redisraft.ColorCommit(), redisraft.ColorLeader(), redisraft.ColorVote(), redisraft.ColorBoundedTerm(5), redisraft.ColorIndex(), redisraft.ColorSnapshot()}
 
 	partitionEnv := types.NewPartitionEnv(types.PartitionEnvConfig{
@@ -72,13 +73,21 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 
 	c := types.NewComparison(runs)
 
-	c.AddAnalysis("bugs", redisraft.BugAnalyzer(saveFile), redisraft.BugComparator())
+	c.AddAnalysis("Crashes", redisraft.BugAnalyzerCrash(path.Join(saveFile, "crash")), redisraft.BugComparator())
+	c.AddAnalysis("Bugs", redisraft.BugAnalyzer(
+		path.Join(saveFile, "bugs"),
+		types.BugDesc{Name: "ReducedLog", Check: redisraft.ReducedLog()},
+		types.BugDesc{Name: "ModifiedLog", Check: redisraft.ModifiedLog()},
+		types.BugDesc{Name: "InconsistentLogs", Check: redisraft.InconsistentLogs()},
+	), types.BugComparator(path.Join(saveFile, "bugs")))
 	rm, ok := getRedisPredicateHeirarchy(machine)
 	if !ok {
 		env.Cleanup()
 		return
 	}
 	RMPolicy := policies.NewRewardMachinePolicy(rm, false)
+
+	c.AddAnalysis("plot", redisraft.CoverageAnalyzer(colors...), redisraft.CoverageComparator(saveFile))
 
 	c.AddAnalysis("rm", policies.RewardMachineAnalyzer(RMPolicy), policies.RewardMachineCoverageComparator(saveFile))
 
@@ -90,7 +99,6 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 	}))
 
 	c.Run()
-	env.Cleanup()
 }
 
 func RedisRaftRMCommand() *cobra.Command {

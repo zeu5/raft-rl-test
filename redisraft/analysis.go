@@ -110,7 +110,7 @@ func CoverageComparator(plotPath string) types.Comparator {
 	}
 }
 
-func BugAnalyzer(savePath string) types.Analyzer {
+func BugAnalyzerCrash(savePath string) types.Analyzer {
 	if _, err := os.Stat(savePath); err != nil {
 		os.MkdirAll(savePath, os.ModePerm)
 	}
@@ -159,6 +159,33 @@ func BugAnalyzer(savePath string) types.Analyzer {
 			}
 		}
 		return occurrences
+	}
+}
+
+// checks all the bugs on the traces
+func BugAnalyzer(savePath string, bugs ...types.BugDesc) types.Analyzer {
+	if _, ok := os.Stat(savePath); ok == nil {
+		os.RemoveAll(savePath)
+	}
+	os.MkdirAll(savePath, 0777)
+	return func(run int, s string, traces []*types.Trace) types.DataSet {
+		firstOccurrence := make(map[string]int)
+		for i, t := range traces {
+			for _, b := range bugs {
+				_, ok := firstOccurrence[b.Name]
+				bugFound, step := b.Check(t)
+				if bugFound { // swapped order just to debug
+					if !ok {
+						firstOccurrence[b.Name] = i
+					}
+					bugPath := path.Join(savePath, strconv.Itoa(run)+"_"+s+"_"+b.Name+"_"+strconv.Itoa(i)+"_step"+strconv.Itoa(step)+"_bug.json")
+					t.Record(bugPath)
+					readPath := path.Join(savePath, strconv.Itoa(run)+"_"+s+"_"+b.Name+"_"+strconv.Itoa(i)+"_step"+strconv.Itoa(step)+"_bug_readable.txt")
+					PrintReadableTrace(t, readPath)
+				}
+			}
+		}
+		return firstOccurrence
 	}
 }
 

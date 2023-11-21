@@ -5,8 +5,8 @@ import (
 )
 
 // this is a function that checks for a certain type of bug in a trace
-func SafetyBug() func(*types.Trace) bool {
-	return func(t *types.Trace) bool {
+func SafetyBug() func(*types.Trace) (bool, int) {
+	return func(t *types.Trace) (bool, int) {
 		processStates := make(map[uint64]LNodeState)
 		for i := 0; i < t.Len(); i++ {
 			s, _, _, _ := t.Get(i)
@@ -20,13 +20,13 @@ func SafetyBug() func(*types.Trace) bool {
 					prevState := processStates[process]
 					if curState.Decided < prevState.Decided || !isLogPrefix(getLogPrefix(prevState.Log, prevState.Decided), getLogPrefix(curState.Log, prevState.Decided)) {
 						// At any point the old log is not a prefix of the new log then we have a bug (we only care about the decided prefix)
-						return true
+						return true, i
 					}
 					processStates[process] = curState
 				}
 			}
 		}
-		return false
+		return false, -1
 	}
 }
 

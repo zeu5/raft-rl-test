@@ -162,6 +162,31 @@ func AtLeastOneLogNotEmpty() types.RewardFuncSingle {
 	}
 }
 
+// return true if there is at least one entry in one of the replicas logs
+func AtLeastOneLogNotEmptyTerm(term uint64) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		pS, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+
+		for _, state := range pS.ReplicaStates { // for each replica state
+			repState := state.(RaftReplicaState)
+			curLog := committedLog(repState.Log, repState.State)
+			filteredLog := filterEntriesNoElection(curLog)
+			if len(filteredLog) > 0 {
+				for _, ent := range filteredLog {
+					if ent.Term == term {
+						return true
+					}
+				}
+			}
+		}
+
+		return false
+	}
+}
+
 // return true if there is at least one empty replica log
 func AtLeastOneLogEmpty() types.RewardFuncSingle {
 	return func(s types.State) bool {

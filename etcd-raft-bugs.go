@@ -28,6 +28,10 @@ func getPredHierEtcd(name string) (*policies.RewardMachine, bool, bool) {
 		PredHierarchy_OutdatedLog2.AddState(raft.LeaderElectedPredicateNumber(1).And(raft.AtLeastOneLogNotEmpty().And(raft.AtLeastOneLogEmpty()).And(raft.StackSizeLowerBound(1))), "TwoElections")     // 2nd ...
 		machine = PredHierarchy_OutdatedLog2
 		oneTime = true
+	case "OutdatedLogSpec":
+		PredHierarchy_OutdatedLogSpec := policies.NewRewardMachine(raft.LeaderElectedPredicateNumberWithTerms(2, []uint64{2, 4}).And(raft.AtLeastOneLogEmpty().And(raft.AtLeastOneLogNotEmptyTerm(2)).And(raft.StackSizeLowerBound(1)))) // final predicate - target space
+		machine = PredHierarchy_OutdatedLogSpec
+		oneTime = true
 	}
 
 	return machine, oneTime, machine != nil
@@ -149,7 +153,7 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	), types.BugComparator(saveFile))
 
 	// c.AddAnalysis("CommitOnlyOneEntry", policies.RewardMachineAnalyzer(PredHierarchy_3), policies.RewardMachineCoverageComparator(saveFile))
-	c.AddAnalysis("CommitEntriesInDifferentTerms", policies.RewardMachineAnalyzer(PHPolicy), policies.RewardMachineCoverageComparator(saveFile))
+	c.AddAnalysis(PredHierName, policies.RewardMachineAnalyzer(PHPolicy), policies.RewardMachineCoverageComparator(saveFile))
 	// c.AddAnalysis("PrintReadable", raft.RaftReadableAnalyzer(savePath), raft.RaftEmptyComparator())
 
 	// here you add different policies with their parameters
@@ -157,19 +161,19 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	// 	Episodes:    episodes,
 	// 	Horizon:     horizon,
 	// 	Policy:      policies.NewSoftMaxNegFreqPolicy(0.3, 0.7, 1),
-	// 	Environment: getRaftPartEnv(raftConfig, colors),
+	// 	Environment: ggetRaftPartEnvCfg(raftConfig, colors, rlConfig),
 	// }))
 	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
 		Policy:      types.NewRandomPolicy(),
-		Environment: getRaftPartEnv(raftConfig, colors),
+		Environment: getRaftPartEnvCfg(raftConfig, colors, rlConfig),
 	}))
 	c.AddExperiment(types.NewExperiment("BonusMaxRL", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
 		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.05),
-		Environment: getRaftPartEnv(raftConfig, colors),
+		Environment: getRaftPartEnvCfg(raftConfig, colors, rlConfig),
 	}))
 	// c.AddExperiment(types.NewExperiment("PredHierarchy_1", &types.AgentConfig{
 	// 	Episodes:    episodes,
@@ -184,7 +188,7 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	// 	Episodes:    episodes,
 	// 	Horizon:     horizon,
 	// 	Policy:      policies.NewStrictPolicy(strictPolicy),
-	// 	Environment: getRaftPartEnv(raftConfig, colors),
+	// 	Environment: getRaftPartEnvCfg(raftConfig, colors, rlConfig),
 	// }))
 	c.AddExperiment(types.NewExperiment(PredHierName, &types.AgentConfig{
 		Episodes:    episodes,
@@ -196,7 +200,7 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	// 	Episodes:    episodes,
 	// 	Horizon:     horizon,
 	// 	Policy:      policies.NewRewardMachinePolicy(PredHierarchy_3),
-	// 	Environment: getRaftPartEnv(raftConfig, colors),
+	// 	Environment: getRaftPartEnvCfg(raftConfig, colors, rlConfig),
 	// }))
 
 	fmt.Print(raftConfig.String())
