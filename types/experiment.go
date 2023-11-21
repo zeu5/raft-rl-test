@@ -90,6 +90,10 @@ type Analyzer func(int, string, []*Trace) DataSet
 // Comparator differentiates between different datasets with associated names
 type Comparator func(int, []string, []DataSet)
 
+func NoopComparator() Comparator {
+	return func(i int, s []string, ds []DataSet) {}
+}
+
 // Comparison contains the different experiments to compare
 // The traces obtained from the experiments are analyzed
 // The analyzed datasets are then compared

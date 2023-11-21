@@ -1,4 +1,4 @@
-package main
+package benchmarks
 
 import (
 	"github.com/zeu5/raft-rl-test/lpaxos"
@@ -6,7 +6,7 @@ import (
 	"github.com/zeu5/raft-rl-test/types"
 )
 
-func Paxos(episodes, horizon int, saveFile string) {
+func Paxos(episodes, horizon, runs int, saveFile string) {
 	// The configuration for the paxos environment
 	lPaxosConfig := lpaxos.LPaxosEnvConfig{
 		// Number of replicas to run

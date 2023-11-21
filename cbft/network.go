@@ -1,15 +1,13 @@
-package ratis
+package cbft
 
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
-	"strconv"
 	"sync"
 	"time"
 
@@ -18,38 +16,45 @@ import (
 )
 
 type Message struct {
-	Fr            string                 `json:"from"`
-	T             string                 `json:"to"`
-	Data          string                 `json:"data"`
-	Type          string                 `json:"type"`
-	ID            string                 `json:"id"`
-	ParsedMessage map[string]interface{} `json:"-"`
-	Intercept     bool                   `json:"intercept"`
+	FromAlias     string           `json:"from"`
+	ToAlias       string           `json:"to"`
+	Data          []byte           `json:"data"`
+	Type          string           `json:"type"`
+	ID            string           `json:"id"`
+	ParsedMessage *WrappedEnvelope `json:"-"`
+	FromID        int              `json:"-"`
+	ToID          int              `json:"-"`
+}
+
+type WrappedEnvelope struct {
+	ChanID byte   `json:"chid"`
+	Msg    []byte `json:"msg"`
 }
 
 func (m Message) To() uint64 {
-	to, _ := strconv.Atoi(m.T)
-	return uint64(to)
+	return uint64(m.ToID)
 }
 
 func (m Message) From() uint64 {
-	from, _ := strconv.Atoi(m.Fr)
-	return uint64(from)
+	return uint64(m.FromID)
 }
 
 func (m Message) Copy() Message {
 	n := Message{
-		Fr:            m.Fr,
-		T:             m.T,
-		Data:          m.Data,
-		Type:          m.Type,
-		ID:            m.ID,
-		ParsedMessage: make(map[string]interface{}),
+		FromAlias: m.FromAlias,
+		ToAlias:   m.ToAlias,
+		Data:      m.Data,
+		Type:      m.Type,
+		ID:        m.ID,
+		FromID:    m.FromID,
+		ToID:      m.ToID,
 	}
 	if m.ParsedMessage != nil {
-		for k, v := range m.ParsedMessage {
-			n.ParsedMessage[k] = v
+		n.ParsedMessage = &WrappedEnvelope{
+			ChanID: m.ParsedMessage.ChanID,
+			Msg:    make([]byte, len(m.ParsedMessage.Msg)),
 		}
+		copy(n.ParsedMessage.Msg, m.ParsedMessage.Msg)
 	}
 	return n
 }
@@ -60,13 +65,25 @@ func (m Message) Hash() string {
 
 var _ types.Message = Message{}
 
+type nodeKeys struct {
+	Public  []byte
+	Private []byte
+}
+type nodeInfo struct {
+	ID    int
+	Alias string
+	Addr  string
+	Keys  *nodeKeys
+}
+
 type InterceptNetwork struct {
 	Port   int
 	ctx    context.Context
 	server *http.Server
 
-	lock  *sync.Mutex
-	nodes map[uint64]string
+	lock     *sync.Mutex
+	nodes    map[int]*nodeInfo
+	aliasMap map[string]int
 	// Make this bag of messages
 	messages map[string]Message
 }
@@ -77,7 +94,8 @@ func NewInterceptNetwork(ctx context.Context, port int) *InterceptNetwork {
 		Port:     port,
 		ctx:      ctx,
 		lock:     new(sync.Mutex),
-		nodes:    make(map[uint64]string),
+		nodes:    make(map[int]*nodeInfo),
+		aliasMap: make(map[string]int),
 		messages: make(map[string]Message),
 	}
 
@@ -114,20 +132,17 @@ func (n *InterceptNetwork) handleMessage(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to unmarshal request"})
 		return
 	}
-	data, err := base64.StdEncoding.DecodeString(m.Data)
-	if err != nil {
+
+	we := &WrappedEnvelope{}
+	if err := json.Unmarshal(m.Data, we); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to unmarshal request"})
 		return
 	}
-	fmt.Println("Received message of type: " + m.Type)
-	parsedMessage := make(map[string]interface{})
-	if err := json.Unmarshal(data, &parsedMessage); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to unmarshal request"})
-		return
-	}
-	m.ParsedMessage = parsedMessage
+	m.ParsedMessage = we
 
 	n.lock.Lock()
+	m.FromID = n.aliasMap[m.FromAlias]
+	m.ToID = n.aliasMap[m.ToAlias]
 	n.messages[m.ID] = m
 	n.lock.Unlock()
 
@@ -135,44 +150,16 @@ func (n *InterceptNetwork) handleMessage(c *gin.Context) {
 }
 
 func (n *InterceptNetwork) handleReplica(c *gin.Context) {
-	replica := make(map[string]interface{})
-	if err := c.ShouldBindJSON(&replica); err != nil {
+	nodeI := &nodeInfo{}
+	if err := c.ShouldBindJSON(&nodeI); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to unmarshal request"})
-		return
-	}
-	nodeID := 0
-	nodeIDI, ok := replica["id"]
-	if !ok {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-		return
-	}
-	nodeIDS, ok := nodeIDI.(string)
-	if !ok {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-		return
-	}
-	nodeID, err := strconv.Atoi(nodeIDS)
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-		return
-	}
-
-	nodeAddrI, ok := replica["addr"]
-	if !ok {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-		return
-	}
-	nodeAddr, ok := nodeAddrI.(string)
-	if !ok {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
 		return
 	}
 
 	n.lock.Lock()
-	n.nodes[uint64(nodeID)] = nodeAddr
+	n.nodes[nodeI.ID] = nodeI
+	n.aliasMap[nodeI.Alias] = nodeI.ID
 	n.lock.Unlock()
-
-	fmt.Println("Received replica")
 
 	c.JSON(http.StatusOK, gin.H{"message": "ok"})
 }
@@ -195,7 +182,8 @@ func (n *InterceptNetwork) Reset() {
 	defer n.lock.Unlock()
 
 	n.messages = make(map[string]Message)
-	n.nodes = make(map[uint64]string)
+	n.nodes = make(map[int]*nodeInfo)
+	n.aliasMap = make(map[string]int)
 }
 
 func (n *InterceptNetwork) WaitForNodes(numNodes int) bool {
@@ -221,7 +209,7 @@ func (n *InterceptNetwork) SendMessage(id string) {
 	m, ok := n.messages[id]
 	nodeAddr := ""
 	if ok {
-		nodeAddr = n.nodes[m.To()]
+		nodeAddr = n.nodes[m.ToID].Addr
 	}
 	n.lock.Unlock()
 
