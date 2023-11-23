@@ -34,23 +34,23 @@ func CometExploration(episodes, horizon int, saveFile string, ctx context.Contex
 	c := types.NewComparison(runs)
 
 	c.AddAnalysis("plot", cbft.CoverageAnalyzer(colors...), cbft.CoverageComparator(saveFile))
-	c.AddAnalysis("logs", cbft.RecordLogsAnalyzer(saveFile), types.NoopComparator())
-	c.AddAnalysis("state_trace", cbft.RecordStateTraceAnalyzer(saveFile), types.NoopComparator())
-	// c.AddAnalysis("crashes", cbft.CrashesAnalyzer(saveFile), types.NoopComparator())
+	// c.AddAnalysis("logs", cbft.RecordLogsAnalyzer(saveFile), types.NoopComparator())
+	// c.AddAnalysis("state_trace", cbft.RecordStateTraceAnalyzer(saveFile), types.NoopComparator())
+	c.AddAnalysis("crashes", cbft.CrashesAnalyzer(saveFile), types.NoopComparator())
 
-	// c.AddExperiment(types.NewExperiment("NegReward", &types.AgentConfig{
-	// 	Episodes:    episodes,
-	// 	Horizon:     horizon,
-	// 	Policy:      policies.NewSoftMaxNegFreqPolicy(0.1, 0.99, 1),
-	// 	Environment: partitionEnv,
-	// }))
+	c.AddExperiment(types.NewExperiment("NegReward", &types.AgentConfig{
+		Episodes:    episodes,
+		Horizon:     horizon,
+		Policy:      policies.NewSoftMaxNegFreqPolicy(0.1, 0.99, 1),
+		Environment: partitionEnv,
+	}))
 
-	// c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
-	// 	Episodes:    episodes,
-	// 	Horizon:     horizon,
-	// 	Policy:      types.NewRandomPolicy(),
-	// 	Environment: partitionEnv,
-	// }))
+	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
+		Episodes:    episodes,
+		Horizon:     horizon,
+		Policy:      types.NewRandomPolicy(),
+		Environment: partitionEnv,
+	}))
 
 	// strict := policies.NewStrictPolicy(types.NewRandomPolicy())
 	// strict.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))

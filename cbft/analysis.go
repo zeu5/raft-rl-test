@@ -1,23 +1,98 @@
 package cbft
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 
 	"github.com/zeu5/raft-rl-test/types"
+	"gonum.org/v1/plot"
+	"gonum.org/v1/plot/plotter"
+	"gonum.org/v1/plot/plotutil"
+	"gonum.org/v1/plot/vg"
 )
+
+func cometColoredStateHash(state types.State, colors ...CometColorFunc) string {
+	ps := state.(*types.Partition)
+	coloredState := make(map[uint64]map[string]interface{})
+	for node, s := range ps.ReplicaStates {
+		nodeColoredState := make(map[string]interface{})
+		ns := s.(*CometNodeState)
+		for _, c := range colors {
+			key, val := c(ns)
+			nodeColoredState[key] = val
+		}
+		coloredState[node] = nodeColoredState
+	}
+
+	bs, _ := json.Marshal(coloredState)
+	hash := sha256.Sum256(bs)
+	return hex.EncodeToString(hash[:])
+}
 
 func CoverageAnalyzer(colors ...CometColorFunc) types.Analyzer {
 	return func(i int, s string, t []*types.Trace) types.DataSet {
-		return nil
+		c := make([]int, 0)
+		states := make(map[string]bool)
+		for _, trace := range t {
+			for i := 0; i < trace.Len(); i++ {
+				state, _, _, _ := trace.Get(i)
+				stateHash := cometColoredStateHash(state)
+				if _, ok := states[stateHash]; !ok {
+					states[stateHash] = true
+				}
+			}
+			c = append(c, len(states))
+		}
+		return c
 	}
 }
 
 func CoverageComparator(savePath string) types.Comparator {
-	return func(i int, s []string, ds []types.DataSet) {}
+	if _, err := os.Stat(savePath); err != nil {
+		os.Mkdir(savePath, os.ModePerm)
+	}
+	return func(run int, s []string, ds []types.DataSet) {
+		p := plot.New()
+
+		p.Title.Text = "Comparison"
+		p.X.Label.Text = "Iteration"
+		p.Y.Label.Text = "States covered"
+
+		coverageData := make(map[string][]int)
+
+		for i := 0; i < len(s); i++ {
+			dataset := ds[i].([]int)
+			coverageData[s[i]] = make([]int, len(dataset))
+			copy(coverageData[s[i]], dataset)
+			points := make(plotter.XYs, len(dataset))
+			for j, v := range dataset {
+				points[j] = plotter.XY{
+					X: float64(j),
+					Y: float64(v),
+				}
+			}
+			line, err := plotter.NewLine(points)
+			if err != nil {
+				continue
+			}
+			line.Color = plotutil.Color(i)
+			p.Add(line)
+			p.Legend.Add(s[i], line)
+		}
+
+		p.Save(8*vg.Inch, 8*vg.Inch, path.Join(savePath, strconv.Itoa(run)+"_coverage.png"))
+
+		bs, err := json.Marshal(coverageData)
+		if err == nil {
+			os.WriteFile(path.Join(savePath, strconv.Itoa(run)+"_data.json"), bs, 0644)
+		}
+	}
 }
 
 func recordLogsToFile(s *types.Partition, file string) {

@@ -34,6 +34,9 @@ func (p *ProposerInfo) Copy() *ProposerInfo {
 }
 
 type CometNodeState struct {
+	Height            int               `json:"-"`
+	Round             int               `json:"-"`
+	Step              string            `json:"-"`
 	HeightRoundStep   string            `json:"height/round/step"`
 	ProposalBlockHash string            `json:"proposal_block_hash"`
 	LockedBlockHash   string            `json:"locked_block_hash"`
@@ -84,6 +87,9 @@ func EmptyCometNodeState() *CometNodeState {
 
 func (r *CometNodeState) Copy() *CometNodeState {
 	out := &CometNodeState{
+		Height:            r.Height,
+		Round:             r.Round,
+		Step:              r.Step,
 		HeightRoundStep:   r.HeightRoundStep,
 		ProposalBlockHash: r.ProposalBlockHash,
 		LockedBlockHash:   r.LockedBlockHash,
@@ -236,6 +242,33 @@ func (r *CometNode) Info() (*CometNodeState, error) {
 	}
 
 	newState := stateRaw.Result.RoundState.Copy()
+	hrs := strings.Split(newState.HeightRoundStep, "/")
+	if len(hrs) == 3 {
+		newState.Height, _ = strconv.Atoi(hrs[0])
+		newState.Round, _ = strconv.Atoi(hrs[1])
+		step, _ := strconv.Atoi(hrs[2])
+		switch step {
+		case 1:
+			newState.Step = "RoundStepNewHeight"
+		case 2:
+			newState.Step = "RoundStepNewRound"
+		case 3:
+			newState.Step = "RoundStepPropose"
+		case 4:
+			newState.Step = "RoundStepPrevote"
+		case 5:
+			newState.Step = "RoundStepPrevoteWait"
+		case 6:
+			newState.Step = "RoundStepPrecommit"
+		case 7:
+			newState.Step = "RoundStepPrecommitWait"
+		case 8:
+			newState.Step = "RoundStepCommit"
+		default:
+			newState.Step = "RoundStepUnknown"
+		}
+	}
+
 	newState.LogStdout = r.stdout.String()
 	newState.LogStderr = r.stderr.String()
 

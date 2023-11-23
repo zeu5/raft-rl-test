@@ -14,8 +14,13 @@ import (
 func getCometPredicateHeirarchy(name string) (*policies.RewardMachine, bool) {
 	var machine *policies.RewardMachine = nil
 	switch name {
-	case "Round2":
+	case "AnyRound1AfterCommit":
+		machine = policies.NewRewardMachine(cbft.AllAtLeastRound(1).And(cbft.AtLeastHeight(2)))
+		machine.AddState(cbft.AnyAtHeight(2), "Height2")
+	case "AnyRound2":
 		machine = policies.NewRewardMachine(cbft.AnyReachedRound(2))
+	case "AllRound1":
+		machine = policies.NewRewardMachine(cbft.AllAtLeastRound(1))
 	}
 	return machine, machine != nil
 }
