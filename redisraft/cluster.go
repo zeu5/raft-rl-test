@@ -31,6 +31,10 @@ func (r RedisEntry) Copy() RedisEntry {
 	}
 }
 
+func (r RedisEntry) String() string {
+	return fmt.Sprintf("[ID:%s | I:%d | T:%d | Len:%d]", r.ID, r.Index, r.Term, r.DataLen)
+}
+
 type RedisNodeState struct {
 	Params    map[string]string
 	Logs      []RedisEntry
@@ -308,11 +312,18 @@ func (c *ClusterConfig) Copy() *ClusterConfig {
 }
 
 func (c *ClusterConfig) SetDefaults() {
+	ex, err := os.Executable()
+	if err != nil {
+		panic(err)
+	}
+	exPath := path.Dir(ex)
 	if c.RaftModulePath == "" {
-		c.RaftModulePath = "/home/snagendra/Fuzzing/redisraft-fuzzing/redisraft.so"
+		c.RaftModulePath = path.Join(exPath, "/redisraft/redisraft.so")
+		// "/home/snagendra/Fuzzing/redisraft-fuzzing/redisraft.so"
 	}
 	if c.RedisServerBinaryPath == "" {
-		c.RedisServerBinaryPath = "/home/snagendra/Fuzzing/redis/src/redis-server"
+		c.RedisServerBinaryPath = path.Join(exPath, "/redisraft/redis-server")
+		// "/home/snagendra/Fuzzing/redis/src/redis-server"
 	}
 	if c.WorkingDir == "" {
 		c.WorkingDir = "/home/snagendra/Fuzzing/redisraft-fuzzing/tests/tmp"

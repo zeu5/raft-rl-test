@@ -193,7 +193,12 @@ func (r *RedisRaftEnv) Reset() types.PartitionedSystemState {
 	}
 	r.network.Reset()
 	r.cluster = NewCluster(r.clusterConfig)
-	r.cluster.Start()
+	err := r.cluster.Start()
+	if err != nil {
+		panic(err)
+	}
+
+	// r.network.WaitForNodes(r.clusterConfig.NumNodes)
 
 	r.network.WaitForNodes(r.clusterConfig.NumNodes)
 

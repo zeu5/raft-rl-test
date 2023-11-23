@@ -10,7 +10,7 @@ import (
 
 type BugDesc struct {
 	Name  string
-	Check func(*Trace) bool
+	Check func(*Trace) (bool, int)
 }
 
 // checks all the bugs on the traces
@@ -24,11 +24,12 @@ func BugAnalyzer(savePath string, bugs ...BugDesc) Analyzer {
 		for i, t := range traces {
 			for _, b := range bugs {
 				_, ok := firstOccurrence[b.Name]
-				if b.Check(t) { // swapped order just to debug
+				bugFound, step := b.Check(t)
+				if bugFound { // swapped order just to debug
 					if !ok {
 						firstOccurrence[b.Name] = i
 					}
-					bugPath := path.Join(savePath, strconv.Itoa(run)+"_"+s+"_"+b.Name+"_"+strconv.Itoa(i)+"_bug.json")
+					bugPath := path.Join(savePath, strconv.Itoa(run)+"_"+s+"_"+b.Name+"_"+strconv.Itoa(i)+"_step"+strconv.Itoa(step)+"_bug.json")
 					t.Record(bugPath)
 				}
 			}

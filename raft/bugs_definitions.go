@@ -21,8 +21,8 @@ import (
 // ReplicaState["log"]:	[]pb.Entry
 
 // checks if the log size of a replica decreases throughout an execution
-func ReducedLog() func(*types.Trace) bool {
-	return func(t *types.Trace) bool {
+func ReducedLog() func(*types.Trace) (bool, int) {
+	return func(t *types.Trace) (bool, int) {
 		replicasLogs := make(map[uint64][]pb.Entry) // map of processID : Log (list of entries)
 
 		for i := 0; i < t.Len(); i++ { // foreach (state, action, new_state, reward) in the trace
@@ -38,20 +38,20 @@ func ReducedLog() func(*types.Trace) bool {
 					}
 
 					if len(curLog) < len(replicasLogs[replica_id]) { // check if log size decreased
-						return true // BUG FOUND
+						return true, i // BUG FOUND
 					}
 
-					replicasLogs[replica_id] = curLog // update previous state log with the current one for next iteration
+					replicasLogs[replica_id] = copyLog(curLog) // update previous state log with the current one for next iteration
 				}
 			}
 		}
-		return false
+		return false, -1
 	}
 }
 
 // checks if a committed entry of a replica has been changed throughout an execution
-func ModifiedLog() func(*types.Trace) bool {
-	return func(t *types.Trace) bool {
+func ModifiedLog() func(*types.Trace) (bool, int) {
+	return func(t *types.Trace) (bool, int) {
 		replicasLogs := make(map[uint64][]pb.Entry) // map of processID : Log (list of entries)
 
 		for i := 0; i < t.Len(); i++ { // foreach (state, action, new_state, reward) in the trace
@@ -68,21 +68,21 @@ func ModifiedLog() func(*types.Trace) bool {
 
 					for j := 0; j < min(len(replicasLogs[replica_id]), len(curLog)); j++ { // for the size of the old log (ignore newly appended entries)
 						if !eq_entry(curLog[j], replicasLogs[replica_id][j]) { // check if they are equal
-							return true // BUG FOUND
+							return true, i // BUG FOUND
 						}
 					}
 
-					replicasLogs[replica_id] = curLog // update previous state log with the current one for next iteration
+					replicasLogs[replica_id] = copyLog(curLog) // update previous state log with the current one for next iteration
 				}
 			}
 		}
-		return false
+		return false, -1
 	}
 }
 
 // checks if any replica has an inconsistent log w.r.t. other replicas
-func InconsistentLogs() func(*types.Trace) bool {
-	return func(t *types.Trace) bool {
+func InconsistentLogs() func(*types.Trace) (bool, int) {
+	return func(t *types.Trace) (bool, int) {
 		for i := 0; i < t.Len(); i++ { // foreach (state, action, new_state, reward) in the trace
 			s, _, _, _ := t.Get(i) // take state s
 			pS, ok := s.(*types.Partition)
@@ -101,20 +101,20 @@ func InconsistentLogs() func(*types.Trace) bool {
 
 						for k := 0; k < minSize; k++ { // for each entry
 							if !eq_entry(logsList[j1][k], logsList[j2][k]) { // check if they are equal
-								return true // BUG FOUND
+								return true, i // BUG FOUND
 							}
 						}
 					}
 				}
 			}
 		}
-		return false
+		return false, -1
 	}
 }
 
 // Check if there are more than one leader in the same term
-func MultipleLeaders() func(*types.Trace) bool {
-	return func(t *types.Trace) bool {
+func MultipleLeaders() func(*types.Trace) (bool, int) {
+	return func(t *types.Trace) (bool, int) {
 		// processStates := make(map[uint64]RaftState)
 		// processLogs := make(map[uint64][]pb.Entry) // map of processID : Log (list of entries)
 		for i := 0; i < t.Len(); i++ { // foreach (state, action, new_state, reward) in the trace
@@ -133,19 +133,19 @@ func MultipleLeaders() func(*types.Trace) bool {
 						}
 						leaders[int(curTerm)] = val + 1 // increase it by one
 						if leaders[int(curTerm)] > 1 {  // if more than one leader => BUG FOUND
-							return true
+							return true, i
 						}
 					}
 				}
 			}
 		}
-		return false
+		return false, -1
 	}
 }
 
 // MADE TO CHECK TRACE RECORDING -- checks if the log size of any replica is not empty
-func DummyBug() func(*types.Trace) bool {
-	return func(t *types.Trace) bool {
+func DummyBug() func(*types.Trace) (bool, int) {
+	return func(t *types.Trace) (bool, int) {
 		for i := 0; i < t.Len(); i++ { // foreach (state, action, new_state, reward) in the trace
 			s, _, _, _ := t.Get(i) // take state s
 			pS, ok := s.(*types.Partition)
@@ -172,7 +172,7 @@ func DummyBug() func(*types.Trace) bool {
 									ddifferentTerms[ent.Term] = true
 								}
 								if len(ddifferentTerms) > 1 {
-									return true // BUG FOUND
+									return true, i // BUG FOUND
 								}
 							}
 						}
@@ -180,13 +180,13 @@ func DummyBug() func(*types.Trace) bool {
 				}
 			}
 		}
-		return false
+		return false, -1
 	}
 }
 
 // MADE TO CHECK TRACE RECORDING -- checks if the log size of any replica is not empty
-func DummyBug2() func(*types.Trace) bool {
-	return func(t *types.Trace) bool {
+func DummyBug2() func(*types.Trace) (bool, int) {
+	return func(t *types.Trace) (bool, int) {
 		for i := 0; i < t.Len(); i++ { // foreach (state, action, new_state, reward) in the trace
 			s, _, _, _ := t.Get(i) // take state s
 			pS, ok := s.(*types.Partition)
@@ -197,12 +197,12 @@ func DummyBug2() func(*types.Trace) bool {
 					curSnapshot := repState.Snapshot
 
 					if curSnapshot.Index > 0 || curSnapshot.Term > 0 { // check if log size decreased
-						return true // BUG FOUND
+						return true, i // BUG FOUND
 					}
 				}
 			}
 		}
-		return false
+		return false, -1
 	}
 }
 

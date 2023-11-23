@@ -29,8 +29,8 @@ func InconsistentLogState(state *types.Partition) bool {
 	return false
 }
 
-func InconsistentLogs() func(*types.Trace) bool {
-	return func(t *types.Trace) bool {
+func InconsistentLogs() func(*types.Trace) (bool, int) {
+	return func(t *types.Trace) (bool, int) {
 		for i := 0; i < t.Len(); i++ {
 			s, _, _, _ := t.Get(i)
 			ps, ok := s.(*types.Partition)
@@ -38,16 +38,16 @@ func InconsistentLogs() func(*types.Trace) bool {
 				continue
 			}
 			if InconsistentLogState(ps) {
-				return true
+				return true, i
 			}
 		}
 
-		return false
+		return false, -1
 	}
 }
 
-func MultiplePrimaries() func(*types.Trace) bool {
-	return func(t *types.Trace) bool {
+func MultiplePrimaries() func(*types.Trace) (bool, int) {
+	return func(t *types.Trace) (bool, int) {
 		for i := 0; i < t.Len(); i++ {
 			s, _, _, _ := t.Get(i)
 			ps, ok := s.(*types.Partition)
@@ -61,13 +61,13 @@ func MultiplePrimaries() func(*types.Trace) bool {
 					ballot := ls.MaxAcceptedProposal.Ballot.Num
 					if _, ok := primaries[ballot]; ok {
 						// There is already a primary for this ballot number
-						return true
+						return true, i
 					}
 					primaries[ballot] = node
 				}
 			}
 		}
 
-		return false
+		return false, -1
 	}
 }

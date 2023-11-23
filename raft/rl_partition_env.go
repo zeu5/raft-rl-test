@@ -283,6 +283,8 @@ func (p *RaftPartitionEnv) Tick() types.PartitionedSystemState {
 		if err == nil {
 			// TODO: copy logs instead of assigning directly
 			newState.Logs[id] = copyLog(ents)
+		} else {
+			panic("error in reading entries in the log")
 		}
 
 		if p.config.SnapshotFrequency != 0 && newState.ticks > 0 && newState.ticks%p.config.SnapshotFrequency == 0 {
@@ -402,6 +404,8 @@ func (p *RaftPartitionEnv) deliverMessage(m types.Message) types.PartitionedSyst
 		ents, err := storage.Entries(1, lastIndex+1, 1024*1024) // hardcoded value from link_env.go
 		if err == nil {
 			newState.Logs[id] = copyLog(ents)
+		} else {
+			panic("error in reading entries in the log")
 		}
 
 		// add snapshot
