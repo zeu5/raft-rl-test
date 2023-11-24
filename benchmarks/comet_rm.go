@@ -21,6 +21,14 @@ func getCometPredicateHeirarchy(name string) (*policies.RewardMachine, bool) {
 		machine = policies.NewRewardMachine(cbft.AnyReachedRound(2))
 	case "AllRound1":
 		machine = policies.NewRewardMachine(cbft.AllAtLeastRound(1))
+	case "AnyLocked":
+		machine = policies.NewRewardMachine(cbft.EmptyLockedForAll().Not())
+	case "AllLocked":
+		machine = policies.NewRewardMachine(cbft.LockedForAll())
+	case "DifferentLocked":
+		machine = policies.NewRewardMachine(cbft.DifferentLocked())
+	case "SameLocked":
+		machine = policies.NewRewardMachine(cbft.SameLockedForAll())
 	}
 	return machine, machine != nil
 }

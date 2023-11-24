@@ -51,3 +51,55 @@ func AnyAtHeight(height int) types.RewardFuncSingle {
 		return false
 	}
 }
+
+func EmptyLockedForAll() types.RewardFuncSingle {
+	return func(s types.State) bool {
+		for _, rs := range s.(*types.Partition).ReplicaStates {
+			ns := rs.(*CometNodeState)
+			if ns.LockedBlockHash != "" {
+				return false
+			}
+		}
+		return true
+	}
+}
+
+func LockedForAll() types.RewardFuncSingle {
+	return func(s types.State) bool {
+		for _, rs := range s.(*types.Partition).ReplicaStates {
+			ns := rs.(*CometNodeState)
+			if ns.LockedBlockHash == "" {
+				return false
+			}
+		}
+		return true
+	}
+}
+
+func SameLockedForAll() types.RewardFuncSingle {
+	return func(s types.State) bool {
+		lockedValues := make(map[string]bool)
+		for _, rs := range s.(*types.Partition).ReplicaStates {
+			ns := rs.(*CometNodeState)
+			if ns.LockedBlockHash != "" {
+				lockedValues[ns.LockedBlockHash] = true
+			} else {
+				return false
+			}
+		}
+		return len(lockedValues) == 1
+	}
+}
+
+func DifferentLocked() types.RewardFuncSingle {
+	return func(s types.State) bool {
+		lockedValues := make(map[string]bool)
+		for _, rs := range s.(*types.Partition).ReplicaStates {
+			ns := rs.(*CometNodeState)
+			if ns.LockedBlockHash != "" {
+				lockedValues[ns.LockedBlockHash] = true
+			}
+		}
+		return len(lockedValues) > 1
+	}
+}

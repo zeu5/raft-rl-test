@@ -42,7 +42,7 @@ func CoverageAnalyzer(colors ...CometColorFunc) types.Analyzer {
 		for _, trace := range t {
 			for i := 0; i < trace.Len(); i++ {
 				state, _, _, _ := trace.Get(i)
-				stateHash := cometColoredStateHash(state)
+				stateHash := cometColoredStateHash(state, colors...)
 				if _, ok := states[stateHash]; !ok {
 					states[stateHash] = true
 				}
