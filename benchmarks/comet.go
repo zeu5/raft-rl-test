@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"path"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/zeu5/raft-rl-test/cbft"
@@ -12,11 +14,15 @@ import (
 )
 
 func CometExploration(episodes, horizon int, saveFile string, ctx context.Context) {
+
+	exec, _ := os.Executable()
+	curDir := filepath.Dir(exec)
+
 	env := cbft.NewCometEnv(ctx, &cbft.CometClusterConfig{
-		CometBinaryPath:     "/Users/srinidhin/Local/go/src/github.com/zeu5/cometbft/build/cometbft",
+		CometBinaryPath:     path.Join(curDir, "cbft", "cometbft"),
 		InterceptListenPort: 7074,
 		BaseRPCPort:         26756,
-		BaseWorkingDir:      "/Users/srinidhin/Local/go/src/github.com/zeu5/raft-rl-test/results/tmp",
+		BaseWorkingDir:      path.Join(curDir, saveFile, "tmp"),
 		NumNodes:            4,
 	})
 	colors := []cbft.CometColorFunc{cbft.ColorHRS(), cbft.ColorProposal(), cbft.ColorNumVotes(), cbft.ColorProposer()}
@@ -28,7 +34,7 @@ func CometExploration(episodes, horizon int, saveFile string, ctx context.Contex
 		MaxMessagesPerTick:     20,
 		StaySameStateUpto:      2,
 		NumReplicas:            4,
-		WithCrashes:            true,
+		WithCrashes:            false,
 	})
 
 	c := types.NewComparison(runs)

@@ -135,6 +135,25 @@ func stateToLines(s *types.Partition) []string {
 			fmt.Sprintf("NodeID: %d, State: %s", node, string(bs)),
 		)
 	}
+	revMap := make(map[int][]uint64)
+	for id, part := range s.PartitionMap {
+		list, ok := revMap[part]
+		if !ok {
+			list = make([]uint64, 0)
+		}
+		revMap[part] = append(list, id)
+	}
+
+	partition := ""
+	for _, part := range revMap {
+		partition = fmt.Sprintf("%s [", partition)
+		for _, replica := range part {
+			partition = fmt.Sprintf("%s %d", partition, replica)
+		}
+		partition = fmt.Sprintf("%s ]", partition)
+	}
+	partition = fmt.Sprintf("Partition: %s\n", partition)
+	lines = append(lines, partition)
 
 	return lines
 }
