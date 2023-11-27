@@ -94,8 +94,9 @@ type Partition struct {
 	PendingRequests   []Request
 	CanDeliverRequest bool
 	// For crashes
-	WithCrashes bool
-	ActiveNodes map[uint64]bool
+	WithCrashes      bool
+	RemainingCrashes int
+	ActiveNodes      map[uint64]bool
 }
 
 var _ State = &Partition{}
@@ -199,7 +200,7 @@ func (p *Partition) Actions() []Action {
 		}
 		partitionActions = append(partitionActions, &CreatePartitionAction{Partition: partition})
 	}
-	if p.WithCrashes {
+	if p.WithCrashes && p.RemainingCrashes > 0 {
 		activeColors := make(map[string]Color)
 		haveInactive := false
 		for node, color := range p.ReplicaColors {
@@ -248,6 +249,7 @@ func copyPartition(p *Partition) *Partition {
 		PartitionMap:      make(map[uint64]int),
 		RepeatCount:       p.RepeatCount,
 		WithCrashes:       p.WithCrashes,
+		RemainingCrashes:  p.RemainingCrashes,
 		ActiveNodes:       make(map[uint64]bool),
 		PendingRequests:   make([]Request, len(p.PendingRequests)),
 		CanDeliverRequest: p.CanDeliverRequest,
@@ -296,6 +298,7 @@ type PartitionEnvConfig struct {
 	MaxMessagesPerTick     int
 	StaySameStateUpto      int
 	WithCrashes            bool
+	CrashLimit             int
 }
 
 func NewPartitionEnv(c PartitionEnvConfig) *PartitionEnv {
@@ -322,6 +325,7 @@ func (p *PartitionEnv) reset() {
 		Partition:         make([][]Color, 1),
 		RepeatCount:       0,
 		WithCrashes:       p.config.WithCrashes,
+		RemainingCrashes:  p.config.CrashLimit,
 		ActiveNodes:       make(map[uint64]bool),
 		PendingRequests:   s.PendingRequests(),
 		CanDeliverRequest: s.CanDeliverRequest(),
@@ -365,6 +369,7 @@ func (p *PartitionEnv) handleStartStop(a Action) *Partition {
 		newActive[i] = true
 	}
 	if ss.Action == "Stop" {
+		nextState.RemainingCrashes = nextState.RemainingCrashes - 1
 		// Stop random node of the color if active
 		activeNodes := make([]uint64, 0)
 		for node, c := range p.CurPartition.ReplicaColors {

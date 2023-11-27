@@ -87,9 +87,13 @@ func RaftAnalyzer(savePath string, colors ...RaftColorFunc) types.Analyzer {
 				cState := &coloredState{NodeStates: make(map[uint64]*coloredReplicaState)} // & takes reference... constructor of coloredState struct
 				for node, s := range rState.ReplicaStates {                                // for each node, take abstracted state
 					rcState := &coloredReplicaState{Params: make(map[string]interface{})}
-					for _, c := range colors { // fill abstract state for a node
-						key, val := c(s.(RaftReplicaState))
-						rcState.Params[key] = val
+					if _, ok := rState.ActiveNodes[node]; !ok {
+						rcState.Params["active"] = false
+					} else {
+						for _, c := range colors { // fill abstract state for a node
+							key, val := c(s.(RaftReplicaState))
+							rcState.Params[key] = val
+						}
 					}
 					cState.NodeStates[node] = rcState // put in overall state
 				}
