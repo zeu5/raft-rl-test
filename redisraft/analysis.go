@@ -178,15 +178,42 @@ func BugAnalyzer(savePath string, bugs ...types.BugDesc) types.Analyzer {
 					if !ok {
 						firstOccurrence[b.Name] = i
 					}
+
+					// save the trace into files
 					bugPath := path.Join(savePath, strconv.Itoa(run)+"_"+s+"_"+b.Name+"_"+strconv.Itoa(i)+"_step"+strconv.Itoa(step)+"_bug.json")
 					t.Record(bugPath)
 					readPath := path.Join(savePath, strconv.Itoa(run)+"_"+s+"_"+b.Name+"_"+strconv.Itoa(i)+"_step"+strconv.Itoa(step)+"_bug_readable.txt")
 					PrintReadableTrace(t, readPath)
+
+					// write log file
+					bugState, _, _, _ := t.Get(step)
+					pS, okS := bugState.(*types.Partition)
+					if okS {
+						logs := processLogs(pS)
+						logFilePath := path.Join(savePath, strconv.Itoa(run)+"_"+s+"_"+b.Name+"_"+strconv.Itoa(i)+"_step"+strconv.Itoa(step)+"_bug.log")
+						os.WriteFile(logFilePath, []byte(logs), 0644)
+					}
 				}
 			}
 		}
 		return firstOccurrence
 	}
+}
+
+func processLogs(partition *types.Partition) string {
+	logLines := []string{}
+	for nodeID, s := range partition.ReplicaStates {
+		logLines = append(logLines, fmt.Sprintf("logs for node: %d\n", nodeID))
+		rState := s.(*RedisNodeState)
+		logLines = append(logLines, "----- Stdout -----", rState.LogStdout, "----- Stderr -----", rState.LogStderr, "\n")
+		logLines = append(logLines, fmt.Sprintf("state for node: %d\n", nodeID))
+		bs, err := json.Marshal(rState.Params)
+		if err != nil {
+			logLines = append(logLines, string(bs)+"\n\n")
+		}
+	}
+	logs := strings.Join(logLines, "\n")
+	return logs
 }
 
 func BugComparator() types.Comparator {

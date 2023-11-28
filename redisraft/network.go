@@ -167,11 +167,11 @@ func (n *InterceptNetwork) handleReplica(c *gin.Context) {
 }
 
 func (n *InterceptNetwork) Start() {
-	go func() {
+	go func() { // starts the server to listen for requests
 		n.server.ListenAndServe()
 	}()
 
-	go func() {
+	go func() { // what is this routine doing?
 		<-n.ctx.Done()
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
@@ -179,6 +179,7 @@ func (n *InterceptNetwork) Start() {
 	}()
 }
 
+// re-create the messages and nodes maps for the network
 func (n *InterceptNetwork) Reset() {
 	n.lock.Lock()
 	defer n.lock.Unlock()
@@ -187,6 +188,7 @@ func (n *InterceptNetwork) Reset() {
 	n.nodes = make(map[uint64]string)
 }
 
+// wait until the specified number of nodes get connected, return false if it does not happen within the internal specified timeout
 func (n *InterceptNetwork) WaitForNodes(numNodes int) bool {
 	timeout := time.After(2 * time.Second)
 	numConnectedNodes := 0
@@ -205,23 +207,27 @@ func (n *InterceptNetwork) WaitForNodes(numNodes int) bool {
 	return true
 }
 
+// send a message from the list given its id
 func (n *InterceptNetwork) SendMessage(id string) {
 	n.lock.Lock()
-	m, ok1 := n.messages[id]
+	m, ok1 := n.messages[id] // get message from the list
 	nodeAddr := ""
-	if ok1 {
+	if ok1 { // if present, read the target node address
 		nodeAddr = n.nodes[m.To()]
 	}
 	n.lock.Unlock()
 
-	if !ok1 {
+	if !ok1 { // if message not present, return
 		return
 	}
 
+	// marshal the message to send it
 	bs, err := json.Marshal(m)
 	if err != nil {
 		return
 	}
+
+	// set up http client to send it?
 	client := &http.Client{
 		Transport: &http.Transport{
 			DialContext: (&net.Dialer{
@@ -234,17 +240,21 @@ func (n *InterceptNetwork) SendMessage(id string) {
 			DisableKeepAlives:     true,
 		},
 	}
+
+	// send the message over http
 	resp, err := client.Post("http://"+nodeAddr+"/message", "application/json", bytes.NewBuffer(bs))
-	if err == nil {
+	if err == nil { // what happens here?
 		io.ReadAll(resp.Body)
 		resp.Body.Close()
 	}
 
+	// take the lock and delete the sent message from the list
 	n.lock.Lock()
 	delete(n.messages, id)
 	n.lock.Unlock()
 }
 
+// delete a message from the list given its id, if there is no such message => no-op
 func (n *InterceptNetwork) DeleteMessage(id string) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
