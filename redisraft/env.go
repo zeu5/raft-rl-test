@@ -87,6 +87,7 @@ func NewRedisRaftEnv(ctx context.Context, clusterConfig *ClusterConfig) *RedisRa
 	}
 	e.network.Start()
 
+	// for duration analysis
 	e.stats["start_times"] = make([]time.Duration, 0)
 	e.stats["stop_times"] = make([]time.Duration, 0)
 
@@ -187,13 +188,64 @@ func (r *RedisRaftEnv) DropMessages(messages []types.Message) types.PartitionedS
 	return newState
 }
 
-func (r *RedisRaftEnv) Reset() types.PartitionedSystemState {
+func (r *RedisRaftEnv) Reset_old() types.PartitionedSystemState {
 	if r.cluster != nil {
 		r.cluster.Destroy()
 	}
 	r.network.Reset()
 	r.cluster = NewCluster(r.clusterConfig)
 	err := r.cluster.Start()
+	if err != nil {
+		panic(err)
+	}
+
+	// r.network.WaitForNodes(r.clusterConfig.NumNodes)
+
+	r.network.WaitForNodes(r.clusterConfig.NumNodes)
+
+	newState := &RedisClusterState{
+		NodeStates: r.cluster.GetNodeStates(),
+		Messages:   r.network.GetAllMessages(),
+		Requests:   make([]RedisRequest, r.clusterConfig.NumRequests),
+	}
+	for i := 0; i < r.clusterConfig.NumRequests; i++ {
+		req := RedisRequest{Type: "Incr"}
+		if rand.Intn(2) == 1 {
+			req.Type = "Get"
+		}
+		newState.Requests[i] = req.Copy()
+	}
+
+	r.curState = newState
+	return newState
+}
+
+func (r *RedisRaftEnv) Reset() types.PartitionedSystemState {
+	if r.cluster != nil {
+		r.cluster.Destroy()
+	}
+	r.network.Reset()
+	r.cluster = NewCluster(r.clusterConfig)
+
+	// try to restart the cluster for a few times until it does not return an error
+	trials := 0
+	var err error
+	for {
+		err := r.cluster.Start()
+		if err == nil || trials > 5 {
+			break
+		} else {
+			if r.cluster != nil {
+				r.cluster.Destroy()
+			}
+			r.network.Reset()
+			r.cluster = NewCluster(r.clusterConfig)
+			trials++
+			time.Sleep(2 * time.Second)
+		}
+	}
+
+	// err := r.cluster.Start()
 	if err != nil {
 		panic(err)
 	}
@@ -271,7 +323,8 @@ func (r *RedisRaftEnv) Cleanup() {
 }
 
 func (r *RedisRaftEnv) Tick() types.PartitionedSystemState {
-	time.Sleep(20 * time.Millisecond)
+	// time.Sleep(20 * time.Millisecond)
+	time.Sleep(time.Duration(r.clusterConfig.TickLength) * time.Millisecond)
 	newState := &RedisClusterState{
 		NodeStates: r.cluster.GetNodeStates(),
 		Messages:   r.network.GetAllMessages(),

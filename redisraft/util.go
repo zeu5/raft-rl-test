@@ -157,7 +157,11 @@ func ReadableState(p types.Partition) []string {
 	result := make([]string, 0)
 
 	for i := 1; i < len(p.ReplicaStates)+1; i++ { // for each replica state
-		result = append(result, ReadableReplicaState(p.ReplicaStates[uint64(i)], uint64(i)))
+		if p.ActiveNodes[uint64(i)] {
+			result = append(result, ReadableReplicaState(p.ReplicaStates[uint64(i)], uint64(i)))
+		} else { // if node is 'inactive'
+			result = append(result, fmt.Sprintf(" ID: %d | INACTIVE \n", i))
+		}
 	}
 	result = append(result, "---\n")
 	partition := p.PartitionMap

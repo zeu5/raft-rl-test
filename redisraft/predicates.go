@@ -200,3 +200,24 @@ func AllInTermAtleast(minTerm int) types.RewardFuncSingle {
 		return true
 	}
 }
+
+// returns true if there is at least one log with entries in two different terms
+func EntriesInDifferentTerms() types.RewardFuncSingle {
+	return func(s types.State) bool {
+		ps, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+		for _, state := range ps.ReplicaStates {
+			rState := state.(*RedisNodeState)
+			terms := make(map[int]bool)
+			for _, entry := range rState.Logs {
+				terms[entry.Term] = true
+			}
+			if len(terms) > 1 {
+				return true
+			}
+		}
+		return false
+	}
+}

@@ -15,6 +15,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// An entry in a node's log
 type RedisEntry struct {
 	ID      string
 	Term    int
@@ -35,6 +36,7 @@ func (r RedisEntry) String() string {
 	return fmt.Sprintf("[ID:%s | I:%d | T:%d | Len:%d]", r.ID, r.Index, r.Term, r.DataLen)
 }
 
+// the state of a node
 type RedisNodeState struct {
 	Params    map[string]string
 	Logs      []RedisEntry
@@ -78,6 +80,7 @@ func EmptyRedisNodeState() *RedisNodeState {
 	return &RedisNodeState{Params: make(map[string]string), Logs: make([]RedisEntry, 0)}
 }
 
+// configuration of a RedisNode
 type RedisNodeConfig struct {
 	ClusterID           int
 	Port                int
@@ -91,6 +94,7 @@ type RedisNodeConfig struct {
 	BinaryPath          string
 }
 
+// RedisNode structure
 type RedisNode struct {
 	ID      int
 	process *exec.Cmd
@@ -161,6 +165,7 @@ func (r *RedisNode) Create() {
 	r.process.Stderr = r.stderr
 }
 
+// start the RedisNode server process, returns an error if already started
 func (r *RedisNode) Start() error {
 	if r.ctx != nil || r.process != nil {
 		return errors.New("redis server already started")
@@ -280,18 +285,19 @@ func (r *RedisNode) Info() (*RedisNodeState, error) {
 }
 
 type ClusterConfig struct {
-	NumNodes              int
-	RaftModulePath        string
-	RedisServerBinaryPath string
+	NumNodes              int    // number of nodes in the cluster
+	RaftModulePath        string // ???
+	RedisServerBinaryPath string // ???
 	BasePort              int
 	BaseInterceptPort     int
 	ID                    int
 	InterceptListenAddr   string
 	WorkingDir            string
 	LogLevel              string
-	RequestTimeout        int
-	ElectionTimeout       int
-	NumRequests           int
+	RequestTimeout        int // heartbeat timeout in milliseconds
+	ElectionTimeout       int // new election timeout in milliseconds
+	NumRequests           int // number of client requests available
+	TickLength            int // length of a tick in milliseconds
 }
 
 func (c *ClusterConfig) Copy() *ClusterConfig {
@@ -308,6 +314,7 @@ func (c *ClusterConfig) Copy() *ClusterConfig {
 		RequestTimeout:        c.RequestTimeout,
 		ElectionTimeout:       c.ElectionTimeout,
 		NumRequests:           c.NumRequests,
+		TickLength:            c.TickLength,
 	}
 }
 
@@ -341,6 +348,9 @@ func (c *ClusterConfig) SetDefaults() {
 	}
 	if c.ElectionTimeout == 0 {
 		c.ElectionTimeout = 200
+	}
+	if c.TickLength == 0 {
+		c.TickLength = 40
 	}
 }
 
