@@ -355,3 +355,9 @@ func ColorDecided() RSLColorFunc {
 		return "decided", ls.Decided
 	}
 }
+
+func ColorLogLength() RSLColorFunc {
+	return func(ls LocalState) (string, interface{}) {
+		return "logLength", ls.Log.NumDecided()
+	}
+}

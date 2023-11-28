@@ -585,8 +585,6 @@ func (p *PartitionEnv) handleRequest(a Action) *Partition {
 	if nextState.CanDeliverRequest && len(nextState.PendingRequests) > 0 {
 		nextRequest := nextState.PendingRequests[0]
 		s := p.UnderlyingEnv.ReceiveRequest(nextRequest)
-		nextState.PendingRequests = s.PendingRequests()
-		nextState.CanDeliverRequest = s.CanDeliverRequest()
 
 		newPartition := make([][]uint64, len(nextState.Partition))
 		for i := range nextState.Partition {

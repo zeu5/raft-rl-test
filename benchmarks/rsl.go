@@ -48,19 +48,19 @@ func RSLExploration() {
 			Environment: GetRSLEnvironment(config, colors),
 		},
 	))
-	// strictPolicy := policies.NewStrictPolicy(types.NewRandomPolicy())
-	// strictPolicy.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
+	strictPolicy := policies.NewStrictPolicy(types.NewRandomPolicy())
+	strictPolicy.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
 
-	// // Policy to never partition
-	// c.AddExperiment(types.NewExperiment(
-	// 	"Strict",
-	// 	&types.AgentConfig{
-	// 		Episodes:    episodes,
-	// 		Horizon:     horizon,
-	// 		Policy:      policies.NewStrictPolicy(strictPolicy),
-	// 		Environment: GetRSLEnvironment(config),
-	// 	},
-	// ))
+	// Policy to never partition
+	c.AddExperiment(types.NewExperiment(
+		"Strict",
+		&types.AgentConfig{
+			Episodes:    episodes,
+			Horizon:     horizon,
+			Policy:      policies.NewStrictPolicy(strictPolicy),
+			Environment: GetRSLEnvironment(config, colors),
+		},
+	))
 	// RL based exploration
 	c.AddExperiment(types.NewExperiment(
 		"NegReward",
@@ -76,7 +76,7 @@ func RSLExploration() {
 		&types.AgentConfig{
 			Episodes:    episodes,
 			Horizon:     horizon,
-			Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
+			Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.05),
 			Environment: GetRSLEnvironment(config, colors),
 		},
 	))
@@ -90,9 +90,9 @@ func GetRSLEnvironment(c rsl.RSLEnvConfig, colors []rsl.RSLColorFunc) types.Envi
 		Env:                    rsl.NewRLSPartitionEnv(c),
 		NumReplicas:            c.Nodes,
 		TicketBetweenPartition: 3,
-		MaxMessagesPerTick:     3,
+		MaxMessagesPerTick:     100,
 		StaySameStateUpto:      5,
-		WithCrashes:            true,
+		WithCrashes:            false,
 	})
 }
 
@@ -103,7 +103,7 @@ func RSLExplorationCommand() *cobra.Command {
 			RSLExploration()
 		},
 	}
-	cmd.PersistentFlags().IntVarP(&requests, "requests", "r", 1, "Number of requests to run with")
+	cmd.PersistentFlags().IntVarP(&requests, "requests", "r", 3, "Number of requests to run with")
 	return cmd
 }
 

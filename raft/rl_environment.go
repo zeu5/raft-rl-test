@@ -221,6 +221,7 @@ type RLConfig struct {
 	MaxMessagesPerTick    int  // upper bound of messages delivered per tick
 	StaySameStateUpTo     int  // amount of consecutive steps in the same partitioning to be considered different
 	WithCrashes           bool // enable crash actions
+	CrashLimit            int  // Limit the number of crashes possible
 }
 
 func (r *RLConfig) String() string {
@@ -228,7 +229,8 @@ func (r *RLConfig) String() string {
 	result = fmt.Sprintf("%s TicksBetweenPartition: %d\n", result, r.TicksBetweenPartition)
 	result = fmt.Sprintf("%s MaxMessagesPerTick: %d\n", result, r.MaxMessagesPerTick)
 	result = fmt.Sprintf("%s StaySameStateUpTo: %d\n", result, r.StaySameStateUpTo)
-	result = fmt.Sprintf("%s WithCrashes: %t\n\n", result, r.WithCrashes)
+	result = fmt.Sprintf("%s WithCrashes: %t\n", result, r.WithCrashes)
+	result = fmt.Sprintf("%s Crash limit: %d\n\n", result, r.CrashLimit)
 
 	return result
 }
@@ -250,16 +252,6 @@ func NewRaftEnvironment(config RaftEnvironmentConfig) *RaftEnvironment {
 		storages: make(map[uint64]*raft.MemoryStorage),
 		messages: make(map[string]pb.Message),
 		rand:     rand.New(rand.NewSource(time.Now().UnixNano())),
-	}
-	for i := 0; i < r.config.Requests; i++ {
-		proposal := pb.Message{
-			Type: pb.MsgProp,
-			From: uint64(0),
-			Entries: []pb.Entry{
-				{Data: []byte(strconv.Itoa(i + 1))},
-			},
-		}
-		r.messages[msgKey(proposal)] = proposal
 	}
 	r.makeNodes()
 	return r

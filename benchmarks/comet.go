@@ -47,7 +47,7 @@ func CometExploration(episodes, horizon int, saveFile string, ctx context.Contex
 	c.AddExperiment(types.NewExperiment("NegReward", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
-		Policy:      policies.NewSoftMaxNegFreqPolicy(0.1, 0.99, 1),
+		Policy:      types.NewSoftMaxNegPolicy(0.1, 0.99, 1),
 		Environment: partitionEnv,
 	}))
 

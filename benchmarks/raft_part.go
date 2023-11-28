@@ -13,8 +13,8 @@ func RaftPart(episodes, horizon int, saveFile string) {
 	// config of the running system
 	raftConfig := raft.RaftEnvironmentConfig{
 		Replicas:          3,
-		ElectionTick:      7, // lower bound for a process to try to go to new term (starting an election) - double of this is upperbound
-		HeartbeatTick:     2, // frequency of heartbeats
+		ElectionTick:      10, // lower bound for a process to try to go to new term (starting an election) - double of this is upperbound
+		HeartbeatTick:     3,  // frequency of heartbeats
 		Timeouts:          timeouts,
 		Requests:          requests,
 		SnapshotFrequency: 0,
@@ -22,7 +22,7 @@ func RaftPart(episodes, horizon int, saveFile string) {
 
 	// abstraction for both plot and RL
 	// colors is one abstraction definition
-	colors := []raft.RaftColorFunc{raft.ColorState(), raft.ColorCommit(), raft.ColorLeader(), raft.ColorVote(), raft.ColorBoundedTerm(6)}
+	colors := []raft.RaftColorFunc{raft.ColorState(), raft.ColorCommit(), raft.ColorLeader(), raft.ColorVote(), raft.ColorLogLength()} //raft.ColorBoundedTerm(10),
 
 	// c is general experiment
 	// colors ... , expanded list, can omit the argument
@@ -49,7 +49,7 @@ func RaftPart(episodes, horizon int, saveFile string) {
 	c.AddExperiment(types.NewExperiment("RL", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
-		Policy:      policies.NewSoftMaxNegFreqPolicy(0.3, 0.7, 1),
+		Policy:      types.NewSoftMaxNegPolicy(0.3, 0.7, 1), // policies.NewSoftMaxNegFreqPolicy(0.3,0.7,1)
 		Environment: getRaftPartEnv(raftConfig, colors),
 	}))
 	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
@@ -77,7 +77,7 @@ func getRaftPartEnv(config raft.RaftEnvironmentConfig, colors []raft.RaftColorFu
 		MaxMessagesPerTick:     100,                                  // upper bound of random num of delivered messages
 		StaySameStateUpto:      5,                                    // counter to distinguish consecutive states
 		NumReplicas:            config.Replicas,
-		WithCrashes:            true,
+		WithCrashes:            false,
 		CrashLimit:             100,
 	})
 }
@@ -92,6 +92,7 @@ func getRaftPartEnvCfg(config raft.RaftEnvironmentConfig, colors []raft.RaftColo
 		StaySameStateUpto:      rlConfig.StaySameStateUpTo,           // counter to distinguish consecutive states
 		NumReplicas:            config.Replicas,                      // number of replicas
 		WithCrashes:            rlConfig.WithCrashes,                 // enable crash actions
+		CrashLimit:             rlConfig.CrashLimit,                  // limit the number of crash actions
 	})
 }
 

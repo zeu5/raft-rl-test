@@ -13,7 +13,7 @@ type RSLConfig struct {
 }
 
 func (r RSLConfig) QuorumSize() int {
-	return (len(r.Members)+1)/2 + 1
+	return (len(r.Members))/2 + 1
 }
 
 func (r RSLConfig) Copy() RSLConfig {
