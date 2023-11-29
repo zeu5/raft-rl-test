@@ -70,6 +70,10 @@ func (q *QTable) Exists(state string) bool {
 	return ok
 }
 
+func (q *QTable) Size() int {
+	return len(q.table)
+}
+
 func (q *QTable) MaxAmong(state string, actions []string, def float64) (string, float64) {
 	if _, ok := q.table[state]; !ok {
 		q.table[state] = make(map[string]float64)

@@ -27,6 +27,20 @@ func (i *InActiveColor) Copy() Color {
 	return &InActiveColor{}
 }
 
+type IntColor struct {
+	K string
+}
+
+func (i *IntColor) Hash() string {
+	return i.K
+}
+
+func (i *IntColor) Copy() Color {
+	return &IntColor{
+		K: i.K,
+	}
+}
+
 // Accepts a replica state and colors it
 type Painter interface {
 	Color(ReplicaState) Color
@@ -233,7 +247,19 @@ func (p *Partition) Hash() string {
 			partition[i][j] = color.Hash()
 		}
 	}
-	bs, _ := json.Marshal(map[string]interface{}{"colors": partition, "repeat_count": p.RepeatCount, "pending_requests": len(p.PendingRequests)})
+	activeColors := make(map[string]bool)
+	for node, c := range p.ReplicaColors {
+		if _, ok := p.ActiveNodes[node]; ok {
+			activeColors[c.Hash()] = true
+		}
+	}
+
+	bs, _ := json.Marshal(map[string]interface{}{
+		"colors":           partition,
+		"repeat_count":     p.RepeatCount,
+		"pending_requests": len(p.PendingRequests),
+		"active_colors":    activeColors,
+	})
 	hash := sha256.Sum256(bs)
 	return hex.EncodeToString(hash[:])
 }
@@ -403,14 +429,6 @@ func (p *PartitionEnv) handleStartStop(a Action) *Partition {
 	for n := range newActive {
 		nextState.ActiveNodes[n] = true
 	}
-	for n, c := range p.CurPartition.ReplicaColors {
-		_, inactive := nextState.ActiveNodes[n]
-		if inactive {
-			nextState.ReplicaColors[n] = &InActiveColor{}
-		} else {
-			nextState.ReplicaColors[n] = c
-		}
-	}
 
 	// Recolor based on active nodes and recompute the partition
 	newPartition := make([][]uint64, len(p.CurPartition.Partition))
@@ -541,12 +559,8 @@ func (p *PartitionEnv) handlePartition(a Action) *Partition {
 	for i := 0; i < p.NumReplicas; i++ {
 		id := uint64(i + 1)
 		rs := s.GetReplicaState(id)
-		var color Color = &InActiveColor{}
-		if _, isActive := nextState.ActiveNodes[id]; isActive {
-			color = p.painter.Color(rs)
-		}
-		nextState.ReplicaColors[id] = color // abstraction
-		nextState.ReplicaStates[id] = rs    // actual replica state
+		nextState.ReplicaColors[id] = p.painter.Color(rs) // abstraction
+		nextState.ReplicaStates[id] = rs                  // actual replica state
 	}
 
 	nextStatePartition := make([][]Color, len(newPartition))
@@ -592,14 +606,8 @@ func (p *PartitionEnv) handleRequest(a Action) *Partition {
 		}
 		for n, part := range nextState.PartitionMap {
 			newPartition[part] = append(newPartition[part], n)
-			_, inactive := nextState.ActiveNodes[n]
 			rs := s.GetReplicaState(n)
-			if inactive {
-				nextState.ReplicaColors[n] = &InActiveColor{}
-			} else {
-				color := p.painter.Color(rs)
-				nextState.ReplicaColors[n] = color
-			}
+			nextState.ReplicaColors[n] = p.painter.Color(rs)
 			nextState.ReplicaStates[n] = rs
 		}
 
