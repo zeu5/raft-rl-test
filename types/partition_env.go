@@ -240,28 +240,29 @@ func (p *Partition) Actions() []Action {
 
 // hash of a partition state, state representation for the RL agent
 func (p *Partition) Hash() string {
-	partition := make([][]string, len(p.Partition))
-	for i, par := range p.Partition {
-		partition[i] = make([]string, len(par))
-		for j, color := range par {
-			partition[i][j] = color.Hash()
-		}
-	}
-	activeColors := make(map[string]bool)
-	for node, c := range p.ReplicaColors {
-		if _, ok := p.ActiveNodes[node]; ok {
-			activeColors[c.Hash()] = true
-		}
-	}
+	return "..."
+	// partition := make([][]string, len(p.Partition))
+	// for i, par := range p.Partition {
+	// 	partition[i] = make([]string, len(par))
+	// 	for j, color := range par {
+	// 		partition[i][j] = color.Hash()
+	// 	}
+	// }
+	// activeColors := make(map[string]bool)
+	// for node, c := range p.ReplicaColors {
+	// 	if _, ok := p.ActiveNodes[node]; ok {
+	// 		activeColors[c.Hash()] = true
+	// 	}
+	// }
 
-	bs, _ := json.Marshal(map[string]interface{}{
-		"colors":           partition,
-		"repeat_count":     p.RepeatCount,
-		"pending_requests": len(p.PendingRequests),
-		"active_colors":    activeColors,
-	})
-	hash := sha256.Sum256(bs)
-	return hex.EncodeToString(hash[:])
+	// bs, _ := json.Marshal(map[string]interface{}{
+	// 	"colors":           partition,
+	// 	"repeat_count":     p.RepeatCount,
+	// 	"pending_requests": len(p.PendingRequests),
+	// 	"active_colors":    activeColors,
+	// })
+	// hash := sha256.Sum256(bs)
+	// return hex.EncodeToString(hash[:])
 }
 
 var _ State = &Partition{}

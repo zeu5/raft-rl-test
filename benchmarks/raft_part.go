@@ -34,6 +34,7 @@ func RaftPart(episodes, horizon int, saveFile string) {
 	c.AddAnalysis("Plot", raft.RaftAnalyzer(saveFile, colors...), raft.RaftPlotComparator(saveFile))
 	c.AddAnalysis("Crashes", types.CrashAnalyzer(), types.CrashComparator(saveFile))
 	c.AddAnalysis("PureCoverage", types.PureCoverage(), types.PureCoveragePlotter(saveFile))
+	c.AddAnalysis("PartitionCoverage", types.PartitionCoverage(), types.PartitionCoveragePlotter(saveFile))
 
 	// here you add different policies with their parameters
 	// strict := policies.NewStrictPolicy(types.NewRandomPolicy())
@@ -69,7 +70,6 @@ func RaftPart(episodes, horizon int, saveFile string) {
 }
 
 func getRaftPartEnv(config raft.RaftEnvironmentConfig, colors []raft.RaftColorFunc) types.Environment {
-
 	return types.NewPartitionEnv(types.PartitionEnvConfig{
 		Painter:                raft.NewRaftStatePainter(colors...),  // pass the abstraction to env
 		Env:                    raft.NewPartitionEnvironment(config), // actual environment
@@ -78,7 +78,7 @@ func getRaftPartEnv(config raft.RaftEnvironmentConfig, colors []raft.RaftColorFu
 		StaySameStateUpto:      5,                                    // counter to distinguish consecutive states
 		NumReplicas:            config.Replicas,
 		WithCrashes:            true,
-		CrashLimit:             100,
+		CrashLimit:             10,
 	})
 }
 

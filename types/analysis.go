@@ -1,6 +1,9 @@
 package types
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path"
@@ -68,7 +71,7 @@ func PartitionCoverage() Analyzer {
 		for _, trace := range t {
 			for j := 0; j < trace.Len(); j++ {
 				s, _, _, _ := trace.Get(j)
-				sHash := s.(*Partition).Hash()
+				sHash := partitionHash(s.(*Partition))
 				if _, ok := uniqueStates[sHash]; !ok {
 					uniqueStates[sHash] = true
 				}
@@ -77,6 +80,31 @@ func PartitionCoverage() Analyzer {
 		}
 		return numUniqueStates
 	}
+}
+
+func partitionHash(p *Partition) string {
+	partition := make([][]string, len(p.Partition))
+	for i, par := range p.Partition {
+		partition[i] = make([]string, len(par))
+		for j, color := range par {
+			partition[i][j] = color.Hash()
+		}
+	}
+	activeColors := make(map[string]bool)
+	for node, c := range p.ReplicaColors {
+		if _, ok := p.ActiveNodes[node]; ok {
+			activeColors[c.Hash()] = true
+		}
+	}
+
+	bs, _ := json.Marshal(map[string]interface{}{
+		"colors":           partition,
+		"repeat_count":     p.RepeatCount,
+		"pending_requests": len(p.PendingRequests),
+		"active_colors":    activeColors,
+	})
+	hash := sha256.Sum256(bs)
+	return hex.EncodeToString(hash[:])
 }
 
 func PartitionCoveragePlotter(plotPath string) Comparator {
