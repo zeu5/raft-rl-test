@@ -300,6 +300,16 @@ type ClusterConfig struct {
 	TickLength            int // length of a tick in milliseconds
 }
 
+func (r *ClusterConfig) Printable() string {
+	result := "RedisClusterConfig: \n"
+	result = fmt.Sprintf("%s Replicas: %d\n", result, r.NumNodes)
+	result = fmt.Sprintf("%s ElectionTick: %d ms\n", result, r.ElectionTimeout)
+	result = fmt.Sprintf("%s HeartbeatTick: %d ms\n", result, r.RequestTimeout)
+	result = fmt.Sprintf("%s TickLength: %d ms\n", result, r.TickLength)
+	result = fmt.Sprintf("%s Requests: %d\n", result, r.NumRequests)
+	return result
+}
+
 func (c *ClusterConfig) Copy() *ClusterConfig {
 	return &ClusterConfig{
 		NumNodes:              c.NumNodes,
@@ -408,6 +418,25 @@ func (c *Cluster) GetNodeStates() map[uint64]*RedisNodeState {
 		out[uint64(id)] = state.Copy()
 	}
 	return out
+}
+
+// returns the updated map of RedisNodeState - version returning also the execution time in microseconds
+func (c *Cluster) GetNodeStates_Time() (map[uint64]*RedisNodeState, int64) {
+	timeStart := time.Now().UnixMicro()
+	out := make(map[uint64]*RedisNodeState)
+	for id, node := range c.Nodes {
+		state, err := node.Info()
+		if err != nil {
+			e := EmptyRedisNodeState()
+			e.LogStdout, e.LogStderr = node.GetLogs()
+			out[uint64(id)] = e
+			continue
+		}
+		out[uint64(id)] = state.Copy()
+	}
+	timeEnd := time.Now().UnixMicro()
+
+	return out, timeEnd - timeStart
 }
 
 func (c *Cluster) Start() error {

@@ -2,7 +2,10 @@ package redisraft
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
+	"os"
+	"path"
 	"sync"
 	"time"
 
@@ -33,11 +36,13 @@ type RedisClusterState struct {
 	Requests   []RedisRequest
 }
 
+// return the replica state for the specified ID
 func (r *RedisClusterState) GetReplicaState(id uint64) types.ReplicaState {
 	s := r.NodeStates[id]
 	return s
 }
 
+// return a copy of the pending messages in the cluster
 func (r *RedisClusterState) PendingMessages() map[string]types.Message {
 	out := make(map[string]types.Message)
 	for k, m := range r.Messages {
@@ -46,6 +51,7 @@ func (r *RedisClusterState) PendingMessages() map[string]types.Message {
 	return out
 }
 
+// return true if there is a replica in state leader
 func (r *RedisClusterState) CanDeliverRequest() bool {
 	haveLeader := false
 	for _, s := range r.NodeStates {
@@ -57,6 +63,7 @@ func (r *RedisClusterState) CanDeliverRequest() bool {
 	return haveLeader
 }
 
+// return a copy of the pending requests
 func (r *RedisClusterState) PendingRequests() []types.Request {
 	out := make([]types.Request, 0)
 	for _, r := range r.Requests {
@@ -75,15 +82,24 @@ type RedisRaftEnv struct {
 	curState *RedisClusterState
 
 	stats map[string][]time.Duration
+
+	// record duration between ticks
+	timeTickDurations [][]int64 // map[episode] = [tick gaps in microseconds]
+	timeLastRecorded  int64     //
+	timeEpIndex       int
+	savePath          string
 }
 
 // For a given config, should only be instantiated once since it spins up a sever and binds the addr:port
-func NewRedisRaftEnv(ctx context.Context, clusterConfig *ClusterConfig) *RedisRaftEnv {
+func NewRedisRaftEnv(ctx context.Context, clusterConfig *ClusterConfig, savePath ...string) *RedisRaftEnv {
 	e := &RedisRaftEnv{
-		clusterConfig: clusterConfig,
-		network:       NewInterceptNetwork(ctx, clusterConfig.InterceptListenAddr),
-		cluster:       nil,
-		stats:         make(map[string][]time.Duration),
+		clusterConfig:     clusterConfig,
+		network:           NewInterceptNetwork(ctx, clusterConfig.InterceptListenAddr),
+		cluster:           nil,
+		stats:             make(map[string][]time.Duration),
+		timeTickDurations: make([][]int64, 0),
+		timeEpIndex:       0,
+		savePath:          savePath[0],
 	}
 	e.network.Start()
 
@@ -91,9 +107,24 @@ func NewRedisRaftEnv(ctx context.Context, clusterConfig *ClusterConfig) *RedisRa
 	e.stats["start_times"] = make([]time.Duration, 0)
 	e.stats["stop_times"] = make([]time.Duration, 0)
 
+	e.stats["GetNodeStates"] = make([]time.Duration, 0)
+	e.stats["DeliverMessages"] = make([]time.Duration, 0)
+	e.stats["GetAllMessages"] = make([]time.Duration, 0)
+	e.stats["DropMessages"] = make([]time.Duration, 0)
+
+	// for tick length analysis
+	if len(savePath) == 1 {
+		if _, ok := os.Stat(savePath[0]); ok == nil {
+			os.RemoveAll(savePath[0])
+		}
+		os.MkdirAll(savePath[0], 0777)
+	}
+	e.timeTickDurations = append(e.timeTickDurations, make([]int64, 0)) // initialize with the first episode list
+
 	return e
 }
 
+// deliver a request to leader action
 func (r *RedisRaftEnv) ReceiveRequest(req types.Request) types.PartitionedSystemState {
 	newState := &RedisClusterState{
 		NodeStates: make(map[uint64]*RedisNodeState),
@@ -130,10 +161,20 @@ func (r *RedisRaftEnv) ReceiveRequest(req types.Request) types.PartitionedSystem
 		newState.Requests = append(newState.Requests, re.Copy())
 	}
 
+	start := time.Now() // time stats
+
+	newState.NodeStates = r.cluster.GetNodeStates()
+
+	dur := time.Since(start)                                         // time stats
+	r.stats["GetNodeStates"] = append(r.stats["GetNodeStates"], dur) // time stats
+
+	r.curState = newState
 	return newState
 }
 
 func (r *RedisRaftEnv) DeliverMessages(messages []types.Message) types.PartitionedSystemState {
+	start := time.Now() // time stats
+
 	wg := new(sync.WaitGroup)
 	for _, m := range messages {
 		rm, ok := m.(Message)
@@ -155,13 +196,23 @@ func (r *RedisRaftEnv) DeliverMessages(messages []types.Message) types.Partition
 	for id, s := range r.curState.NodeStates {
 		newState.NodeStates[id] = s.Copy()
 	}
+	start2 := time.Now() // time stats
+
 	newState.Messages = r.network.GetAllMessages()
+
+	dur2 := time.Since(start2)                                          // time stats
+	r.stats["GetAllMessages"] = append(r.stats["GetAllMessages"], dur2) // time stats
+
 	r.curState = newState
+
+	dur := time.Since(start)                                             // time stats
+	r.stats["DeliverMessages"] = append(r.stats["DeliverMessages"], dur) // time stats
 
 	return newState
 }
 
 func (r *RedisRaftEnv) DropMessages(messages []types.Message) types.PartitionedSystemState {
+	start := time.Now() // time stats
 	wg := new(sync.WaitGroup)
 	for _, m := range messages {
 		rm, ok := m.(Message)
@@ -182,8 +233,18 @@ func (r *RedisRaftEnv) DropMessages(messages []types.Message) types.PartitionedS
 	for id, s := range r.curState.NodeStates {
 		newState.NodeStates[id] = s.Copy()
 	}
+
+	start2 := time.Now() // time stats
+
 	newState.Messages = r.network.GetAllMessages()
+
+	dur2 := time.Since(start2)                                          // time stats
+	r.stats["GetAllMessages"] = append(r.stats["GetAllMessages"], dur2) // time stats
+
 	r.curState = newState
+
+	dur := time.Since(start)                                       // time stats
+	r.stats["DropMessages"] = append(r.stats["DropMessages"], dur) // time stats
 
 	return newState
 }
@@ -221,6 +282,7 @@ func (r *RedisRaftEnv) Reset_old() types.PartitionedSystemState {
 }
 
 func (r *RedisRaftEnv) Reset() types.PartitionedSystemState {
+	// fmt.Print("reset function") // DEBUG
 	if r.cluster != nil {
 		r.cluster.Destroy()
 	}
@@ -268,6 +330,35 @@ func (r *RedisRaftEnv) Reset() types.PartitionedSystemState {
 	}
 
 	r.curState = newState
+
+	if len(r.timeTickDurations[r.timeEpIndex]) > 0 { // time stats
+		// fmt.Print("printing one episode\n") // DEBUG
+		fileName := fmt.Sprintf("ticks_episode_%d", r.timeEpIndex) // start counting episodes from zero
+		filePath := path.Join(r.savePath, fileName)
+		text := ""
+		text = fmt.Sprintf("%s Number of ticks: %d\n", text, len(r.timeTickDurations[r.timeEpIndex]))
+		for i := 0; i < len(r.timeTickDurations[r.timeEpIndex]); i++ {
+			text = fmt.Sprintf("%s %d", text, r.timeTickDurations[r.timeEpIndex][i])
+		}
+		// fmt.Print(text) // DEBUG
+		types.WriteToFile(filePath, text)
+
+		fileName = fmt.Sprintf("timeStats_episode_%d", r.timeEpIndex) // start counting episodes from zero
+		filePath = path.Join(r.savePath, fileName)
+		text = PrintableStats(r.stats)
+		types.WriteToFile(filePath, text)
+
+		// set up new list and index
+		r.timeTickDurations = append(r.timeTickDurations, make([]int64, 0)) // add a new episode as a list
+		r.timeEpIndex = len(r.timeTickDurations) - 1                        // set the current episode index as the last entry in the list of lists
+		r.ResetStats()                                                      // reset stats lists for the new episode
+	}
+
+	// for tick length recording
+	// fmt.Print("update list") // DEBUG
+
+	r.timeLastRecorded = time.Now().UnixMicro() // store current system time
+
 	return newState
 }
 
@@ -323,15 +414,61 @@ func (r *RedisRaftEnv) Cleanup() {
 }
 
 func (r *RedisRaftEnv) Tick() types.PartitionedSystemState {
+	// fmt.Print("tick function") // DEBUG
 	// time.Sleep(20 * time.Millisecond)
 	time.Sleep(time.Duration(r.clusterConfig.TickLength) * time.Millisecond)
+
+	timeCurrent := time.Now().UnixMicro()                                                           // read current time
+	timeDifference := timeCurrent - r.timeLastRecorded                                              // compute difference with previously stored
+	r.timeLastRecorded = timeCurrent                                                                // store new time
+	r.timeTickDurations[r.timeEpIndex] = append(r.timeTickDurations[r.timeEpIndex], timeDifference) // add an entry in the episode with the recorded time gap
+
+	start := time.Now()
+
+	nStates := r.cluster.GetNodeStates()
+
+	dur := time.Since(start)                                         // time stats
+	r.stats["GetNodeStates"] = append(r.stats["GetNodeStates"], dur) // time stats
+
+	start = time.Now()
+
+	messages := r.network.GetAllMessages()
+
+	dur = time.Since(start)                                            // time stats
+	r.stats["GetAllMessages"] = append(r.stats["GetAllMessages"], dur) // time stats
+
 	newState := &RedisClusterState{
-		NodeStates: r.cluster.GetNodeStates(),
-		Messages:   r.network.GetAllMessages(),
+		NodeStates: nStates,
+		Messages:   messages,
 		Requests:   copyRequests(r.curState.Requests),
 	}
 	r.curState = newState
 	return newState
+}
+
+// reset time stats lists
+func (r *RedisRaftEnv) ResetStats() {
+	r.stats["start_times"] = make([]time.Duration, 0)
+	r.stats["stop_times"] = make([]time.Duration, 0)
+
+	r.stats["GetNodeStates"] = make([]time.Duration, 0)
+	r.stats["DeliverMessages"] = make([]time.Duration, 0)
+	r.stats["GetAllMessages"] = make([]time.Duration, 0)
+	r.stats["DropMessages"] = make([]time.Duration, 0)
+}
+
+func PrintableStats(data map[string]([]time.Duration)) string {
+	result := ""
+
+	for label, durations := range data {
+		result = fmt.Sprintf("%s%s:\n", result, label)
+		for _, dur := range durations {
+			result = fmt.Sprintf("%s %d", result, dur.Milliseconds())
+		}
+		result = result + "\n"
+	}
+
+	return result
 }
 
 var _ types.PartitionedSystemEnvironment = &RedisRaftEnv{}

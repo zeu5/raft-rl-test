@@ -1,6 +1,7 @@
 package types
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"strconv"
@@ -106,4 +107,14 @@ func CrashComparator(saveFile string) Comparator {
 			p.Save(8*vg.Inch, 8*vg.Inch, path.Join(saveFile, strconv.Itoa(run)+"_"+names[i]+"_crashes.png"))
 		}
 	}
+}
+
+// takes a save path and a variable number of strings and writes them to file separated by new lines
+func WriteToFile(savePath string, content ...string) {
+	singleString := ""
+	for _, c := range content {
+		singleString = fmt.Sprintf("%s \n%s", singleString, c)
+	}
+
+	os.WriteFile(savePath, []byte(singleString), 0644)
 }

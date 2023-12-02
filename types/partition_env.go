@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"math/rand"
 	"sort"
 	"time"
@@ -299,6 +300,18 @@ type PartitionEnvConfig struct {
 	StaySameStateUpto      int
 	WithCrashes            bool
 	CrashLimit             int
+}
+
+func (r *PartitionEnvConfig) Printable() string {
+	result := "PartitionEnvConfig: \n"
+	result = fmt.Sprintf("%s TicksBetweenPartition: %d\n", result, r.TicketBetweenPartition)
+	result = fmt.Sprintf("%s NumReplicas: %d\n", result, r.NumReplicas)
+	result = fmt.Sprintf("%s MaxMessagesPerTick: %d\n", result, r.MaxMessagesPerTick)
+	result = fmt.Sprintf("%s StaySameStateUpto: %d\n", result, r.StaySameStateUpto)
+	result = fmt.Sprintf("%s WithCrashes: %t\n", result, r.WithCrashes)
+	result = fmt.Sprintf("%s CrashLimit: %d\n", result, r.CrashLimit)
+
+	return result
 }
 
 func NewPartitionEnv(c PartitionEnvConfig) *PartitionEnv {

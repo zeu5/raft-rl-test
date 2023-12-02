@@ -203,6 +203,7 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	// 	Environment: getRaftPartEnvCfg(raftConfig, colors, rlConfig),
 	// }))
 
+	// print experiment configuration to terminal
 	fmt.Print(raftConfig.String())
 	fmt.Print(rlConfig.String())
 	fmt.Print(PrintColors(chosenColors))

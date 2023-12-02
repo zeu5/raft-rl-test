@@ -108,6 +108,13 @@ func InconsistentLogs() func(*types.Trace) (bool, int) {
 	}
 }
 
+// checks if any replica has an inconsistent log w.r.t. other replicas
+func TruePredicate() func(*types.Trace) (bool, int) {
+	return func(t *types.Trace) (bool, int) {
+		return true, 0
+	}
+}
+
 // take a log and a commit index value, and discard all entries with index higher than the commit index
 func filterLogCommit(log []RedisEntry, commitIndex int) []RedisEntry {
 	result := make([]RedisEntry, 0)

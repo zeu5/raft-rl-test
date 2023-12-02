@@ -51,7 +51,7 @@ func getRedisPredicateHeirarchy(name string) (*policies.RewardMachine, bool) {
 }
 
 func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx context.Context) {
-	env := redisraft.NewRedisRaftEnv(ctx, &redisraft.ClusterConfig{
+	clusterConfig := redisraft.ClusterConfig{
 		NumNodes:            3,
 		BasePort:            5000,
 		BaseInterceptPort:   2023,
@@ -60,11 +60,12 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		WorkingDir:          path.Join(saveFile, "tmp"),
 		NumRequests:         3,
 
-		RequestTimeout:  15,  // heartbeat in milliseconds (fixed or variable?)
-		ElectionTimeout: 200, // election timeout in milliseconds (from specified value to its double)
+		RequestTimeout:  25,  // heartbeat in milliseconds (fixed or variable?)
+		ElectionTimeout: 120, // election timeout in milliseconds (from specified value to its double)
 
-		TickLength: 10,
-	})
+		TickLength: 20,
+	}
+	env := redisraft.NewRedisRaftEnv(ctx, &clusterConfig, path.Join(saveFile, "tickLength"))
 	defer env.Cleanup()
 
 	// abstraction for both plot and RL
@@ -100,10 +101,11 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		Painter:                redisraft.NewRedisRaftStatePainter(colors...),
 		Env:                    env,
 		TicketBetweenPartition: 3,
-		MaxMessagesPerTick:     20,
+		MaxMessagesPerTick:     100,
 		StaySameStateUpto:      5,
 		NumReplicas:            3,
 		WithCrashes:            true,
+		CrashLimit:             100,
 	}
 
 	c := types.NewComparison(runs)
@@ -115,6 +117,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		types.BugDesc{Name: "ReducedLog", Check: redisraft.ReducedLog()},
 		types.BugDesc{Name: "ModifiedLog", Check: redisraft.ModifiedLog()},
 		types.BugDesc{Name: "InconsistentLogs", Check: redisraft.InconsistentLogs()},
+		types.BugDesc{Name: "True", Check: redisraft.TruePredicate()},
 	), types.BugComparator(path.Join(saveFile, "bugs")))
 	rm, ok := getRedisPredicateHeirarchy(machine)
 	if !ok {
@@ -123,7 +126,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 	}
 	RMPolicy := policies.NewRewardMachinePolicy(rm, false)
 
-	c.AddAnalysis("plot", redisraft.CoverageAnalyzer(colors...), redisraft.CoverageComparator(saveFile))
+	// c.AddAnalysis("plot", redisraft.CoverageAnalyzer(colors...), redisraft.CoverageComparator(saveFile))
 
 	c.AddAnalysis("rm", policies.RewardMachineAnalyzer(RMPolicy), policies.RewardMachineCoverageComparator(saveFile))
 
@@ -145,6 +148,10 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.05),
 		Environment: types.NewPartitionEnv(partitionEnvConfig),
 	}))
+
+	// print config file
+	configPath := path.Join(saveFile, "config.txt")
+	types.WriteToFile(configPath, clusterConfig.Printable(), partitionEnvConfig.Printable(), PrintColors(chosenColors))
 
 	c.Run()
 }
