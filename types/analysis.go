@@ -184,3 +184,13 @@ func CrashComparator(saveFile string) Comparator {
 		}
 	}
 }
+
+// takes a save path and a variable number of strings and writes them to file separated by new lines
+func WriteToFile(savePath string, content ...string) {
+	singleString := ""
+	for _, c := range content {
+		singleString = fmt.Sprintf("%s \n%s", singleString, c)
+	}
+
+	os.WriteFile(savePath, []byte(singleString), 0644)
+}

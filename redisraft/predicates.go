@@ -7,6 +7,7 @@ import (
 	"github.com/zeu5/raft-rl-test/types"
 )
 
+// returns true if one replica is in the state leader
 func LeaderElected() types.RewardFuncSingle {
 	return func(s types.State) bool {
 		pS, ok := s.(*types.Partition)
@@ -25,6 +26,7 @@ func LeaderElected() types.RewardFuncSingle {
 	}
 }
 
+// returns true if at least one replica has the specified commit value
 func NumberCommit(commit int) types.RewardFuncSingle {
 	return func(s types.State) bool {
 		ps, ok := s.(*types.Partition)
@@ -41,6 +43,7 @@ func NumberCommit(commit int) types.RewardFuncSingle {
 	}
 }
 
+// returns true if at least one replica has the specified term value
 func TermNumber(term int) types.RewardFuncSingle {
 	return func(s types.State) bool {
 		ps, ok := s.(*types.Partition)
@@ -57,6 +60,7 @@ func TermNumber(term int) types.RewardFuncSingle {
 	}
 }
 
+// returns true if all the replicas are either in leader or follower state
 func OnlyFollowersAndLeader() types.RewardFuncSingle {
 	return func(s types.State) bool {
 		ps, ok := s.(*types.Partition)
@@ -73,6 +77,7 @@ func OnlyFollowersAndLeader() types.RewardFuncSingle {
 	}
 }
 
+// returns true if at least one replica is in the specified state
 func InState(state string) types.RewardFuncSingle {
 	return func(s types.State) bool {
 		ps, ok := s.(*types.Partition)
@@ -89,6 +94,7 @@ func InState(state string) types.RewardFuncSingle {
 	}
 }
 
+// returns true if at least one replica has commit value greater or equal to the specified one
 func CommitIndexAtLeast(idx int) types.RewardFuncSingle {
 	return func(s types.State) bool {
 		ps, ok := s.(*types.Partition)
@@ -105,6 +111,7 @@ func CommitIndexAtLeast(idx int) types.RewardFuncSingle {
 	}
 }
 
+// returns true if at least one replica has index value greater or equal to the specified one
 func CurrentIndexAtLeast(idx int) types.RewardFuncSingle {
 	return func(s types.State) bool {
 		ps, ok := s.(*types.Partition)
@@ -121,6 +128,7 @@ func CurrentIndexAtLeast(idx int) types.RewardFuncSingle {
 	}
 }
 
+// returns true if at least one replica has the specified number of connected nodes (?)
 func NumConnectedNodesInAny(n int) types.RewardFuncSingle {
 	return func(s types.State) bool {
 		ps, ok := s.(*types.Partition)
@@ -145,6 +153,7 @@ func NumConnectedNodesInAny(n int) types.RewardFuncSingle {
 	}
 }
 
+// returns true if there are two replicas with terms difference greater or equal to the specified one
 func OutOfSyncBy(diff int) types.RewardFuncSingle {
 	return func(s types.State) bool {
 		ps, ok := s.(*types.Partition)
@@ -167,6 +176,7 @@ func OutOfSyncBy(diff int) types.RewardFuncSingle {
 	}
 }
 
+// returns true if all the replicas are in the same term, and this term is greater or equal than the specified one
 func AllInSyncAtleast(minTerm int) types.RewardFuncSingle {
 	return func(s types.State) bool {
 		ps, ok := s.(*types.Partition)
@@ -185,6 +195,7 @@ func AllInSyncAtleast(minTerm int) types.RewardFuncSingle {
 	}
 }
 
+// returns true if there is no replica with term below the specified value
 func AllInTermAtleast(minTerm int) types.RewardFuncSingle {
 	return func(s types.State) bool {
 		ps, ok := s.(*types.Partition)
