@@ -410,6 +410,7 @@ func NewCluster(config *ClusterConfig) *Cluster {
 
 func (c *Cluster) GetNodeStates() map[uint64]*RedisNodeState {
 	out := make(map[uint64]*RedisNodeState)
+	outLock := new(sync.Mutex)
 	wg := new(sync.WaitGroup)
 	for id, node := range c.Nodes {
 		wg.Add(1)
@@ -418,10 +419,13 @@ func (c *Cluster) GetNodeStates() map[uint64]*RedisNodeState {
 			if err != nil {
 				e := EmptyRedisNodeState()
 				e.LogStdout, e.LogStderr = node.GetLogs()
+				outLock.Lock()
 				out[uint64(id)] = e
-
+				outLock.Unlock()
 			} else {
+				outLock.Lock()
 				out[uint64(id)] = state.Copy()
+				outLock.Unlock()
 			}
 			wg.Done()
 		}(node, id)
