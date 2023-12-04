@@ -104,8 +104,9 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		MaxMessagesPerTick:     100,
 		StaySameStateUpto:      5,
 		NumReplicas:            3,
-		WithCrashes:            true,
-		CrashLimit:             100,
+		WithCrashes:            false,
+		CrashLimit:             5,
+		MaxInactive:            0,
 	}
 
 	c := types.NewComparison(runs)

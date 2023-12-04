@@ -97,6 +97,7 @@ type Partition struct {
 	// For crashes
 	WithCrashes      bool
 	RemainingCrashes int
+	MaxInactive      int // max number of simultaneously crashed nodes, 0 means no limit
 	ActiveNodes      map[uint64]bool
 }
 
@@ -201,23 +202,34 @@ func (p *Partition) Actions() []Action {
 		}
 		partitionActions = append(partitionActions, &CreatePartitionAction{Partition: partition})
 	}
-	if p.WithCrashes && p.RemainingCrashes > 0 {
-		activeColors := make(map[string]Color)
-		haveInactive := false
-		for node, color := range p.ReplicaColors {
-			if _, ok := p.ActiveNodes[node]; ok {
-				activeColors[color.Hash()] = color
-			} else {
-				haveInactive = true
+	// check for start and stop action
+	if p.WithCrashes { // if crashes enabled
+		// compute number of inactive nodes
+		totalReplicas := len(p.ReplicaColors)
+		inactiveReplicas := totalReplicas - len(p.ActiveNodes)
+
+		// stop actions
+		if p.RemainingCrashes > 0 && ((inactiveReplicas < p.MaxInactive) || p.MaxInactive == 0) { // crash limits not reached
+			activeColors := make(map[string]Color) // list of active colors to eventually crash
+			for node, color := range p.ReplicaColors {
+				if _, ok := p.ActiveNodes[node]; ok { // if id of the node is in the list of active ones
+					activeColors[color.Hash()] = color // add its color to the list
+				}
 			}
+
+			// add stop actions for the active colors
+			for c := range activeColors { // add one stop action for each active node color, will be chosen randomly if multiple nodes with same color
+				partitionActions = append(partitionActions, &StopStartAction{Color: c, Action: "Stop"})
+			}
+
 		}
-		for c := range activeColors {
-			partitionActions = append(partitionActions, &StopStartAction{Color: c, Action: "Stop"})
-		}
-		if haveInactive {
-			partitionActions = append(partitionActions, &StopStartAction{Action: "Start"})
+
+		// start action
+		if inactiveReplicas > 0 {
+			partitionActions = append(partitionActions, &StopStartAction{Action: "Start"}) // add a single start action which will randomly start one inactive node
 		}
 	}
+	// check for request action
 	if p.CanDeliverRequest && len(p.PendingRequests) > 0 {
 		partitionActions = append(partitionActions, &SendRequestAction{})
 	}
@@ -251,6 +263,7 @@ func copyPartition(p *Partition) *Partition {
 		RepeatCount:       p.RepeatCount,
 		WithCrashes:       p.WithCrashes,
 		RemainingCrashes:  p.RemainingCrashes,
+		MaxInactive:       p.MaxInactive,
 		ActiveNodes:       make(map[uint64]bool),
 		PendingRequests:   make([]Request, len(p.PendingRequests)),
 		CanDeliverRequest: p.CanDeliverRequest,
@@ -299,6 +312,7 @@ type PartitionEnvConfig struct {
 	MaxMessagesPerTick     int
 	StaySameStateUpto      int
 	WithCrashes            bool
+	MaxInactive            int // max number of simultaneously crashed nodes, 0 means no limit
 	CrashLimit             int
 }
 
@@ -309,6 +323,7 @@ func (r *PartitionEnvConfig) Printable() string {
 	result = fmt.Sprintf("%s MaxMessagesPerTick: %d\n", result, r.MaxMessagesPerTick)
 	result = fmt.Sprintf("%s StaySameStateUpto: %d\n", result, r.StaySameStateUpto)
 	result = fmt.Sprintf("%s WithCrashes: %t\n", result, r.WithCrashes)
+	result = fmt.Sprintf("%s MaxInactive: %d\n", result, r.MaxInactive)
 	result = fmt.Sprintf("%s CrashLimit: %d\n", result, r.CrashLimit)
 
 	return result
@@ -339,6 +354,7 @@ func (p *PartitionEnv) reset() {
 		RepeatCount:       0,
 		WithCrashes:       p.config.WithCrashes,
 		RemainingCrashes:  p.config.CrashLimit,
+		MaxInactive:       p.config.MaxInactive,
 		ActiveNodes:       make(map[uint64]bool),
 		PendingRequests:   s.PendingRequests(),
 		CanDeliverRequest: s.CanDeliverRequest(),
