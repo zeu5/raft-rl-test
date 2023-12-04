@@ -10,6 +10,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -115,7 +116,9 @@ func NewRedisNode(config *RedisNodeConfig) *RedisNode {
 		ID:      config.NodeID,
 		process: nil,
 		client: redis.NewClient(&redis.Options{
-			Addr: addr,
+			Addr:        addr,
+			MaxRetries:  -1,
+			DialTimeout: 5 * time.Millisecond,
 		}),
 		config: config,
 		ctx:    nil,
@@ -271,7 +274,7 @@ func (r *RedisNode) Info() (*RedisNodeState, error) {
 		return nil, errors.New("process stopped")
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 	info, err := r.client.Info(ctx, "raft").Result()
 	if err != nil {
@@ -407,16 +410,23 @@ func NewCluster(config *ClusterConfig) *Cluster {
 
 func (c *Cluster) GetNodeStates() map[uint64]*RedisNodeState {
 	out := make(map[uint64]*RedisNodeState)
+	wg := new(sync.WaitGroup)
 	for id, node := range c.Nodes {
-		state, err := node.Info()
-		if err != nil {
-			e := EmptyRedisNodeState()
-			e.LogStdout, e.LogStderr = node.GetLogs()
-			out[uint64(id)] = e
-			continue
-		}
-		out[uint64(id)] = state.Copy()
+		wg.Add(1)
+		go func(node *RedisNode, id int) {
+			state, err := node.Info()
+			if err != nil {
+				e := EmptyRedisNodeState()
+				e.LogStdout, e.LogStderr = node.GetLogs()
+				out[uint64(id)] = e
+
+			} else {
+				out[uint64(id)] = state.Copy()
+			}
+			wg.Done()
+		}(node, id)
 	}
+	wg.Wait()
 	return out
 }
 
