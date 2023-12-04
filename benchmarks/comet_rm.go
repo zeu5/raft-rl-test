@@ -29,6 +29,17 @@ func getCometPredicateHeirarchy(name string) (*policies.RewardMachine, bool) {
 		machine = policies.NewRewardMachine(cbft.DifferentLocked())
 	case "SameLocked":
 		machine = policies.NewRewardMachine(cbft.SameLockedForAll())
+	case "Round1NoLocked":
+		machine = policies.NewRewardMachine(cbft.EmptyLockedForAll().And(cbft.AnyReachedRound(1)))
+		machine.AddState(cbft.AnyReachedRound(1), "Round1")
+		machine.AddState(cbft.EmptyLockedForAll(), "No Locked")
+	case "Round1Locked":
+		machine = policies.NewRewardMachine(cbft.EmptyLockedForAll().Not().And(cbft.AnyReachedRound(1)))
+		machine.AddState(cbft.EmptyLockedForAll().Not(), "AnyLocked")
+		machine.AddState(cbft.AnyReachedRound(1), "Round1")
+	case "Commit1":
+		machine = policies.NewRewardMachine(cbft.AnyAtHeight(2))
+		// case ""
 	}
 	return machine, machine != nil
 }
@@ -50,7 +61,8 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 		MaxMessagesPerTick:     20,
 		StaySameStateUpto:      2,
 		NumReplicas:            4,
-		WithCrashes:            false,
+		WithCrashes:            true,
+		CrashLimit:             10,
 	})
 
 	c := types.NewComparison(runs)

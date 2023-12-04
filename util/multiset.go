@@ -43,8 +43,8 @@ func (m MultiSet) keysNMultiplicities() ([]string, []int) {
 	}
 	sort.Strings(sortedKeys)
 	multiplicities := make([]int, len(sortedKeys))
-	for i := 0; i < len(sortedKeys); i++ {
-		multiplicities[i] = len(sMap[sortedKeys[i]])
+	for i, sKey := range sortedKeys {
+		multiplicities[i] = len(sMap[sKey])
 	}
 	return sortedKeys, multiplicities
 }

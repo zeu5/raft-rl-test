@@ -1,6 +1,9 @@
 package types
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path"
@@ -12,24 +15,96 @@ import (
 	"gonum.org/v1/plot/vg"
 )
 
-func PartitionCoverage() Analyzer {
+func PureCoverage() Analyzer {
 	return func(i int, s string, t []*Trace) DataSet {
 		uniqueStates := make(map[string]bool)
 		numUniqueStates := make([]int, 0)
-		curTraceUniqueStates := 0
 		for _, trace := range t {
 			for j := 0; j < trace.Len(); j++ {
 				s, _, _, _ := trace.Get(j)
 				sHash := s.Hash()
 				if _, ok := uniqueStates[sHash]; !ok {
 					uniqueStates[sHash] = true
-					curTraceUniqueStates += 1
 				}
 			}
-			numUniqueStates = append(numUniqueStates, curTraceUniqueStates)
+			numUniqueStates = append(numUniqueStates, len(uniqueStates))
 		}
 		return numUniqueStates
 	}
+}
+
+func PureCoveragePlotter(plotPath string) Comparator {
+	if _, err := os.Stat(plotPath); err != nil {
+		os.Mkdir(plotPath, os.ModePerm)
+	}
+	return func(i int, s []string, ds []DataSet) {
+		p := plot.New()
+		p.Title.Text = "Comparison"
+		p.X.Label.Text = "Iteration"
+		p.Y.Label.Text = "States covered"
+		for i := 0; i < len(s); i++ {
+			uniqueStates := ds[i].([]int)
+			points := make(plotter.XYs, len(uniqueStates))
+			for i, v := range uniqueStates {
+				points[i] = plotter.XY{
+					X: float64(i),
+					Y: float64(v),
+				}
+			}
+			line, err := plotter.NewLine(points)
+			if err != nil {
+				continue
+			}
+			line.Color = plotutil.Color(i)
+			p.Add(line)
+			p.Legend.Add(s[i], line)
+			fmt.Printf("Number of unique states: %d for benchmark: %s\n", uniqueStates[len(uniqueStates)-1], s[i])
+		}
+		p.Save(8*vg.Inch, 8*vg.Inch, path.Join(plotPath, strconv.Itoa(i)+"_pure_coverage.png"))
+	}
+}
+
+func PartitionCoverage() Analyzer {
+	return func(i int, s string, t []*Trace) DataSet {
+		uniqueStates := make(map[string]bool)
+		numUniqueStates := make([]int, 0)
+		for _, trace := range t {
+			for j := 0; j < trace.Len(); j++ {
+				s, _, _, _ := trace.Get(j)
+				sHash := partitionHash(s.(*Partition))
+				if _, ok := uniqueStates[sHash]; !ok {
+					uniqueStates[sHash] = true
+				}
+			}
+			numUniqueStates = append(numUniqueStates, len(uniqueStates))
+		}
+		return numUniqueStates
+	}
+}
+
+func partitionHash(p *Partition) string {
+	partition := make([][]string, len(p.Partition))
+	for i, par := range p.Partition {
+		partition[i] = make([]string, len(par))
+		for j, color := range par {
+			partition[i][j] = color.Hash()
+		}
+	}
+	activeColors := make(map[string]bool)
+	for node, c := range p.ReplicaColors {
+		if _, ok := p.ActiveNodes[node]; ok {
+			activeColors[c.Hash()] = true
+		}
+	}
+
+	bs, _ := json.Marshal(map[string]interface{}{
+		"colors":           partition,
+		"repeat_count":     p.RepeatCount,
+		"pending_requests": len(p.PendingRequests),
+		"active_colors":    activeColors,
+	})
+	hash := sha256.Sum256(bs)
+	return hex.EncodeToString(hash[:])
 }
 
 func PartitionCoveragePlotter(plotPath string) Comparator {
@@ -57,8 +132,9 @@ func PartitionCoveragePlotter(plotPath string) Comparator {
 			line.Color = plotutil.Color(i)
 			p.Add(line)
 			p.Legend.Add(s[i], line)
+			fmt.Printf("Number of unique states: %d for benchmark: %s\n", uniqueStates[len(uniqueStates)-1], s[i])
 		}
-		p.Save(8*vg.Inch, 8*vg.Inch, path.Join(plotPath, strconv.Itoa(i)+"_pure_coverage.png"))
+		p.Save(8*vg.Inch, 8*vg.Inch, path.Join(plotPath, strconv.Itoa(i)+"_partition_coverage.png"))
 	}
 }
 
