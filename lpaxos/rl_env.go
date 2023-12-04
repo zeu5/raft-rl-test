@@ -149,13 +149,6 @@ func NewLPaxosEnv(c LPaxosEnvConfig) *LPaxosEnv {
 		nodes:    make(map[uint64]*LPaxosNode),
 		messages: make(map[string]Message),
 	}
-	for i := 0; i < c.Requests; i++ {
-		cmd := Message{
-			Type: CommandMessage,
-			Log:  []Entry{{Data: []byte(strconv.Itoa(i + 1))}},
-		}
-		e.messages[cmd.Hash()] = cmd
-	}
 	e.makeNodes()
 	return e
 }

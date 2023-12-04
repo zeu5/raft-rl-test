@@ -56,6 +56,43 @@ func (g *KGrid) Max() float64 {
 	return float64(max)
 }
 
+func GridCoverageAnalyzer() types.Analyzer {
+	return func(run int, s string, t []*types.Trace) types.DataSet {
+		positions := make(map[int]map[int]map[int]bool)
+		for _, trace := range t {
+			for i := 0; i < trace.Len(); i++ {
+				state, _, _, _ := trace.Get(i)
+				gridPostition := state.(*Position)
+				if _, ok := positions[gridPostition.K]; !ok {
+					positions[gridPostition.K] = make(map[int]map[int]bool)
+				}
+				if _, ok := positions[gridPostition.K][gridPostition.I]; !ok {
+					positions[gridPostition.K][gridPostition.I] = make(map[int]bool)
+				}
+				positions[gridPostition.K][gridPostition.I][gridPostition.J] = true
+			}
+		}
+		return positions
+	}
+}
+
+func GridCoverageComparator() types.Comparator {
+	return func(i int, s []string, ds []types.DataSet) {
+		for i := 0; i < len(s); i++ {
+			name := s[i]
+			dataSet := ds[i].(map[int]map[int]map[int]bool)
+			positions := 0
+			for _, g := range dataSet {
+				for _, p := range g {
+					positions += len(p)
+				}
+			}
+
+			fmt.Printf("Run: %d, Experiment %s positions covered: %d\n", i, name, positions)
+		}
+	}
+}
+
 func GridAnalyzer(_ int, _ string, traces []*types.Trace) types.DataSet {
 	dataSet := &GridDataSet{
 		Visits:    make(map[int]map[int]map[int]int),

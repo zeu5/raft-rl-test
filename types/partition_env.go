@@ -17,14 +17,18 @@ type Color interface {
 	Copy() Color
 }
 
-type InActiveColor struct{}
+type InActiveColor struct {
+	Color
+}
 
 func (i *InActiveColor) Hash() string {
-	return "Inactive"
+	return "Inactive_" + i.Color.Hash()
 }
 
 func (i *InActiveColor) Copy() Color {
-	return &InActiveColor{}
+	return &InActiveColor{
+		Color: i.Color.Copy(),
+	}
 }
 
 type IntColor struct {
@@ -196,23 +200,35 @@ func (c *CreatePartitionAction) Hash() string {
 func (p *Partition) Actions() []Action {
 	colorElems := make([]util.Elem, 0)
 	colorsHash := make(map[string]Color)
-	for _, c := range p.ReplicaColors {
+	for node, c := range p.ReplicaColors {
 		hash := c.Hash()
 		colorsHash[hash] = c
-		colorElems = append(colorElems, util.StringElem(hash))
+		if _, active := p.ActiveNodes[node]; active {
+			colorElems = append(colorElems, util.StringElem(hash))
+		}
 	}
 	partitionActions := make([]Action, 0)
-	partitionActions = append(partitionActions, &KeepSamePartitionAction{})
-	for _, p := range util.EnumeratePartitions(util.MultiSet(colorElems)) {
-		partition := make([][]Color, len(p))
-		for i, ps := range p {
-			partition[i] = make([]Color, len(ps))
-			for j, c := range ps {
-				hash := string(c.(util.StringElem))
-				partition[i][j] = colorsHash[hash]
+	if len(colorElems) > 0 {
+		partitionActions = append(partitionActions, &KeepSamePartitionAction{})
+		for _, part := range util.EnumeratePartitions(util.MultiSet(colorElems)) {
+			partition := make([][]Color, len(part))
+			for i, ps := range part {
+				partition[i] = make([]Color, len(ps))
+				for j, c := range ps {
+					hash := string(c.(util.StringElem))
+					partition[i][j] = colorsHash[hash]
+				}
 			}
+			inActivePart := make([]Color, 0)
+			for n, c := range p.ReplicaColors {
+				_, active := p.ActiveNodes[n]
+				if !active {
+					inActivePart = append(inActivePart, c)
+				}
+			}
+			partition = append(partition, inActivePart)
+			partitionActions = append(partitionActions, &CreatePartitionAction{Partition: partition})
 		}
-		partitionActions = append(partitionActions, &CreatePartitionAction{Partition: partition})
 	}
 	if p.WithCrashes && p.RemainingCrashes > 0 {
 		activeColors := make(map[string]Color)
@@ -240,29 +256,27 @@ func (p *Partition) Actions() []Action {
 
 // hash of a partition state, state representation for the RL agent
 func (p *Partition) Hash() string {
-	return "..."
-	// partition := make([][]string, len(p.Partition))
-	// for i, par := range p.Partition {
-	// 	partition[i] = make([]string, len(par))
-	// 	for j, color := range par {
-	// 		partition[i][j] = color.Hash()
-	// 	}
-	// }
+	partition := make([][]string, len(p.Partition))
+	for i, par := range p.Partition {
+		partition[i] = make([]string, len(par))
+		for j, color := range par {
+			partition[i][j] = color.Hash()
+		}
+	}
 	// activeColors := make(map[string]bool)
 	// for node, c := range p.ReplicaColors {
 	// 	if _, ok := p.ActiveNodes[node]; ok {
 	// 		activeColors[c.Hash()] = true
 	// 	}
 	// }
-
-	// bs, _ := json.Marshal(map[string]interface{}{
-	// 	"colors":           partition,
-	// 	"repeat_count":     p.RepeatCount,
-	// 	"pending_requests": len(p.PendingRequests),
-	// 	"active_colors":    activeColors,
-	// })
-	// hash := sha256.Sum256(bs)
-	// return hex.EncodeToString(hash[:])
+	bs, _ := json.Marshal(map[string]interface{}{
+		"colors":           partition,
+		"repeat_count":     p.RepeatCount,
+		"pending_requests": len(p.PendingRequests),
+		// "active_colors":    activeColors,
+	})
+	hash := sha256.Sum256(bs)
+	return hex.EncodeToString(hash[:])
 }
 
 var _ State = &Partition{}
@@ -431,13 +445,58 @@ func (p *PartitionEnv) handleStartStop(a Action) *Partition {
 		nextState.ActiveNodes[n] = true
 	}
 
+	s := p.UnderlyingEnv.Tick()
+	p.messages = make(map[string]Message)
+	for k, m := range s.PendingMessages() { // save pending messages for next state
+		p.messages[k] = m
+	}
+
+	for i := 0; i < p.NumReplicas; i++ {
+		id := uint64(i + 1)
+		rs := s.GetReplicaState(id)
+		_, active := nextState.ActiveNodes[id]
+		color := p.painter.Color(rs)
+		if !active {
+			color = &InActiveColor{Color: color}
+		}
+		nextState.ReplicaColors[id] = color // abstraction
+		nextState.ReplicaStates[id] = rs    // actual replica state
+	}
+
 	// Recolor based on active nodes and recompute the partition
 	newPartition := make([][]uint64, len(p.CurPartition.Partition))
+	inactivePart := make([]uint64, 0)
+	newActivePart := make([]uint64, 0)
 	for i := range p.CurPartition.Partition {
 		newPartition[i] = make([]uint64, 0)
 	}
-	for n, p := range p.CurPartition.PartitionMap {
-		newPartition[p] = append(newPartition[p], n)
+	for n, part := range p.CurPartition.PartitionMap {
+		_, newActive := newActive[n]
+		_, oldActive := p.CurPartition.ActiveNodes[n]
+
+		if newActive && oldActive {
+			newPartition[part] = append(newPartition[part], n)
+		} else if newActive && !oldActive {
+			newActivePart = append(newActivePart, n)
+		} else {
+			inactivePart = append(inactivePart, n)
+		}
+	}
+	newPartition = append(newPartition, newActivePart)
+	newPartition = append(newPartition, inactivePart)
+
+	tPartition := make([][]uint64, 0)
+	for _, part := range newPartition {
+		if len(part) == 0 {
+			continue
+		}
+		tPartition = append(tPartition, part)
+	}
+	newPartition = tPartition
+	for i, part := range newPartition {
+		for _, node := range part {
+			nextState.PartitionMap[node] = i
+		}
 	}
 
 	nextStatePartition := make([][]Color, len(newPartition))
@@ -451,6 +510,9 @@ func (p *PartitionEnv) handleStartStop(a Action) *Partition {
 	}
 	sort.Sort(PartitionSlice(nextStatePartition))
 	nextState.Partition = nextStatePartition
+	nextState.PendingRequests = s.PendingRequests()
+	nextState.CanDeliverRequest = s.CanDeliverRequest()
+
 	if isSamePartition(nextStatePartition, p.CurPartition.Partition) {
 		nextState.RepeatCount = nextState.RepeatCount + 1
 		if nextState.RepeatCount > p.config.StaySameStateUpto {
@@ -560,8 +622,12 @@ func (p *PartitionEnv) handlePartition(a Action) *Partition {
 	for i := 0; i < p.NumReplicas; i++ {
 		id := uint64(i + 1)
 		rs := s.GetReplicaState(id)
-		nextState.ReplicaColors[id] = p.painter.Color(rs) // abstraction
-		nextState.ReplicaStates[id] = rs                  // actual replica state
+		color := p.painter.Color(rs)
+		if _, ok := nextState.ActiveNodes[id]; !ok {
+			color = &InActiveColor{Color: color}
+		}
+		nextState.ReplicaColors[id] = color // abstraction
+		nextState.ReplicaStates[id] = rs    // actual replica state
 	}
 
 	nextStatePartition := make([][]Color, len(newPartition))
@@ -608,7 +674,11 @@ func (p *PartitionEnv) handleRequest(a Action) *Partition {
 		for n, part := range nextState.PartitionMap {
 			newPartition[part] = append(newPartition[part], n)
 			rs := s.GetReplicaState(n)
-			nextState.ReplicaColors[n] = p.painter.Color(rs)
+			color := p.painter.Color(rs)
+			if _, ok := nextState.ActiveNodes[n]; !ok {
+				color = &InActiveColor{Color: color}
+			}
+			nextState.ReplicaColors[n] = color
 			nextState.ReplicaStates[n] = rs
 		}
 

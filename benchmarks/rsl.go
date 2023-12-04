@@ -29,7 +29,7 @@ func RSLExploration() {
 		AdditionalCommands: make([]rsl.Command, 0),
 	}
 
-	colors := []rsl.RSLColorFunc{rsl.ColorState(), rsl.ColorDecree(), rsl.ColorDecided(), rsl.ColorBoundedBallot(5)}
+	colors := []rsl.RSLColorFunc{rsl.ColorState(), rsl.ColorDecree(), rsl.ColorDecided(), rsl.ColorBoundedBallot(5), rsl.ColorLogLength()}
 
 	c := types.NewComparison(runs)
 	c.AddAnalysis("Plot", rsl.CoverageAnalyzer(colors...), rsl.CoverageComparator(saveFile))
@@ -38,6 +38,7 @@ func RSLExploration() {
 		types.BugDesc{Name: "InconsistentLogs", Check: rsl.InconsistentLogs()},
 		types.BugDesc{Name: "MultiplePrimaries", Check: rsl.MultiplePrimaries()},
 	), types.BugComparator(saveFile))
+	c.AddAnalysis("Crashes", types.CrashAnalyzer(), types.CrashComparator(saveFile))
 	c.AddAnalysis("PureCoverage", types.PureCoverage(), types.PureCoveragePlotter(saveFile))
 	// Random exploration
 	c.AddExperiment(types.NewExperiment(
@@ -94,7 +95,7 @@ func GetRSLEnvironment(c rsl.RSLEnvConfig, colors []rsl.RSLColorFunc) types.Envi
 		MaxMessagesPerTick:     100,
 		StaySameStateUpto:      5,
 		WithCrashes:            true,
-		CrashLimit:             10,
+		CrashLimit:             100,
 	})
 }
 

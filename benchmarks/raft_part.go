@@ -34,7 +34,7 @@ func RaftPart(episodes, horizon int, saveFile string) {
 	c.AddAnalysis("Plot", raft.RaftAnalyzer(saveFile, colors...), raft.RaftPlotComparator(saveFile))
 	c.AddAnalysis("Crashes", types.CrashAnalyzer(), types.CrashComparator(saveFile))
 	c.AddAnalysis("PureCoverage", types.PureCoverage(), types.PureCoveragePlotter(saveFile))
-	c.AddAnalysis("PartitionCoverage", types.PartitionCoverage(), types.PartitionCoveragePlotter(saveFile))
+	// c.AddAnalysis("PartitionCoverage", types.PartitionCoverage(), types.PartitionCoveragePlotter(saveFile))
 
 	// here you add different policies with their parameters
 	// strict := policies.NewStrictPolicy(types.NewRandomPolicy())
@@ -77,8 +77,8 @@ func getRaftPartEnv(config raft.RaftEnvironmentConfig, colors []raft.RaftColorFu
 		MaxMessagesPerTick:     100,                                  // upper bound of random num of delivered messages
 		StaySameStateUpto:      5,                                    // counter to distinguish consecutive states
 		NumReplicas:            config.Replicas,
-		WithCrashes:            true,
-		CrashLimit:             10,
+		WithCrashes:            false,
+		CrashLimit:             100,
 	})
 }
 
