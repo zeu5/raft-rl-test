@@ -104,8 +104,8 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		MaxMessagesPerTick:     100,
 		StaySameStateUpto:      5,
 		NumReplicas:            3,
-		WithCrashes:            false,
-		CrashLimit:             5,
+		WithCrashes:            true,
+		CrashLimit:             10,
 		MaxInactive:            0,
 	}
 
@@ -122,13 +122,11 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 	), types.BugComparator(path.Join(saveFile, "bugs")))
 	rm, ok := getRedisPredicateHeirarchy(machine)
 	if !ok {
-		env.Cleanup()
 		return
 	}
 	RMPolicy := policies.NewRewardMachinePolicy(rm, false)
 
 	// c.AddAnalysis("plot", redisraft.CoverageAnalyzer(colors...), redisraft.CoverageComparator(saveFile))
-
 	c.AddAnalysis("rm", policies.RewardMachineAnalyzer(RMPolicy), policies.RewardMachineCoverageComparator(saveFile))
 
 	c.AddExperiment(types.NewExperiment("predHierarchy", &types.AgentConfig{

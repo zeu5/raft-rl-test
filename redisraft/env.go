@@ -312,8 +312,6 @@ func (r *RedisRaftEnv) Reset() types.PartitionedSystemState {
 		panic(err)
 	}
 
-	// r.network.WaitForNodes(r.clusterConfig.NumNodes)
-
 	r.network.WaitForNodes(r.clusterConfig.NumNodes)
 
 	newState := &RedisClusterState{

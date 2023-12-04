@@ -117,8 +117,7 @@ func NewRedisNode(config *RedisNodeConfig) *RedisNode {
 		process: nil,
 		client: redis.NewClient(&redis.Options{
 			Addr:        addr,
-			MaxRetries:  -1,
-			DialTimeout: 5 * time.Millisecond,
+			DialTimeout: 10 * time.Millisecond,
 		}),
 		config: config,
 		ctx:    nil,
@@ -274,6 +273,7 @@ func (r *RedisNode) Info() (*RedisNodeState, error) {
 		return nil, errors.New("process stopped")
 	}
 
+	// TODO: is the timeout duration sufficient?
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 	info, err := r.client.Info(ctx, "raft").Result()

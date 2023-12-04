@@ -62,7 +62,7 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 		StaySameStateUpto:      2,
 		NumReplicas:            4,
 		WithCrashes:            true,
-		CrashLimit:             10,
+		CrashLimit:             30,
 	})
 
 	c := types.NewComparison(runs)
