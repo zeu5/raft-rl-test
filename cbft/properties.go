@@ -16,6 +16,18 @@ func AnyReachedRound(round int) types.RewardFuncSingle {
 	}
 }
 
+func AnyReachedStep(step string) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		for _, rs := range s.(*types.Partition).ReplicaStates {
+			ns := rs.(*CometNodeState)
+			if ns.Step == step {
+				return true
+			}
+		}
+		return false
+	}
+}
+
 func AllAtLeastRound(round int) types.RewardFuncSingle {
 	return func(s types.State) bool {
 		for _, rs := range s.(*types.Partition).ReplicaStates {

@@ -86,7 +86,7 @@
                 "100",
                 "etcd-raft-bugs",
                 "--save",
-                "result_debug",
+                "results_debug",
                 "-p",
                 "OutdatedLog2"
             ]
@@ -188,7 +188,22 @@
                 "redisraft-rm",
                 "Term2",
                 "--save",
-                "result_debug",
+                "results_debug",
+            ]
+        },
+        {
+            "name": "Run comet reward machine",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "-e",
+                "10",
+                "comet-rm",
+                "StepPrevote",
+                "--save",
+                "results_debug",
             ]
         },
         {

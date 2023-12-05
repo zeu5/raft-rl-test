@@ -6,8 +6,8 @@ import (
 
 // Experiment encapsulates the different parameters to configure an agent and analyze the traces
 type Experiment struct {
-	config *AgentConfig
-	name   string
+	*AgentConfig
+	Name string
 	// Result contains the traces of the experiment
 	Result []*Trace
 	// Properties to test on the trace
@@ -19,8 +19,8 @@ type Experiment struct {
 // NewExperiment creates a new experiment instance
 func NewExperiment(name string, config *AgentConfig) *Experiment {
 	return &Experiment{
-		config:          config,
-		name:            name,
+		AgentConfig:     config,
+		Name:            name,
 		Result:          make([]*Trace, 0),
 		Properties:      make([]*Monitor, 0),
 		PropertiesStats: make([]int, 0),
@@ -42,10 +42,10 @@ func (e *Experiment) hasProperties() bool {
 // Run the experiment for the specified number of episodes
 // Additionally, for each iteration, check if any of the properties have been satisfied
 func (e *Experiment) Run() {
-	agent := NewAgent(e.config)
+	agent := NewAgent(e.AgentConfig)
 	// episodeTimes := make([]time.Duration, 0)
-	for i := 0; i < e.config.Episodes; i++ {
-		fmt.Printf("\rExperiment: %s, Episode: %d/%d", e.name, i+1, e.config.Episodes)
+	for i := 0; i < e.Episodes; i++ {
+		fmt.Printf("\rExperiment: %s, Episode: %d/%d", e.Name, i+1, e.Episodes)
 		// start := time.Now()
 		trace := agent.runEpisode(i)
 		// dur := time.Since(start)
@@ -77,8 +77,8 @@ func (e *Experiment) Run() {
 // Reset cleans the information about the traces (to save memory)
 func (e *Experiment) Reset() {
 	e.Result = make([]*Trace, 0)
-	e.config.Environment.Reset()
-	e.config.Policy.Reset()
+	e.Environment.Reset()
+	e.Policy.Reset()
 }
 
 // Generic Dataset that contains information after processing the traces
@@ -86,6 +86,9 @@ type DataSet interface{}
 
 // Analyzer compresses the information in the traces to a DataSet
 type Analyzer func(int, string, []*Trace) DataSet
+
+// Experiment analyzer takes the whole experiment object for analysis
+type EAnalyzer func(int, *Experiment)
 
 // Comparator differentiates between different datasets with associated names
 type Comparator func(int, []string, []DataSet)
@@ -100,6 +103,7 @@ func NoopComparator() Comparator {
 type Comparison struct {
 	Experiments []*Experiment
 	analyzers   map[string]Analyzer
+	eAnalyzers  []EAnalyzer
 	comparators map[string]Comparator
 	runs        int
 }
@@ -109,6 +113,7 @@ func NewComparison(runs int) *Comparison {
 	return &Comparison{
 		Experiments: make([]*Experiment, 0),
 		analyzers:   make(map[string]Analyzer),
+		eAnalyzers:  make([]EAnalyzer, 0),
 		comparators: make(map[string]Comparator),
 		runs:        runs,
 	}
@@ -122,6 +127,10 @@ func (c *Comparison) AddAnalysis(name string, analyzer Analyzer, comparator Comp
 // Add experiments to compare
 func (c *Comparison) AddExperiment(e *Experiment) {
 	c.Experiments = append(c.Experiments, e)
+}
+
+func (c *Comparison) AddEAnalysis(ea EAnalyzer) {
+	c.eAnalyzers = append(c.eAnalyzers, ea)
 }
 
 // Run each experiment sequentially
@@ -139,10 +148,13 @@ func (c *Comparison) Run() {
 		for i, e := range c.Experiments { // index - experiment  in the list of experiments
 			e.Run() // running the algorithm, stores the results
 			for name, a := range c.analyzers {
-				datasets[name][i] = a(run, e.name, e.Result) // call the analyzer on the experiment results
+				datasets[name][i] = a(run, e.Name, e.Result) // call the analyzer on the experiment results
 			}
-			names[i] = e.name // policy/experiment name
-			e.Reset()         //
+			names[i] = e.Name // policy/experiment name
+			for _, ea := range c.eAnalyzers {
+				ea(run, e)
+			}
+			e.Reset() //
 		}
 		for name, comp := range c.comparators {
 			comp(run, names, datasets[name]) // make the plots

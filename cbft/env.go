@@ -96,6 +96,10 @@ func NewCometEnv(ctx context.Context, clusterConfig *CometClusterConfig) *CometE
 	return e
 }
 
+func (r *CometEnv) BecomeByzantine(nodeID uint64) {
+	r.network.MakeNodeByzantine(nodeID)
+}
+
 func (r *CometEnv) ReceiveRequest(req types.Request) types.PartitionedSystemState {
 	newState := r.curState.Copy()
 

@@ -111,6 +111,8 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 
 	c := types.NewComparison(runs)
 
+	c.AddEAnalysis(types.RecordPartitionStats(saveFile))
+
 	c.AddAnalysis("Plot", redisraft.CoverageAnalyzer(colors...), redisraft.CoverageComparator(saveFile))
 	c.AddAnalysis("Crashes", redisraft.BugAnalyzerCrash(path.Join(saveFile, "crash")), redisraft.BugComparator())
 	c.AddAnalysis("Bugs", redisraft.BugAnalyzer(

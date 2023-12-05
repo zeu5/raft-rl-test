@@ -116,6 +116,36 @@ func dummyHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "ok"})
 }
 
+func (n *InterceptNetwork) MakeNodeByzantine(nodeID uint64) {
+	n.lock.Lock()
+	nI, ok := n.nodes[int(nodeID)]
+	nodeAddr := nI.Addr
+	if !ok {
+		n.lock.Unlock()
+		return
+	}
+	n.lock.Unlock()
+
+	client := &http.Client{
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout:   5 * time.Second,
+				KeepAlive: 5 * time.Second,
+			}).DialContext,
+			TLSHandshakeTimeout:   5 * time.Second,
+			ResponseHeaderTimeout: 5 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			DisableKeepAlives:     true,
+		},
+	}
+	bs := []byte("ok")
+	resp, err := client.Post("http://"+nodeAddr+"/byzantine", "application/text", bytes.NewBuffer(bs))
+	if err == nil {
+		io.ReadAll(resp.Body)
+		resp.Body.Close()
+	}
+}
+
 func (n *InterceptNetwork) GetAllMessages() map[string]Message {
 	out := make(map[string]Message)
 	n.lock.Lock()

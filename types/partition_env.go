@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"os"
 	"sort"
 	"time"
 
@@ -97,6 +98,10 @@ type PartitionedSystemEnvironment interface {
 	Start(uint64)
 }
 
+type ByzantineEnvironment interface {
+	BecomeByzantine(uint64)
+}
+
 // A state of the partitioned environment
 type Partition struct {
 	// The colors corresponding to each replica
@@ -117,6 +122,10 @@ type Partition struct {
 	RemainingCrashes int
 	MaxInactive      int // max number of simultaneously crashed nodes, 0 means no limit
 	ActiveNodes      map[uint64]bool
+	// For byzantine actions
+	ByzantineNodes     map[uint64]bool
+	RemainingByzantine int
+	WithByzantine      bool
 }
 
 var _ State = &Partition{}
@@ -150,6 +159,16 @@ type SendRequestAction struct {
 func (s *SendRequestAction) Hash() string {
 	return "Request"
 }
+
+type ByzantineAction struct {
+	Color string
+}
+
+func (b *ByzantineAction) Hash() string {
+	return "Byzantine_" + b.Color
+}
+
+var _ Action = &ByzantineAction{}
 
 // Partition slice used to pass to the sort function
 type PartitionSlice [][]Color
@@ -264,6 +283,22 @@ func (p *Partition) Actions() []Action {
 		partitionActions = append(partitionActions, &SendRequestAction{})
 	}
 
+	if p.WithByzantine && p.RemainingByzantine > 0 {
+		byzantineColors := make(map[string]bool)
+		for node, c := range p.ReplicaColors {
+			_, byzantine := p.ByzantineNodes[node]
+			_, active := p.ActiveNodes[node]
+			if !byzantine && active {
+				byzantineColors[c.Hash()] = true
+			}
+		}
+		if len(byzantineColors) > 0 {
+			for c := range byzantineColors {
+				partitionActions = append(partitionActions, &ByzantineAction{Color: c})
+			}
+		}
+	}
+
 	return partitionActions
 }
 
@@ -276,18 +311,21 @@ func (p *Partition) Hash() string {
 			partition[i][j] = color.Hash()
 		}
 	}
-	// activeColors := make(map[string]bool)
-	// for node, c := range p.ReplicaColors {
-	// 	if _, ok := p.ActiveNodes[node]; ok {
-	// 		activeColors[c.Hash()] = true
-	// 	}
-	// }
-	bs, _ := json.Marshal(map[string]interface{}{
-		"colors":           partition,
-		"repeat_count":     p.RepeatCount,
-		"pending_requests": len(p.PendingRequests),
-		// "active_colors":    activeColors,
-	})
+	out := make(map[string]interface{})
+	out["colors"] = partition
+	out["repeat_count"] = p.RepeatCount
+	out["pending_requests"] = len(p.PendingRequests)
+	if p.WithByzantine {
+		byzantineColors := make(map[string]bool)
+		for node, c := range p.ReplicaColors {
+			if _, ok := p.ByzantineNodes[node]; ok {
+				byzantineColors[c.Hash()] = true
+			}
+		}
+		out["byzantine_colors"] = byzantineColors
+	}
+
+	bs, _ := json.Marshal(out)
 	hash := sha256.Sum256(bs)
 	return hex.EncodeToString(hash[:])
 }
@@ -297,17 +335,20 @@ var _ Action = &CreatePartitionAction{}
 
 func copyPartition(p *Partition) *Partition {
 	n := &Partition{
-		ReplicaColors:     make(map[uint64]Color),
-		Partition:         make([][]Color, len(p.Partition)),
-		ReplicaStates:     make(map[uint64]ReplicaState),
-		PartitionMap:      make(map[uint64]int),
-		RepeatCount:       p.RepeatCount,
-		WithCrashes:       p.WithCrashes,
-		RemainingCrashes:  p.RemainingCrashes,
-		MaxInactive:       p.MaxInactive,
-		ActiveNodes:       make(map[uint64]bool),
-		PendingRequests:   make([]Request, len(p.PendingRequests)),
-		CanDeliverRequest: p.CanDeliverRequest,
+		ReplicaColors:      make(map[uint64]Color),
+		Partition:          make([][]Color, len(p.Partition)),
+		ReplicaStates:      make(map[uint64]ReplicaState),
+		PartitionMap:       make(map[uint64]int),
+		RepeatCount:        p.RepeatCount,
+		WithCrashes:        p.WithCrashes,
+		RemainingCrashes:   p.RemainingCrashes,
+		MaxInactive:        p.MaxInactive,
+		ActiveNodes:        make(map[uint64]bool),
+		PendingRequests:    make([]Request, len(p.PendingRequests)),
+		CanDeliverRequest:  p.CanDeliverRequest,
+		WithByzantine:      p.WithByzantine,
+		RemainingByzantine: p.RemainingByzantine,
+		ByzantineNodes:     make(map[uint64]bool),
 	}
 	for i, s := range p.ReplicaColors {
 		n.ReplicaColors[i] = s.Copy()
@@ -327,6 +368,9 @@ func copyPartition(p *Partition) *Partition {
 	for i := range p.ActiveNodes {
 		n.ActiveNodes[i] = p.ActiveNodes[i]
 	}
+	for node, ok := range p.ByzantineNodes {
+		n.ByzantineNodes[node] = ok
+	}
 	copy(n.PendingRequests, p.PendingRequests)
 	return n
 }
@@ -341,6 +385,8 @@ type PartitionEnv struct {
 	messages      map[string]Message
 	config        PartitionEnvConfig
 	rand          *rand.Rand
+
+	stats map[string]interface{}
 }
 
 var _ Environment = &PartitionEnv{}
@@ -355,6 +401,9 @@ type PartitionEnvConfig struct {
 	WithCrashes            bool
 	MaxInactive            int // max number of simultaneously crashed nodes, 0 means no limit
 	CrashLimit             int
+	WithByzantine          bool
+	MaxByzantine           int
+	RecordStats            bool
 }
 
 func (r *PartitionEnvConfig) Printable() string {
@@ -366,6 +415,9 @@ func (r *PartitionEnvConfig) Printable() string {
 	result = fmt.Sprintf("%s WithCrashes: %t\n", result, r.WithCrashes)
 	result = fmt.Sprintf("%s MaxInactive: %d\n", result, r.MaxInactive)
 	result = fmt.Sprintf("%s CrashLimit: %d\n", result, r.CrashLimit)
+	result = fmt.Sprintf("%s WithByzantine: %t\n", result, r.WithByzantine)
+	result = fmt.Sprintf("%s MaxByzantine: %d\n", result, r.MaxByzantine)
+	result = fmt.Sprintf("%s RecordStats: %t\n", result, r.RecordStats)
 
 	return result
 }
@@ -379,26 +431,95 @@ func NewPartitionEnv(c PartitionEnvConfig) *PartitionEnv {
 		CurPartition:  nil,
 		config:        c,
 		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
+		stats:         make(map[string]interface{}),
 	}
+	p.ResetStats()
 	p.reset()
 	return p
 }
 
+func (p *PartitionEnv) recordStat(key string, value interface{}) {
+	if !p.config.RecordStats {
+		return
+	}
+	switch key {
+	case "reset_times":
+		p.stats[key] = append(p.stats[key].([]time.Duration), value.(time.Duration))
+	case "step_times":
+		p.stats[key] = append(p.stats[key].([]stepTime), value.(stepTime))
+	case "start_times":
+		p.stats[key] = append(p.stats[key].([]time.Duration), value.(time.Duration))
+	case "stop_times":
+		p.stats[key] = append(p.stats[key].([]time.Duration), value.(time.Duration))
+	case "partition_times":
+		p.stats[key] = append(p.stats[key].([]time.Duration), value.(time.Duration))
+	case "request_times":
+		p.stats[key] = append(p.stats[key].([]time.Duration), value.(time.Duration))
+	}
+}
+
+type stepTime struct {
+	Action   Action
+	Duration time.Duration
+}
+
+func (s stepTime) MarshalJSON() ([]byte, error) {
+	out := make(map[string]string)
+	out["action"] = s.Action.Hash()
+	out["duration"] = s.Duration.String()
+
+	return json.Marshal(out)
+}
+
+// Record the time statistics to the specified file in json format
+func (p *PartitionEnv) RecordStats(path string) {
+	out := make(map[string]interface{})
+	timeKeys := []string{"reset_times", "start_times", "stop_times", "partition_times", "request_times"}
+	for _, k := range timeKeys {
+		times := make([]string, len(p.stats[k].([]time.Duration)))
+		for i, d := range p.stats[k].([]time.Duration) {
+			times[i] = d.String()
+		}
+		out[k] = times
+	}
+	out["step_times"] = p.stats["step_times"]
+	bs, err := json.Marshal(out)
+	if err == nil {
+		os.WriteFile(path, bs, 0644)
+	}
+}
+
+// Reset the time statistics of the environment
+func (p *PartitionEnv) ResetStats() {
+	p.stats["reset_times"] = make([]time.Duration, 0)
+	p.stats["step_times"] = make([]stepTime, 0)
+	p.stats["start_times"] = make([]time.Duration, 0)
+	p.stats["stop_times"] = make([]time.Duration, 0)
+	p.stats["partition_times"] = make([]time.Duration, 0)
+	p.stats["request_times"] = make([]time.Duration, 0)
+}
+
 func (p *PartitionEnv) reset() {
+	start := time.Now()
 	s := p.UnderlyingEnv.Reset() // takes the state given by the reset function of the underlying environment
+	p.recordStat("reset_times", time.Since(start))
+
 	colors := make([]Color, p.NumReplicas)
 	curPartition := &Partition{
-		ReplicaColors:     make(map[uint64]Color),
-		PartitionMap:      make(map[uint64]int),
-		ReplicaStates:     make(map[uint64]ReplicaState),
-		Partition:         make([][]Color, 1),
-		RepeatCount:       0,
-		WithCrashes:       p.config.WithCrashes,
-		RemainingCrashes:  p.config.CrashLimit,
-		MaxInactive:       p.config.MaxInactive,
-		ActiveNodes:       make(map[uint64]bool),
-		PendingRequests:   s.PendingRequests(),
-		CanDeliverRequest: s.CanDeliverRequest(),
+		ReplicaColors:      make(map[uint64]Color),
+		PartitionMap:       make(map[uint64]int),
+		ReplicaStates:      make(map[uint64]ReplicaState),
+		Partition:          make([][]Color, 1),
+		RepeatCount:        0,
+		WithCrashes:        p.config.WithCrashes,
+		RemainingCrashes:   p.config.CrashLimit,
+		MaxInactive:        p.config.MaxInactive,
+		ActiveNodes:        make(map[uint64]bool),
+		PendingRequests:    s.PendingRequests(),
+		CanDeliverRequest:  s.CanDeliverRequest(),
+		WithByzantine:      p.config.WithByzantine,
+		RemainingByzantine: p.config.MaxByzantine,
+		ByzantineNodes:     make(map[uint64]bool),
 	}
 	for i := 0; i < p.NumReplicas; i++ {
 		id := uint64(i + 1)
@@ -422,6 +543,36 @@ func (p *PartitionEnv) reset() {
 func (p *PartitionEnv) Reset() State {
 	p.reset()
 	return copyPartition(p.CurPartition)
+}
+
+func (p *PartitionEnv) handleByzantine(a Action) *Partition {
+	byzEnv, ok := p.UnderlyingEnv.(ByzantineEnvironment)
+	if !ok {
+		return copyPartition(p.CurPartition)
+	}
+	ba, ok := a.(*ByzantineAction)
+	if !ok {
+		return copyPartition(p.CurPartition)
+	}
+	nextState := copyPartition(p.CurPartition)
+	nonByzantineFilteredNodes := make([]uint64, 0)
+	for node, c := range p.CurPartition.ReplicaColors {
+		_, byzantine := p.CurPartition.ByzantineNodes[node]
+		if !byzantine && c.Hash() == ba.Color {
+			nonByzantineFilteredNodes = append(nonByzantineFilteredNodes, node)
+		}
+	}
+
+	if len(nonByzantineFilteredNodes) == 0 {
+		return nextState
+	}
+
+	toMakeByzantine := nonByzantineFilteredNodes[0]
+	byzEnv.BecomeByzantine(toMakeByzantine)
+
+	nextState.RemainingByzantine = nextState.RemainingByzantine - 1
+	nextState.ByzantineNodes[toMakeByzantine] = true
+	return nextState
 }
 
 // Handle the start and stop action
@@ -450,7 +601,9 @@ func (p *PartitionEnv) handleStartStop(a Action) *Partition {
 		if len(activeNodes) > 0 {
 			nodeI := p.rand.Intn(len(activeNodes))
 			node := activeNodes[nodeI]
+			start := time.Now()
 			p.UnderlyingEnv.Stop(node)
+			p.recordStat("stop_times", time.Since(start))
 			delete(newActive, node)
 		}
 	} else if ss.Action == "Start" {
@@ -464,7 +617,9 @@ func (p *PartitionEnv) handleStartStop(a Action) *Partition {
 		if len(inactiveNodes) > 0 {
 			nodeI := p.rand.Intn(len(inactiveNodes))
 			node := inactiveNodes[nodeI]
+			start := time.Now()
 			p.UnderlyingEnv.Start(node)
+			p.recordStat("start_times", time.Since(start))
 			newActive[node] = true
 		}
 	}
@@ -737,17 +892,27 @@ func (p *PartitionEnv) Step(a Action) State {
 	// 2. Perform ticks, delivering messages in between
 	// 3. Update states, partitions and return
 
+	start := time.Now()
 	var nextState *Partition = nil
 	switch a.(type) {
+	case *ByzantineAction:
+		nextState = p.handleByzantine(a)
 	case *StopStartAction:
 		nextState = p.handleStartStop(a)
 	case *CreatePartitionAction:
+		cs := time.Now()
 		nextState = p.handlePartition(a)
+		p.recordStat("partition_times", time.Since(cs))
 	case *KeepSamePartitionAction:
+		ks := time.Now()
 		nextState = p.handlePartition(a)
+		p.recordStat("partition_times", time.Since(ks))
 	case *SendRequestAction:
+		rs := time.Now()
 		nextState = p.handleRequest(a)
+		p.recordStat("request_times", time.Since(rs))
 	}
+	p.recordStat("step_times", stepTime{Action: a, Duration: time.Since(start)})
 
 	p.CurPartition = copyPartition(nextState)
 	return nextState
