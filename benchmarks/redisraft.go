@@ -36,7 +36,7 @@ func RedisRaftExploration(episodes, horizon int, saveFile string, ctx context.Co
 		WithCrashes:            true,
 	})
 
-	c := types.NewComparison(runs)
+	c := types.NewComparison(runs, saveFile, false)
 
 	c.AddAnalysis("plot", redisraft.CoverageAnalyzer(colors...), redisraft.CoverageComparator(saveFile))
 	c.AddAnalysis("bugs", redisraft.BugAnalyzer(saveFile), redisraft.BugComparator())

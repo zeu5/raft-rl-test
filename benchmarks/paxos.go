@@ -21,7 +21,7 @@ func Paxos(episodes, horizon, runs int, saveFile string) {
 
 	// property := lpaxos.InconsistentLogs()
 	// Comparison runs different agents as specified below. Then analyzes the traces for each agent configuration and compares them
-	c := types.NewComparison(runs)
+	c := types.NewComparison(runs, saveFile, false)
 	c.AddAnalysis("Plot", lpaxos.LPaxosAnalyzer(saveFile), lpaxos.LPaxosComparator(saveFile))
 	// Adding the different policy and experiments
 	c.AddExperiment(types.NewExperiment(

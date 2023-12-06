@@ -109,7 +109,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		MaxInactive:            0,
 	}
 
-	c := types.NewComparison(runs)
+	c := types.NewComparison(runs, saveFile, false)
 
 	c.AddEAnalysis(types.RecordPartitionStats(saveFile))
 

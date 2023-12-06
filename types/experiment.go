@@ -1,7 +1,12 @@
 package types
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path"
+	"strconv"
 )
 
 // Experiment encapsulates the different parameters to configure an agent and analyze the traces
@@ -28,7 +33,7 @@ func NewExperiment(name string, config *AgentConfig) *Experiment {
 }
 
 // NewExperimentWithProperties creates a new experiment instance with the specified properties
-func NewExperimentWithProperties(name string, config *AgentConfig, properties []*Monitor) *Experiment {
+func NewExperimentWithProperties(name string, config *AgentConfig, properties []*Monitor, record bool) *Experiment {
 	e := NewExperiment(name, config)
 	e.Properties = properties
 	e.PropertiesStats = make([]int, len(properties))
@@ -74,8 +79,24 @@ func (e *Experiment) Run() {
 	}
 }
 
+func (e *Experiment) Record(run int, basePath string) {
+	tracesRecordPath := path.Join(basePath, "traces_"+strconv.Itoa(run)+"_"+e.Name+".jsonl")
+	tracesData := new(bytes.Buffer)
+	for _, trace := range e.Result {
+		bs, err := json.Marshal(trace)
+		if err == nil {
+			tracesData.Write(bs)
+			tracesData.Write([]byte("\n"))
+		}
+	}
+	os.WriteFile(tracesRecordPath, tracesData.Bytes(), 0644)
+
+	policyRecordPath := path.Join(basePath, "policy_"+strconv.Itoa(run)+"_"+e.Name)
+	e.Policy.Record(policyRecordPath)
+}
+
 // Reset cleans the information about the traces (to save memory)
-func (e *Experiment) Reset() {
+func (e *Experiment) Reset(run int) {
 	e.Result = make([]*Trace, 0)
 	e.Environment.Reset()
 	e.Policy.Reset()
@@ -106,16 +127,20 @@ type Comparison struct {
 	eAnalyzers  []EAnalyzer
 	comparators map[string]Comparator
 	runs        int
+	recordPath  string
+	record      bool
 }
 
 // NewComparison creates a comparison instance
-func NewComparison(runs int) *Comparison {
+func NewComparison(runs int, recordPath string, record bool) *Comparison {
 	return &Comparison{
 		Experiments: make([]*Experiment, 0),
 		analyzers:   make(map[string]Analyzer),
 		eAnalyzers:  make([]EAnalyzer, 0),
 		comparators: make(map[string]Comparator),
 		runs:        runs,
+		recordPath:  recordPath,
+		record:      record,
 	}
 }
 
@@ -154,7 +179,10 @@ func (c *Comparison) Run() {
 			for _, ea := range c.eAnalyzers {
 				ea(run, e)
 			}
-			e.Reset() //
+			if c.record {
+				e.Record(run, c.recordPath)
+			}
+			e.Reset(run) //
 		}
 		for name, comp := range c.comparators {
 			comp(run, names, datasets[name]) // make the plots

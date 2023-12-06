@@ -55,6 +55,7 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 		BaseRPCPort:         26756,
 		BaseWorkingDir:      path.Join("/home/snagendra/go/src/github.com/zeu5/raft-rl-test", saveFile, "tmp"),
 		NumNodes:            4,
+		NumRequests:         2,
 	})
 	colors := []cbft.CometColorFunc{cbft.ColorHRS(), cbft.ColorProposal(), cbft.ColorNumVotes(), cbft.ColorProposer()}
 
@@ -65,18 +66,18 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 		MaxMessagesPerTick:     20,
 		StaySameStateUpto:      2,
 		NumReplicas:            4,
-		WithCrashes:            true,
+		WithCrashes:            false,
 		CrashLimit:             10,
 		MaxInactive:            2,
 		WithByzantine:          false,
 	}
 
-	c := types.NewComparison(runs)
+	c := types.NewComparison(runs, saveFile, false)
 
 	// c.AddEAnalysis(types.RecordPartitionStats(saveFile))
 	c.AddAnalysis("crashes", cbft.CrashesAnalyzer(saveFile), types.NoopComparator())
 	// c.AddAnalysis("logs", cbft.RecordLogsAnalyzer(saveFile), types.NoopComparator())
-	// c.AddAnalysis("states", cbft.RecordStateTraceAnalyzer(saveFile), types.NoopComparator())
+	c.AddAnalysis("states", cbft.RecordStateTraceAnalyzer(saveFile), types.NoopComparator())
 
 	rm, ok := getCometPredicateHeirarchy(machine)
 	if !ok {

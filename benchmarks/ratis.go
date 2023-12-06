@@ -32,7 +32,7 @@ func RatisExploration(episodes, horizon int, saveFile string, ctx context.Contex
 		WithCrashes:            false,
 	})
 
-	c := types.NewComparison(runs)
+	c := types.NewComparison(runs, saveFile, false)
 
 	c.AddAnalysis("plot", ratis.CoverageAnalyzer(colors...), ratis.CoverageComparator(saveFile))
 	c.AddAnalysis("bugs", ratis.BugAnalyzer(saveFile), ratis.BugComparator())

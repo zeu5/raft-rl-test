@@ -8,6 +8,25 @@ import (
 
 // File contains predicates over etcd-raft states
 
+func AllInTerm(term uint64) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		pS, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+
+		for _, state := range pS.ReplicaStates { // for each replica state
+			repState := state.(RaftReplicaState)
+			curState := repState.State // cast into raft.Status
+			if curState.Term == term {
+				return true
+			}
+		}
+
+		return false
+	}
+}
+
 // return true if at least one of the replicas is in the leader state
 func LeaderElectedPredicateState() types.RewardFuncSingle {
 	return func(s types.State) bool {

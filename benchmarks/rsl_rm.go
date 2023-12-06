@@ -82,7 +82,7 @@ func RSLRewardMachine(rewardMachine string) error {
 
 	colors := []rsl.RSLColorFunc{rsl.ColorState(), rsl.ColorDecree(), rsl.ColorDecided(), rsl.ColorBoundedBallot(5)}
 
-	c := types.NewComparison(runs)
+	c := types.NewComparison(runs, saveFile, false)
 	c.AddAnalysis("rm", policies.RewardMachineAnalyzer(RMPolicy), policies.RewardMachineCoverageComparator(saveFile))
 	c.AddAnalysis("bugs", types.BugAnalyzer(
 		path.Join(saveFile, "bugs"),

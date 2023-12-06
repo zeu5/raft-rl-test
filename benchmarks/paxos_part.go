@@ -15,7 +15,7 @@ func PaxosPart(episodes, horizon int, saveFile string, requests int) {
 		Timeouts: timeouts,
 	}
 
-	c := types.NewComparison(runs)
+	c := types.NewComparison(runs, saveFile, false)
 	c.AddAnalysis("Plot", lpaxos.LPaxosAnalyzer(saveFile), lpaxos.LPaxosComparator(saveFile))
 
 	c.AddExperiment(types.NewExperiment(

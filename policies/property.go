@@ -29,6 +29,10 @@ func NewGuidedPolicy(reward types.RewardFuncSingle, alpha, gamma, epsilon float6
 	}
 }
 
+func (g *GuidedPolicy) Record(path string) {
+	g.qTable.Record(path)
+}
+
 func (g *GuidedPolicy) Reset() {
 	g.qTable = NewQTable()
 }

@@ -82,14 +82,38 @@ func (t *Trace) GetPrefix(i int) (*Trace, bool) {
 	}, true
 }
 
-func (t *Trace) Record(p string) {
+func (t *Trace) MarshalJSON() ([]byte, error) {
 	out := make(map[string]interface{})
-	out["states"] = t.states
-	out["actions"] = t.actions
-	out["next_states"] = t.nextStates
+	states := make([]map[string]interface{}, len(t.states))
+	for i, s := range t.states {
+		states[i] = map[string]interface{}{
+			"key":   s.Hash(),
+			"state": s,
+		}
+	}
+	out["states"] = states
+	actions := make([]map[string]interface{}, len(t.actions))
+	for i, a := range t.actions {
+		actions[i] = map[string]interface{}{
+			"key":    a.Hash(),
+			"action": a,
+		}
+	}
+	out["actions"] = actions
+	nextStates := make([]map[string]interface{}, len(t.states))
+	for i, s := range t.nextStates {
+		nextStates[i] = map[string]interface{}{
+			"key":   s.Hash(),
+			"state": s,
+		}
+	}
+	out["next_states"] = nextStates
 	out["rewards"] = t.rewards
+	return json.Marshal(out)
+}
 
-	bs, err := json.Marshal(out)
+func (t *Trace) Record(p string) {
+	bs, err := json.Marshal(t)
 	if err != nil {
 		return
 	}

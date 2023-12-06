@@ -21,13 +21,11 @@ func NewOnlyDeliverPolicy(first bool) *OnlyDeliverPolicy {
 	}
 }
 
-func (r *OnlyDeliverPolicy) Reset() {
+func (r *OnlyDeliverPolicy) Record(path string) {}
 
-}
+func (r *OnlyDeliverPolicy) Reset() {}
 
-func (r *OnlyDeliverPolicy) UpdateIteration(_ int, _ *types.Trace) {
-
-}
+func (r *OnlyDeliverPolicy) UpdateIteration(_ int, _ *types.Trace) {}
 
 func (r *OnlyDeliverPolicy) NextAction(step int, state types.State, actions []types.Action) (types.Action, bool) {
 	deliverActions := make([]types.Action, 0)

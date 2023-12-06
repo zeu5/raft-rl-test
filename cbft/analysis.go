@@ -167,7 +167,7 @@ func recordTraceToFile(trace *types.Trace, filePath string) {
 	lines := []string{}
 	for i := 0; i < trace.Len(); i++ {
 		s, a, _, _ := trace.Get(i)
-		lines = append(lines, fmt.Sprintf("State for step: %d\n", i))
+		lines = append(lines, fmt.Sprintf("State: %s, step: %d\n", s.Hash(), i))
 		lines = append(lines, stateToLines(s.(*types.Partition))...)
 		lines = append(lines, fmt.Sprintf("Action: %s", a.Hash()))
 		lines = append(lines, "")

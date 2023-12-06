@@ -110,6 +110,12 @@ func (rp *RewardMachinePolicy) UpdateIteration(iteration int, trace *types.Trace
 	rp.reached = false
 }
 
+func (rp *RewardMachinePolicy) Record(recordPath string) {
+	for state, policy := range rp.rm.policies {
+		policy.Record(recordPath + "_" + state)
+	}
+}
+
 func (rp *RewardMachinePolicy) NextAction(step int, state types.State, actions []types.Action) (types.Action, bool) {
 
 	if step == 0 {

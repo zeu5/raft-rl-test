@@ -40,7 +40,7 @@ func GridReward(episodes, horizon int, saveFile string, height, width, grids int
 		{From: grid.Position{I: 35, J: 35, K: 3}, To: grid.Position{I: 0, J: 0, K: 4}},
 	}
 
-	c := types.NewComparison(runs)
+	c := types.NewComparison(runs, saveFile, false)
 	// c.AddAnalysis("GridPlot", grid.GridAnalyzer, grid.GridDepthComparator())
 	c.AddAnalysis("Coverage", grid.GridCoverageAnalyzer(), grid.GridCoverageComparator())
 

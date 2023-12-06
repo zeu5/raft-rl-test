@@ -30,6 +30,10 @@ func NewBonusPolicyGreedyReward(alpha, discount, epsilon float64) *BonusPolicyGr
 	}
 }
 
+func (b *BonusPolicyGreedyReward) Record(path string) {
+	b.qTable.Record(path)
+}
+
 func (b *BonusPolicyGreedyReward) Reset() {
 	b.qTable = NewQTable()
 	b.visits = NewQTable()
