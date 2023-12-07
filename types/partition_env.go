@@ -455,6 +455,8 @@ func (p *PartitionEnv) recordStat(key string, value interface{}) {
 		p.stats[key] = append(p.stats[key].([]time.Duration), value.(time.Duration))
 	case "request_times":
 		p.stats[key] = append(p.stats[key].([]time.Duration), value.(time.Duration))
+	case "tick_messages_delivered":
+		p.stats[key] = append(p.stats[key].([]int), value.(int))
 	}
 }
 
@@ -483,6 +485,7 @@ func (p *PartitionEnv) RecordStats(path string) {
 		out[k] = times
 	}
 	out["step_times"] = p.stats["step_times"]
+	out["tick_messages_delivered"] = p.stats["tick_messages_delivered"]
 	bs, err := json.Marshal(out)
 	if err == nil {
 		os.WriteFile(path, bs, 0644)
@@ -497,6 +500,7 @@ func (p *PartitionEnv) ResetStats() {
 	p.stats["stop_times"] = make([]time.Duration, 0)
 	p.stats["partition_times"] = make([]time.Duration, 0)
 	p.stats["request_times"] = make([]time.Duration, 0)
+	p.stats["tick_messages_delivered"] = make([]int, 0)
 }
 
 func (p *PartitionEnv) reset() {
@@ -764,12 +768,13 @@ func (p *PartitionEnv) handlePartition(a Action) *Partition {
 			}
 		}
 
+		mToDeliver := 0
 		if len(messages) > 0 { // if there are messages to deliver
 			p.rand.Shuffle(len(messages), func(i, j int) { // randomize order of messages?
 				messages[i], messages[j] = messages[j], messages[i]
 			})
 
-			mToDeliver := min(len(messages), p.config.MaxMessagesPerTick) // randomly choose how many messages to deliver, up to specified bound
+			mToDeliver = min(len(messages), p.config.MaxMessagesPerTick) // randomly choose how many messages to deliver, up to specified bound
 			messagesToDeliver := make([]Message, 0)
 			messagesToDrop := make([]Message, 0)
 			for j := 0; j < mToDeliver; j++ {
@@ -795,6 +800,7 @@ func (p *PartitionEnv) handlePartition(a Action) *Partition {
 				p.UnderlyingEnv.DropMessages(messagesToDrop)
 			}
 		}
+		p.recordStat("tick_messages_delivered", mToDeliver)
 		s = p.UnderlyingEnv.Tick() // make the tick pass on the environment
 	}
 
@@ -830,7 +836,7 @@ func (p *PartitionEnv) handlePartition(a Action) *Partition {
 	nextState.CanDeliverRequest = s.CanDeliverRequest()
 
 	newRepeatCount := 0
-	if isSamePartition(nextState.Partition, p.CurPartition.Partition) && isKeepSame {
+	if isSamePartition(nextState.Partition, p.CurPartition.Partition) {
 		newRepeatCount = p.CurPartition.RepeatCount + 1
 		if newRepeatCount > p.config.StaySameStateUpto {
 			newRepeatCount = p.config.StaySameStateUpto

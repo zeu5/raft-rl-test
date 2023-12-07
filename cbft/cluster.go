@@ -317,16 +317,16 @@ type CometClusterConfig struct {
 
 func (c *CometClusterConfig) SetDefaults() {
 	if c.TimeoutPropose == 0 {
-		c.TimeoutPropose = 100
+		c.TimeoutPropose = 200
 	}
 	if c.TimeoutPrevote == 0 {
-		c.TimeoutPrevote = 50
+		c.TimeoutPrevote = 100
 	}
 	if c.TimeoutPrecommit == 0 {
-		c.TimeoutPrecommit = 50
+		c.TimeoutPrecommit = 100
 	}
 	if c.TimeoutCommit == 0 {
-		c.TimeoutCommit = 20
+		c.TimeoutCommit = 100
 	}
 }
 

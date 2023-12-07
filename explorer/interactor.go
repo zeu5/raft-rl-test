@@ -8,6 +8,7 @@ import (
 	"strings"
 )
 
+// Runs the main interactive loop
 func (e *Explorer) Interact() {
 	fmt.Printf("%s", e.header())
 	reader := bufio.NewReader(os.Stdin)
@@ -24,6 +25,7 @@ func (e *Explorer) Interact() {
 			fmt.Println("Invalid input! Try again")
 			continue
 		}
+		fmt.Println("------------------------------------")
 		switch option {
 		case 1:
 			fmt.Printf("%s", e.getInitialStates())
@@ -74,7 +76,7 @@ func (e *Explorer) getFullState(stateKey string) string {
 	if !ok {
 		return "No such state\n"
 	}
-	out := fmt.Sprintf("State Key: %s\n State:\n %s\n", stateKey, state.String())
+	out := fmt.Sprintf("State Key: %s\nState:\n %s\n", stateKey, state.String())
 	return out
 }
 
@@ -119,6 +121,7 @@ Welcome to the q table explorer!
 
 func (e *Explorer) prompt() string {
 	return `
+------------------------------------
 Select one of the following options:
 1. Show initial state
 2. Show QValues
@@ -129,22 +132,31 @@ Enter your choice: `
 }
 
 func (e *Explorer) tracePrompt() string {
-	return `Step(s) Debug(d) Prev(p) Last(l) Quit(q): `
+	return `
+---------------------------------------------
+Step(s) QValues(d) Prev(p) Last(l) Quit(q): `
 }
 
 func (e *Explorer) interactTrace(traceNo int, reader *bufio.Reader) {
 	stepCount := 0
 	trace := e.Traces[traceNo]
+	if trace.Len() == 0 {
+		fmt.Println("Empty trace!")
+		return
+	}
+	fmt.Println("---------------------------------------------")
 	for {
 		s, a, ns, _ := trace.Get(stepCount)
-		fmt.Printf("State: %s, Action:%s, NextState: %s\n", s.Key, a.Key, ns.Key)
+		fmt.Printf("For step %d\nState: %s\nAction:%s\nNextState: %s\n", stepCount+1, s.String(), a.String(), ns.String())
 		fmt.Printf("%s", e.tracePrompt())
 		optionS, err := reader.ReadString('\n')
 		if err != nil {
 			fmt.Println("Invalid input! Try again")
 			continue
 		}
-		switch optionS {
+		fmt.Println("---------------------------------------------")
+		option := strings.Replace(optionS, "\n", "", -1)
+		switch option {
 		case "s":
 			if stepCount == trace.Len()-1 {
 				fmt.Println("No more steps!")
@@ -152,7 +164,7 @@ func (e *Explorer) interactTrace(traceNo int, reader *bufio.Reader) {
 			}
 			stepCount += 1
 		case "d":
-			e.interactTraceStep(traceNo, stepCount, reader)
+			fmt.Printf("%s", e.getQValues(s.Key))
 		case "p":
 			if stepCount == 0 {
 				fmt.Printf("No more steps!")
@@ -169,45 +181,45 @@ func (e *Explorer) interactTrace(traceNo int, reader *bufio.Reader) {
 	}
 }
 
-func (e *Explorer) traceStepPrompt() string {
-	return `
-Select one of the following options:
-1. Show full state
-2. Show q values at state
-3. Show full action
-4. Show full next state
-5. Stop debugging
-Enter your choice: `
-}
+// func (e *Explorer) traceStepPrompt() string {
+// 	return `
+// Select one of the following options:
+// 1. Show full state
+// 2. Show q values at state
+// 3. Show full action
+// 4. Show full next state
+// 5. Stop debugging
+// Enter your choice: `
+// }
 
-func (e *Explorer) interactTraceStep(traceNo, step int, reader *bufio.Reader) {
-	trace := e.Traces[traceNo]
-	s, a, ns, _ := trace.Get(step)
-	for {
-		fmt.Printf("%s", e.traceStepPrompt())
-		optionS, err := reader.ReadString('\n')
-		if err != nil {
-			fmt.Println("Invalid input! Try again")
-			continue
-		}
-		option, err := strconv.Atoi(strings.Replace(optionS, "\n", "", -1))
-		if err != nil {
-			fmt.Println("Invalid input! Try again")
-			continue
-		}
-		switch option {
-		case 1:
-			fmt.Printf("%s", e.getFullState(s.Key))
-		case 2:
-			fmt.Printf("%s", e.getQValues(s.Key))
-		case 3:
-			fmt.Printf("%s\n", a.String())
-		case 4:
-			fmt.Printf("%s", e.getFullState(ns.Key))
-		case 5:
-			return
-		default:
-			fmt.Println("Invalid option! Try again.")
-		}
-	}
-}
+// func (e *Explorer) interactTraceStep(traceNo, step int, reader *bufio.Reader) {
+// 	trace := e.Traces[traceNo]
+// 	s, a, ns, _ := trace.Get(step)
+// 	for {
+// 		fmt.Printf("%s", e.traceStepPrompt())
+// 		optionS, err := reader.ReadString('\n')
+// 		if err != nil {
+// 			fmt.Println("Invalid input! Try again")
+// 			continue
+// 		}
+// 		option, err := strconv.Atoi(strings.Replace(optionS, "\n", "", -1))
+// 		if err != nil {
+// 			fmt.Println("Invalid input! Try again")
+// 			continue
+// 		}
+// 		switch option {
+// 		case 1:
+// 			fmt.Printf("%s", e.getFullState(s.Key))
+// 		case 2:
+// 			fmt.Printf("%s", e.getQValues(s.Key))
+// 		case 3:
+// 			fmt.Printf("%s\n", a.String())
+// 		case 4:
+// 			fmt.Printf("%s", e.getFullState(ns.Key))
+// 		case 5:
+// 			return
+// 		default:
+// 			fmt.Println("Invalid option! Try again.")
+// 		}
+// 	}
+// }

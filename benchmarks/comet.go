@@ -48,6 +48,10 @@ func CometExploration(episodes, horizon int, saveFile string, ctx context.Contex
 	// c.AddAnalysis("logs", cbft.RecordLogsAnalyzer(saveFile), types.NoopComparator())
 	// c.AddAnalysis("state_trace", cbft.RecordStateTraceAnalyzer(saveFile), types.NoopComparator())
 	c.AddAnalysis("crashes", cbft.CrashesAnalyzer(saveFile), types.NoopComparator())
+	c.AddAnalysis("bugs", types.BugAnalyzer(saveFile,
+		types.BugDesc{Name: "Round1", Check: cbft.ReachedRound1()},
+		types.BugDesc{Name: "DifferentProposers", Check: cbft.DifferentProposers()},
+	), types.BugComparator(saveFile))
 
 	c.AddExperiment(types.NewExperiment("NegReward", &types.AgentConfig{
 		Episodes:    episodes,

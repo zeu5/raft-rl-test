@@ -62,21 +62,22 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 	partitionEnvConfig := types.PartitionEnvConfig{
 		Painter:                cbft.NewCometStatePainter(colors...),
 		Env:                    env,
-		TicketBetweenPartition: 3,
-		MaxMessagesPerTick:     20,
+		TicketBetweenPartition: 5,
+		MaxMessagesPerTick:     100,
 		StaySameStateUpto:      2,
 		NumReplicas:            4,
 		WithCrashes:            false,
 		CrashLimit:             10,
 		MaxInactive:            2,
 		WithByzantine:          false,
+		RecordStats:            true,
 	}
 
-	c := types.NewComparison(runs, saveFile, false)
+	c := types.NewComparison(runs, saveFile, true)
 
-	// c.AddEAnalysis(types.RecordPartitionStats(saveFile))
+	c.AddEAnalysis(types.RecordPartitionStats(saveFile))
 	c.AddAnalysis("crashes", cbft.CrashesAnalyzer(saveFile), types.NoopComparator())
-	// c.AddAnalysis("logs", cbft.RecordLogsAnalyzer(saveFile), types.NoopComparator())
+	c.AddAnalysis("logs", cbft.RecordLogsAnalyzer(saveFile), types.NoopComparator())
 	c.AddAnalysis("states", cbft.RecordStateTraceAnalyzer(saveFile), types.NoopComparator())
 
 	rm, ok := getCometPredicateHeirarchy(machine)
@@ -98,6 +99,15 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 		Episodes:    episodes,
 		Horizon:     horizon,
 		Policy:      types.NewRandomPolicy(),
+		Environment: types.NewPartitionEnv(partitionEnvConfig),
+	}))
+	strict := policies.NewStrictPolicy(types.NewRandomPolicy())
+	strict.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
+
+	c.AddExperiment(types.NewExperiment("Strict", &types.AgentConfig{
+		Episodes:    episodes,
+		Horizon:     horizon,
+		Policy:      strict,
 		Environment: types.NewPartitionEnv(partitionEnvConfig),
 	}))
 

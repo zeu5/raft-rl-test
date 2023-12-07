@@ -199,8 +199,8 @@
             "program": "${workspaceFolder}",
             "args": [
                 "explore",
-                "results_raft_term1/policy_0_BonusMaxRL.jsonl",
-                "results_raft_term1/traces_0_BonusMaxRL.jsonl"
+                "results_comet_step_precommit/policy_0_RM_Init.jsonl",
+                "results_comet_step_precommit/traces_0_Random.jsonl"
             ]
         },
         {
