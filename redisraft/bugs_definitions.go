@@ -18,7 +18,7 @@ func ReducedLog() func(*types.Trace) (bool, int) {
 				for replica_id, elem := range pS.ReplicaStates {
 					repState := elem.(*RedisNodeState)
 					curLog := repState.Logs
-					commitIndex := repState.Commit
+					commitIndex := repState.Commit - 1 // apparently need to subtract 1...
 
 					if _, ok := replicasLogs[replica_id]; !ok { // init empty list if previous replica log is not present
 						replicasLogs[replica_id] = make([]RedisEntry, 0)
@@ -50,7 +50,7 @@ func ModifiedLog() func(*types.Trace) (bool, int) {
 				for replica_id, elem := range pS.ReplicaStates {
 					repState := elem.(*RedisNodeState)
 					curLog := repState.Logs
-					commitIndex := repState.Commit
+					commitIndex := repState.Commit - 1 // apparently need to subtract 1...
 
 					if _, ok := replicasLogs[replica_id]; !ok { // init empty list if previous replica log is not present
 						replicasLogs[replica_id] = make([]RedisEntry, 0)
@@ -85,7 +85,7 @@ func InconsistentLogs() func(*types.Trace) (bool, int) {
 				for _, value := range pS.ReplicaStates { // build all replicas committed logs, sorted by index
 					repState := value.(*RedisNodeState)
 					curLog := repState.Logs
-					commitIndex := repState.Commit
+					commitIndex := repState.Commit - 1                // apparently need to subtract 1...
 					commitLog := filterLogCommit(curLog, commitIndex) // take only entries with index at most equal to commit
 					commitLog = sortLogIndex(commitLog)               // sort them by index (to compare them)
 					logsList = append(logsList, commitLog)
@@ -112,6 +112,37 @@ func InconsistentLogs() func(*types.Trace) (bool, int) {
 func TruePredicate() func(*types.Trace) (bool, int) {
 	return func(t *types.Trace) (bool, int) {
 		return true, 0
+	}
+}
+
+// checks if a replica committed two NORMAL entries in different terms
+func EntriesInDifferentTermsDummy() func(*types.Trace) (bool, int) {
+	return func(t *types.Trace) (bool, int) {
+		for i := 0; i < t.Len(); i++ { // foreach (state, action, new_state, reward) in the trace
+			s, _, _, _ := t.Get(i) // take state s
+			pS, ok := s.(*types.Partition)
+			if ok {
+				for _, elem := range pS.ReplicaStates {
+					repState := elem.(*RedisNodeState)
+					curLog := repState.Logs
+					commitIndex := repState.Commit - 1 // apparently need to subtract 1...
+
+					commitLog := filterLogCommit(curLog, commitIndex)
+
+					terms := make(map[int]bool)
+					for _, ent := range commitLog {
+						if EntryTypeToString(ent.Type) == "NORMAL" {
+							terms[ent.Term] = true
+						}
+					}
+
+					if len(terms) > 1 {
+						return true, i
+					}
+				}
+			}
+		}
+		return false, -1
 	}
 }
 

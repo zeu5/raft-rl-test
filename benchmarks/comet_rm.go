@@ -75,7 +75,7 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 	}
 	RMPolicy := policies.NewRewardMachinePolicy(rm, false)
 
-	c.AddAnalysis("rm", policies.RewardMachineAnalyzer(RMPolicy), policies.RewardMachineCoverageComparator(saveFile))
+	c.AddAnalysis("rm", policies.RewardMachineAnalyzer(RMPolicy), policies.RewardMachineCoverageComparator(saveFile, machine))
 
 	c.AddExperiment(types.NewExperiment("RM", &types.AgentConfig{
 		Episodes:    episodes,

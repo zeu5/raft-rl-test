@@ -192,6 +192,23 @@
             ]
         },
         {
+            "name": "Redis-raft debug",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "redisraft-rm",
+                "EntriesDifferentTerms",
+                "-e",
+                "5",
+                "--save",
+                "result_debug",
+                "--horizon",
+                "100"
+            ]
+        },
+        {
             "name": "Run comet exploration",
             "type": "go",
             "request": "launch",

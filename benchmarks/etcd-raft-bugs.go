@@ -142,7 +142,7 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	c := types.NewComparison(runs)
 
 	// here you add different traces analysis and comparators -- to process traces into a dataset (analyzer) and output the results (comparator)
-	// c.AddAnalysis("Plot", raft.RaftAnalyzer(saveFile, colors...), raft.RaftPlotComparator(saveFile))
+	c.AddAnalysis("Plot", raft.RaftAnalyzer(saveFile, colors...), raft.RaftPlotComparator(saveFile))
 	c.AddAnalysis("Bugs", types.BugAnalyzer(
 		path.Join(saveFile, "bugs"),
 		types.BugDesc{Name: "MultipleLeaders", Check: raft.MultipleLeaders()},
@@ -153,7 +153,7 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	), types.BugComparator(saveFile))
 
 	// c.AddAnalysis("CommitOnlyOneEntry", policies.RewardMachineAnalyzer(PredHierarchy_3), policies.RewardMachineCoverageComparator(saveFile))
-	c.AddAnalysis(PredHierName, policies.RewardMachineAnalyzer(PHPolicy), policies.RewardMachineCoverageComparator(saveFile))
+	c.AddAnalysis(PredHierName, policies.RewardMachineAnalyzer(PHPolicy), policies.RewardMachineCoverageComparator(saveFile, PredHierName))
 	// c.AddAnalysis("PrintReadable", raft.RaftReadableAnalyzer(savePath), raft.RaftEmptyComparator())
 
 	// here you add different policies with their parameters
@@ -172,7 +172,7 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	c.AddExperiment(types.NewExperiment("BonusMaxRL", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
-		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.05),
+		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.95, 0.05),
 		Environment: getRaftPartEnvCfg(raftConfig, colors, rlConfig),
 	}))
 	// c.AddExperiment(types.NewExperiment("PredHierarchy_1", &types.AgentConfig{

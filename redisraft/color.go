@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 
 	"github.com/zeu5/raft-rl-test/types"
 )
@@ -120,6 +121,18 @@ func ColorIndex() RedisRaftColorFunc {
 func ColorSnapshot() RedisRaftColorFunc {
 	return func(rns *RedisNodeState) (string, interface{}) {
 		return "snapshot", rns.Snapshot
+	}
+}
+
+// Abstraction for the log, it consists of the list of entries considering only their Term and Type
+func ColorLog() RedisRaftColorFunc {
+	return func(rns *RedisNodeState) (string, interface{}) {
+		result := make([]string, 0)
+		for _, entry := range rns.Logs {
+			entryVal := fmt.Sprintf("%d-%d", entry.Term, entry.Type) // the log is seen as a list of term-type elements
+			result = append(result, entryVal)
+		}
+		return "log", result
 	}
 }
 

@@ -99,34 +99,40 @@ func RewardMachineAnalyzer(rmp *RewardMachinePolicy) types.Analyzer {
 	}
 }
 
-func RewardMachineCoverageComparator(savePath string) types.Comparator {
+// returns a comparator for a predHierarchy analyzer.
+func RewardMachineCoverageComparator(savePath string, hierachyName string) types.Comparator {
 	if _, err := os.Stat(savePath); err != nil {
 		os.Mkdir(savePath, os.ModePerm)
 	}
-	return func(run int, s []string, ds []types.DataSet) {
+	return func(run int, policies []string, ds []types.DataSet) {
+		// readable text file
+		printable := ""
 		for i := 0; i < len(ds); i++ {
-			fmt.Printf("For run: %d, experiment: %s\n", run, s[i])
+			printable = printable + fmt.Sprintf("For run: %d, experiment: %s\n", run, policies[i])
 			rmDS := ds[i].(*RewardMachineDataset)
 			for state, count := range rmDS.RMStateVisits {
-				fmt.Printf("\tRM State %s, Visits: %d\n", state, count)
+				printable = printable + fmt.Sprintf("\tRM State %s, Visits: %d\n", state, count)
 			}
-			fmt.Printf("\tFinal predicate states: %d\n", len(rmDS.FinalPredicateStates))
-			fmt.Printf("\tFirst iteration to Final predicate: %d\n", rmDS.FirstIterationToFinalPredicate)
-			fmt.Printf("\tTraces repeat accuracy after reaching final states: %f\n", rmDS.RepeatAccuracy)
+			printable = printable + fmt.Sprintf("\tFinal predicate states: %d\n", len(rmDS.FinalPredicateStates))
+			printable = printable + fmt.Sprintf("\tFirst iteration to Final predicate: %d\n", rmDS.FirstIterationToFinalPredicate)
+			printable = printable + fmt.Sprintf("\tTraces repeat accuracy after reaching final states: %f\n", rmDS.RepeatAccuracy)
 		}
+		os.WriteFile(path.Join(savePath, hierachyName+"_"+strconv.Itoa(run)+".txt"), []byte(printable), 0644)
+
+		// json file
 		data := make(map[string]interface{})
-		for i, b := range s {
+		for i, policyName := range policies {
 			rmDS := ds[i].(*RewardMachineDataset)
 			d := make(map[string]interface{})
 			d["rmStateVisits"] = rmDS.RMStateVisits
 			d["finalPredicateStates"] = len(rmDS.FinalPredicateStates)
 			d["repeatAccuracy"] = rmDS.RepeatAccuracy
-			d["firstiterationToFinalPredicate"] = rmDS.FirstIterationToFinalPredicate
-			data[b] = d
+			d["firstIterationToFinalPredicate"] = rmDS.FirstIterationToFinalPredicate
+			data[policyName] = d
 		}
 		bs, err := json.Marshal(data)
 		if err == nil {
-			os.WriteFile(path.Join(savePath, strconv.Itoa(run)+".json"), bs, 0644)
+			os.WriteFile(path.Join(savePath, hierachyName+"_"+strconv.Itoa(run)+".json"), bs, 0644)
 		}
 	}
 }
