@@ -72,11 +72,13 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 		CrashLimit:             10,
 		MaxInactive:            2,
 		WithByzantine:          false,
-		RecordStats:            true,
+		// Enables storing the time values in the partition environment
+		RecordStats: true,
 	}
 
 	c := types.NewComparison(runs, saveFile, true)
 
+	// Record the stats (time values) to the file
 	c.AddEAnalysis(types.RecordPartitionStats(saveFile))
 	c.AddAnalysis("crashes", cbft.CrashesAnalyzer(saveFile), types.NoopComparator())
 	c.AddAnalysis("logs", cbft.RecordLogsAnalyzer(saveFile), types.NoopComparator())

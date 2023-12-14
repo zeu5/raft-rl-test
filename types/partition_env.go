@@ -486,7 +486,7 @@ func (p *PartitionEnv) RecordStats(path string) {
 	}
 	out["step_times"] = p.stats["step_times"]
 	out["tick_messages_delivered"] = p.stats["tick_messages_delivered"]
-	bs, err := json.Marshal(out)
+	bs, err := json.MarshalIndent(out, "", "\t")
 	if err == nil {
 		os.WriteFile(path, bs, 0644)
 	}
