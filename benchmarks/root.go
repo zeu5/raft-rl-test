@@ -32,5 +32,6 @@ func GetRootCommand() *cobra.Command {
 	rootCommand.AddCommand(RatisExplorationCommand())
 	rootCommand.AddCommand(CometCommand())
 	rootCommand.AddCommand(CometRMCommand())
+	rootCommand.AddCommand(RatisDebugCommand())
 	return rootCommand
 }
