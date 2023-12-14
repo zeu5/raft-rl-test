@@ -189,3 +189,7 @@ func (c *Comparison) Run() {
 		}
 	}
 }
+
+// func (c *Comparison) RunWithCtx(ctx context.Context) {
+
+// }

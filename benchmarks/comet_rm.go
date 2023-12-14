@@ -44,6 +44,8 @@ func getCometPredicateHeirarchy(name string) (*policies.RewardMachine, bool) {
 		machine = policies.NewRewardMachine(cbft.AnyReachedStep("RoundStepPrecommit"))
 	case "StepPrevote":
 		machine = policies.NewRewardMachine(cbft.AnyReachedStep("RoundStepPrevote"))
+	case "Commit1WithRemainingRequests":
+		machine = policies.NewRewardMachine(cbft.AtLeastHeight(2).And(types.RemainingRequests(15))) // .And(types.Rema))
 	}
 	return machine, machine != nil
 }
@@ -55,14 +57,14 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 		BaseRPCPort:         26756,
 		BaseWorkingDir:      path.Join("/home/snagendra/go/src/github.com/zeu5/raft-rl-test", saveFile, "tmp"),
 		NumNodes:            4,
-		NumRequests:         2,
+		NumRequests:         20,
 	})
 	colors := []cbft.CometColorFunc{cbft.ColorHRS(), cbft.ColorProposal(), cbft.ColorNumVotes(), cbft.ColorProposer()}
 
 	partitionEnvConfig := types.PartitionEnvConfig{
 		Painter:                cbft.NewCometStatePainter(colors...),
 		Env:                    env,
-		TicketBetweenPartition: 5,
+		TicketBetweenPartition: 3,
 		MaxMessagesPerTick:     100,
 		StaySameStateUpto:      2,
 		NumReplicas:            4,

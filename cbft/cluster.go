@@ -368,6 +368,7 @@ func NewCluster(config *CometClusterConfig) (*CometCluster, error) {
 		"--timeout-prevote", strconv.Itoa(c.config.TimeoutPrevote),
 		"--timeout-precommit", strconv.Itoa(c.config.TimeoutPrecommit),
 		"--timeout-commit", strconv.Itoa(c.config.TimeoutCommit),
+		"--debug",
 	}
 
 	cmd := exec.Command(config.CometBinaryPath, testnetArgs...)
