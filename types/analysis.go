@@ -194,3 +194,13 @@ func WriteToFile(savePath string, content ...string) {
 
 	os.WriteFile(savePath, []byte(singleString), 0644)
 }
+
+func RecordPartitionStats(savePath string) EAnalyzer {
+	return func(run int, e *Experiment) {
+		statsSavePath := path.Join(savePath, strconv.Itoa(run)+"_"+e.Name+"_stats.json")
+		if partEnv, ok := e.Environment.(*PartitionEnv); ok {
+			partEnv.RecordStats(statsSavePath)
+			partEnv.ResetStats()
+		}
+	}
+}

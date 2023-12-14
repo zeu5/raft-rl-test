@@ -31,7 +31,7 @@ func RSLExploration() {
 
 	colors := []rsl.RSLColorFunc{rsl.ColorState(), rsl.ColorDecree(), rsl.ColorDecided(), rsl.ColorBoundedBallot(5), rsl.ColorLogLength()}
 
-	c := types.NewComparison(runs)
+	c := types.NewComparison(runs, saveFile, false)
 	c.AddAnalysis("Plot", rsl.CoverageAnalyzer(colors...), rsl.CoverageComparator(saveFile))
 	c.AddAnalysis("Bugs", types.BugAnalyzer(
 		path.Join(saveFile, "bugs"),

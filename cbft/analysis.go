@@ -126,14 +126,19 @@ func RecordLogsAnalyzer(storePath string) types.Analyzer {
 func stateToLines(s *types.Partition) []string {
 	lines := make([]string, 0)
 
-	for node, s := range s.ReplicaStates {
-		ns := s.(*CometNodeState)
+	for node, rs := range s.ReplicaStates {
+		ns := rs.(*CometNodeState)
+		_, active := s.ActiveNodes[node]
 
-		bs, _ := json.Marshal(ns)
-		lines = append(
-			lines,
-			fmt.Sprintf("NodeID: %d, State: %s", node, string(bs)),
-		)
+		if active {
+			bs, _ := json.Marshal(ns)
+			lines = append(
+				lines,
+				fmt.Sprintf("NodeID: %d, State: %s", node, string(bs)),
+			)
+		} else {
+			lines = append(lines, fmt.Sprintf("NodeID: %d, State: Inactive", node))
+		}
 	}
 	revMap := make(map[int][]uint64)
 	for id, part := range s.PartitionMap {
@@ -161,9 +166,10 @@ func stateToLines(s *types.Partition) []string {
 func recordTraceToFile(trace *types.Trace, filePath string) {
 	lines := []string{}
 	for i := 0; i < trace.Len(); i++ {
-		s, _, _, _ := trace.Get(i)
-		lines = append(lines, fmt.Sprintf("State for step: %d\n", i))
+		s, a, _, _ := trace.Get(i)
+		lines = append(lines, fmt.Sprintf("State: %s, step: %d\n", s.Hash(), i))
 		lines = append(lines, stateToLines(s.(*types.Partition))...)
+		lines = append(lines, fmt.Sprintf("Action: %s", a.Hash()))
 		lines = append(lines, "")
 	}
 

@@ -44,7 +44,3 @@ func (t *SoftMaxNegFreqPolicy) Update(step int, state types.State, action types.
 	nextVal := (1-t.Alpha)*curVal + t.Alpha*(reward+t.Gamma*max)
 	t.QTable[stateHash][actionKey] = nextVal
 }
-
-func (t *SoftMaxNegFreqPolicy) Reward(sHash string) float64 {
-	return float64(t.Freq[sHash] * -1)
-}

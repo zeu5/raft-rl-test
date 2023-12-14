@@ -1,8 +1,13 @@
 package policies
 
 import (
+	"bufio"
+	"bytes"
+	"encoding/json"
+	"fmt"
 	"math"
 	"math/rand"
+	"os"
 	"time"
 
 	"github.com/zeu5/raft-rl-test/types"
@@ -20,6 +25,11 @@ func NewQTable() *QTable {
 		table: make(map[string]map[string]float64),
 		rand:  rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
+}
+
+func (q *QTable) GetAll(state string) (map[string]float64, bool) {
+	values, ok := q.table[state]
+	return values, ok
 }
 
 func (q *QTable) Get(state, action string, def float64) float64 {
@@ -98,6 +108,50 @@ func (q *QTable) MaxAmong(state string, actions []string, def float64) (string, 
 	return maxActions[randAction], maxVal
 }
 
+func (q *QTable) Read(path string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("error reading file: %s", err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		in := make(map[string]interface{})
+		err := json.Unmarshal(scanner.Bytes(), &in)
+		if err != nil {
+			return fmt.Errorf("error reading file contents: %s", err)
+		}
+		state := in["state"].(string)
+		entries := make(map[string]float64)
+		for k, v := range in["entries"].(map[string]interface{}) {
+			entries[k] = v.(float64)
+		}
+		q.table[state] = entries
+	}
+	return nil
+}
+
+func (q *QTable) Record(path string) {
+	bs := new(bytes.Buffer)
+
+	for state, entries := range q.table {
+		stateJ := make(map[string]interface{})
+		stateJ["state"] = state
+		stateJ["entries"] = entries
+
+		stateBS, err := json.Marshal(stateJ)
+		if err == nil {
+			bs.Write(stateBS)
+			bs.Write([]byte("\n"))
+		}
+	}
+
+	if bs.Len() > 0 {
+		os.WriteFile(path+".jsonl", bs.Bytes(), 0644)
+	}
+}
+
 type PropertyGuidedPolicy struct {
 	properties  []*types.Monitor
 	expQTable   *QTable
@@ -143,6 +197,8 @@ func NewPropertyGuidedPolicy(properties []*types.Monitor, alpha, gamma, epsilon 
 	}
 	return policy
 }
+
+func (p *PropertyGuidedPolicy) Record(path string) {}
 
 func (p *PropertyGuidedPolicy) Reset() {
 	p.expQTable = NewQTable()

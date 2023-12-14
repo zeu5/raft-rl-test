@@ -24,6 +24,7 @@ func CometExploration(episodes, horizon int, saveFile string, ctx context.Contex
 		BaseRPCPort:         26756,
 		BaseWorkingDir:      path.Join(curDir, saveFile, "tmp"),
 		NumNodes:            4,
+		NumRequests:         2,
 	})
 	colors := []cbft.CometColorFunc{cbft.ColorHRS(), cbft.ColorProposal(), cbft.ColorNumVotes(), cbft.ColorProposer()}
 
@@ -34,15 +35,23 @@ func CometExploration(episodes, horizon int, saveFile string, ctx context.Contex
 		MaxMessagesPerTick:     20,
 		StaySameStateUpto:      2,
 		NumReplicas:            4,
-		WithCrashes:            false,
+		WithCrashes:            true,
+		CrashLimit:             10,
+		MaxInactive:            2,
+		WithByzantine:          true,
+		MaxByzantine:           1,
 	})
 
-	c := types.NewComparison(runs)
+	c := types.NewComparison(runs, saveFile, false)
 
 	c.AddAnalysis("plot", cbft.CoverageAnalyzer(colors...), cbft.CoverageComparator(saveFile))
 	// c.AddAnalysis("logs", cbft.RecordLogsAnalyzer(saveFile), types.NoopComparator())
 	// c.AddAnalysis("state_trace", cbft.RecordStateTraceAnalyzer(saveFile), types.NoopComparator())
 	c.AddAnalysis("crashes", cbft.CrashesAnalyzer(saveFile), types.NoopComparator())
+	c.AddAnalysis("bugs", types.BugAnalyzer(saveFile,
+		types.BugDesc{Name: "Round1", Check: cbft.ReachedRound1()},
+		types.BugDesc{Name: "DifferentProposers", Check: cbft.DifferentProposers()},
+	), types.BugComparator(saveFile))
 
 	c.AddExperiment(types.NewExperiment("NegReward", &types.AgentConfig{
 		Episodes:    episodes,

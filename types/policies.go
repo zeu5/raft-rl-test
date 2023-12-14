@@ -1,8 +1,11 @@
 package types
 
 import (
+	"bytes"
+	"encoding/json"
 	"math"
 	"math/rand"
+	"os"
 	"time"
 
 	erand "golang.org/x/exp/rand"
@@ -22,6 +25,8 @@ type Policy interface {
 	// Reset at the end of running all the episodes
 	// Used to invoke a cleanup of in memory resources
 	Reset()
+	// Record the QTable to a path in a specific format that can be parsed and assessed later
+	Record(string)
 }
 
 // Generic RM Policy interface
@@ -58,6 +63,26 @@ func NewSoftMaxNegPolicy(alpha, gamma, temperature float64) *SoftMaxNegPolicy {
 
 // Checking interface compatibility
 var _ Policy = &SoftMaxNegPolicy{}
+
+func (s *SoftMaxNegPolicy) Record(path string) {
+	bs := new(bytes.Buffer)
+
+	for state, entries := range s.QTable {
+		stateJ := make(map[string]interface{})
+		stateJ["state"] = state
+		stateJ["entries"] = entries
+
+		stateBS, err := json.Marshal(stateJ)
+		if err == nil {
+			bs.Write(stateBS)
+			bs.Write([]byte("\n"))
+		}
+	}
+
+	if bs.Len() > 0 {
+		os.WriteFile(path+".jsonl", bs.Bytes(), 0644)
+	}
+}
 
 // Reset clears the QTable
 func (s *SoftMaxNegPolicy) Reset() {
@@ -157,13 +182,11 @@ func NewRandomPolicy() *RandomPolicy {
 	}
 }
 
-func (r *RandomPolicy) Reset() {
+func (r *RandomPolicy) Record(_ string) {}
 
-}
+func (r *RandomPolicy) Reset() {}
 
-func (r *RandomPolicy) UpdateIteration(_ int, _ *Trace) {
-
-}
+func (r *RandomPolicy) UpdateIteration(_ int, _ *Trace) {}
 
 func (r *RandomPolicy) NextAction(step int, state State, actions []Action) (Action, bool) {
 	i := r.rand.Intn(len(actions))

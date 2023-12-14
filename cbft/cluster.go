@@ -308,6 +308,26 @@ type CometClusterConfig struct {
 	BaseRPCPort         int
 	BaseWorkingDir      string
 	NumRequests         int
+
+	TimeoutPropose   int
+	TimeoutPrevote   int
+	TimeoutPrecommit int
+	TimeoutCommit    int
+}
+
+func (c *CometClusterConfig) SetDefaults() {
+	if c.TimeoutPropose == 0 {
+		c.TimeoutPropose = 200
+	}
+	if c.TimeoutPrevote == 0 {
+		c.TimeoutPrevote = 100
+	}
+	if c.TimeoutPrecommit == 0 {
+		c.TimeoutPrecommit = 100
+	}
+	if c.TimeoutCommit == 0 {
+		c.TimeoutCommit = 100
+	}
 }
 
 func (c *CometClusterConfig) GetNodeConfig(id int) *CometNodeConfig {
@@ -325,6 +345,7 @@ type CometCluster struct {
 }
 
 func NewCluster(config *CometClusterConfig) (*CometCluster, error) {
+	config.SetDefaults()
 	c := &CometCluster{
 		config: config,
 		Nodes:  make(map[int]*CometNode),
@@ -343,6 +364,11 @@ func NewCluster(config *CometClusterConfig) (*CometCluster, error) {
 		"itestnet",
 		"--o", c.config.BaseWorkingDir,
 		"--v", strconv.Itoa(c.config.NumNodes),
+		"--timeout-propose", strconv.Itoa(c.config.TimeoutPropose),
+		"--timeout-prevote", strconv.Itoa(c.config.TimeoutPrevote),
+		"--timeout-precommit", strconv.Itoa(c.config.TimeoutPrecommit),
+		"--timeout-commit", strconv.Itoa(c.config.TimeoutCommit),
+		"--debug",
 	}
 
 	cmd := exec.Command(config.CometBinaryPath, testnetArgs...)

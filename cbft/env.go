@@ -61,7 +61,7 @@ func (r *CometClusterState) Copy() *CometClusterState {
 	out := &CometClusterState{
 		NodeStates: make(map[uint64]*CometNodeState),
 		Messages:   make(map[string]Message),
-		Requests:   make([]CometRequest, 0),
+		Requests:   make([]CometRequest, len(r.Requests)),
 	}
 	for k, v := range r.NodeStates {
 		out.NodeStates[k] = v.Copy()
@@ -69,8 +69,8 @@ func (r *CometClusterState) Copy() *CometClusterState {
 	for k, v := range r.Messages {
 		out.Messages[k] = v.Copy()
 	}
-	for i, r := range r.Requests {
-		out.Requests[i] = r.Copy()
+	for i, req := range r.Requests {
+		out.Requests[i] = req.Copy()
 	}
 	return out
 }
@@ -94,6 +94,10 @@ func NewCometEnv(ctx context.Context, clusterConfig *CometClusterConfig) *CometE
 	}
 	e.network.Start()
 	return e
+}
+
+func (r *CometEnv) BecomeByzantine(nodeID uint64) {
+	r.network.MakeNodeByzantine(nodeID)
 }
 
 func (r *CometEnv) ReceiveRequest(req types.Request) types.PartitionedSystemState {

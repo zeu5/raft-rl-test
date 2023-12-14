@@ -33,7 +33,7 @@ func PaxosRewardMachine(episodes, horizon, runs int, saveFile string) {
 	guideRM := policies.NewRewardMachine(onlyMajorityDecided)
 	// guideRM.AddState(onlyMajorityDecided, "OnlyMajorityDecided")
 
-	c := types.NewComparison(runs)
+	c := types.NewComparison(runs, saveFile, false)
 	c.AddAnalysis("Bugs", types.BugAnalyzer(
 		path.Join(saveFile, "bugs"),
 		types.BugDesc{Name: "Safety", Check: lpaxos.SafetyBug()},

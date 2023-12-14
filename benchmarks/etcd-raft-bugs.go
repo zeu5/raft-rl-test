@@ -32,6 +32,9 @@ func getPredHierEtcd(name string) (*policies.RewardMachine, bool, bool) {
 		PredHierarchy_OutdatedLogSpec := policies.NewRewardMachine(raft.LeaderElectedPredicateNumberWithTerms(2, []uint64{2, 4}).And(raft.AtLeastOneLogEmpty().And(raft.AtLeastOneLogNotEmptyTerm(2)).And(raft.StackSizeLowerBound(1)))) // final predicate - target space
 		machine = PredHierarchy_OutdatedLogSpec
 		oneTime = true
+	case "Term1":
+		machine = policies.NewRewardMachine(raft.AllInTerm(3))
+		oneTime = false
 	}
 
 	return machine, oneTime, machine != nil
@@ -53,7 +56,8 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 		TicksBetweenPartition: 3,
 		MaxMessagesPerTick:    100,
 		StaySameStateUpTo:     5,
-		WithCrashes:           false,
+		WithCrashes:           true,
+		CrashLimit:            10,
 	}
 
 	// abstraction for both plot and RL
@@ -139,7 +143,7 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	// colors ... , expanded list, can omit the argument
 	// Analyzer takes the path to save data and colors... is the abstraction used to plot => makes the datasets
 	// PlotComparator => makes plots from data
-	c := types.NewComparison(runs)
+	c := types.NewComparison(runs, saveFile, true)
 
 	// here you add different traces analysis and comparators -- to process traces into a dataset (analyzer) and output the results (comparator)
 	c.AddAnalysis("Plot", raft.RaftAnalyzer(saveFile, colors...), raft.RaftPlotComparator(saveFile))

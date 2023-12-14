@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"path"
 
 	"github.com/spf13/cobra"
 	"github.com/zeu5/raft-rl-test/cbft"
@@ -17,8 +18,8 @@ func getCometPredicateHeirarchy(name string) (*policies.RewardMachine, bool) {
 	case "AnyRound1AfterCommit":
 		machine = policies.NewRewardMachine(cbft.AllAtLeastRound(1).And(cbft.AtLeastHeight(2)))
 		machine.AddState(cbft.AnyAtHeight(2), "Height2")
-	case "AnyRound2":
-		machine = policies.NewRewardMachine(cbft.AnyReachedRound(2))
+	case "AnyRound1":
+		machine = policies.NewRewardMachine(cbft.AnyReachedRound(1))
 	case "AllRound1":
 		machine = policies.NewRewardMachine(cbft.AllAtLeastRound(1))
 	case "AnyLocked":
@@ -39,7 +40,12 @@ func getCometPredicateHeirarchy(name string) (*policies.RewardMachine, bool) {
 		machine.AddState(cbft.AnyReachedRound(1), "Round1")
 	case "Commit1":
 		machine = policies.NewRewardMachine(cbft.AnyAtHeight(2))
-		// case ""
+	case "StepPreCommit":
+		machine = policies.NewRewardMachine(cbft.AnyReachedStep("RoundStepPrecommit"))
+	case "StepPrevote":
+		machine = policies.NewRewardMachine(cbft.AnyReachedStep("RoundStepPrevote"))
+	case "Commit1WithRemainingRequests":
+		machine = policies.NewRewardMachine(cbft.AtLeastHeight(2).And(types.RemainingRequests(15))) // .And(types.Rema))
 	}
 	return machine, machine != nil
 }
@@ -49,25 +55,35 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 		CometBinaryPath:     "/home/snagendra/go/src/github.com/zeu5/cometbft/build/cometbft",
 		InterceptListenPort: 7074,
 		BaseRPCPort:         26756,
-		BaseWorkingDir:      "/home/snagendra/go/src/github.com/zeu5/raft-rl-test/results/tmp",
+		BaseWorkingDir:      path.Join("/home/snagendra/go/src/github.com/zeu5/raft-rl-test", saveFile, "tmp"),
 		NumNodes:            4,
+		NumRequests:         20,
 	})
 	colors := []cbft.CometColorFunc{cbft.ColorHRS(), cbft.ColorProposal(), cbft.ColorNumVotes(), cbft.ColorProposer()}
 
-	partitionEnv := types.NewPartitionEnv(types.PartitionEnvConfig{
+	partitionEnvConfig := types.PartitionEnvConfig{
 		Painter:                cbft.NewCometStatePainter(colors...),
 		Env:                    env,
 		TicketBetweenPartition: 3,
-		MaxMessagesPerTick:     20,
+		MaxMessagesPerTick:     100,
 		StaySameStateUpto:      2,
 		NumReplicas:            4,
-		WithCrashes:            true,
-		CrashLimit:             30,
-	})
+		WithCrashes:            false,
+		CrashLimit:             10,
+		MaxInactive:            2,
+		WithByzantine:          false,
+		// Enables storing the time values in the partition environment
+		RecordStats: true,
+	}
 
-	c := types.NewComparison(runs)
+	c := types.NewComparison(runs, saveFile, true)
 
-	c.AddAnalysis("bugs", cbft.CrashesAnalyzer(saveFile), types.NoopComparator())
+	// Record the stats (time values) to the file
+	c.AddEAnalysis(types.RecordPartitionStats(saveFile))
+	c.AddAnalysis("crashes", cbft.CrashesAnalyzer(saveFile), types.NoopComparator())
+	c.AddAnalysis("logs", cbft.RecordLogsAnalyzer(saveFile), types.NoopComparator())
+	c.AddAnalysis("states", cbft.RecordStateTraceAnalyzer(saveFile), types.NoopComparator())
+
 	rm, ok := getCometPredicateHeirarchy(machine)
 	if !ok {
 		env.Cleanup()
@@ -81,7 +97,22 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 		Episodes:    episodes,
 		Horizon:     horizon,
 		Policy:      RMPolicy,
-		Environment: partitionEnv,
+		Environment: types.NewPartitionEnv(partitionEnvConfig),
+	}))
+	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
+		Episodes:    episodes,
+		Horizon:     horizon,
+		Policy:      types.NewRandomPolicy(),
+		Environment: types.NewPartitionEnv(partitionEnvConfig),
+	}))
+	strict := policies.NewStrictPolicy(types.NewRandomPolicy())
+	strict.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
+
+	c.AddExperiment(types.NewExperiment("Strict", &types.AgentConfig{
+		Episodes:    episodes,
+		Horizon:     horizon,
+		Policy:      strict,
+		Environment: types.NewPartitionEnv(partitionEnvConfig),
 	}))
 
 	c.Run()

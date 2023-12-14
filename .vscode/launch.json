@@ -86,7 +86,7 @@
                 "100",
                 "etcd-raft-bugs",
                 "--save",
-                "result_debug",
+                "results_debug",
                 "-p",
                 "OutdatedLog2"
             ]
@@ -117,6 +117,16 @@
                 "--horizon",
                 "100",
                 "ratis"
+            ]
+        },
+        {
+            "name": "Run ratis debug",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "ratis-debug"
             ]
         },
         {
@@ -188,7 +198,34 @@
                 "redisraft-rm",
                 "Term2",
                 "--save",
-                "result_debug",
+                "results_debug",
+            ]
+        },
+        {
+            "name": "Run explorer",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "explore",
+                "results_comet_step_precommit/policy_0_RM_Init.jsonl",
+                "results_comet_step_precommit/traces_0_Random.jsonl"
+            ]
+        },
+        {
+            "name": "Run comet reward machine",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "-e",
+                "10",
+                "comet-rm",
+                "StepPrevote",
+                "--save",
+                "results_debug",
             ]
         },
         {
