@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"strconv"
 	"time"
 
 	"github.com/zeu5/raft-rl-test/types"
@@ -115,7 +116,7 @@ func (r *CometEnv) ReceiveRequest(req types.Request) types.PartitionedSystemStat
 		return newState
 	}
 
-	r.cluster.Execute(queryString)
+	go r.cluster.Execute(queryString)
 	newState.Requests = copyRequests(newState.Requests[1:])
 
 	r.curState = newState
@@ -212,7 +213,7 @@ func (r *CometEnv) Reset() types.PartitionedSystemState {
 			newState.Requests[i] = CometRequest{
 				Type:  "set",
 				Key:   "k",
-				Value: "v",
+				Value: strconv.Itoa(i + 1),
 			}
 		}
 	}

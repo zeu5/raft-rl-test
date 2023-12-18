@@ -1,5 +1,10 @@
 package types
 
+import (
+	"context"
+	"fmt"
+)
+
 type AgentConfig struct {
 	Episodes    int
 	Horizon     int
@@ -31,19 +36,32 @@ func NewAgent(config *AgentConfig) *Agent {
 // Run the agent for the specified number of episodes and horizon
 func (a *Agent) Run() {
 	for i := 0; i < a.config.Episodes; i++ {
-		a.traces[i] = a.runEpisode(i)
+		a.traces[i] = a.runEpisode(i, context.TODO())
+	}
+}
+
+func (a *Agent) RunWithCtx(ctx context.Context) {
+	for i := 0; i < a.config.Episodes; i++ {
+		a.traces[i] = a.runEpisode(i, ctx)
 	}
 }
 
 // run a single episode and return the resulting trace
-func (a *Agent) runEpisode(episode int) *Trace {
+func (a *Agent) runEpisode(episode int, ctx context.Context) *Trace {
 	state := a.environment.Reset()
 	trace := NewTrace()
 	actions := state.Actions()
 
 	// stepTimes := make(map[string][]time.Duration, 0)
 
+EPISODE_LOOP:
 	for i := 0; i < a.config.Horizon; i++ {
+		select {
+		case <-ctx.Done():
+			fmt.Println("Stopping!")
+			break EPISODE_LOOP
+		default:
+		}
 		if len(actions) == 0 {
 			break
 		}

@@ -154,7 +154,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 	configPath := path.Join(saveFile, "config.txt")
 	types.WriteToFile(configPath, clusterConfig.Printable(), partitionEnvConfig.Printable(), PrintColors(chosenColors))
 
-	c.Run()
+	c.RunWithCtx(ctx)
 }
 
 func RedisRaftRMCommand() *cobra.Command {

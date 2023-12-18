@@ -308,6 +308,7 @@ type CometClusterConfig struct {
 	BaseRPCPort         int
 	BaseWorkingDir      string
 	NumRequests         int
+	CreateEmptyBlocks   bool
 
 	TimeoutPropose   int
 	TimeoutPrevote   int
@@ -317,16 +318,16 @@ type CometClusterConfig struct {
 
 func (c *CometClusterConfig) SetDefaults() {
 	if c.TimeoutPropose == 0 {
-		c.TimeoutPropose = 200
+		c.TimeoutPropose = 100
 	}
 	if c.TimeoutPrevote == 0 {
-		c.TimeoutPrevote = 100
+		c.TimeoutPrevote = 20
 	}
 	if c.TimeoutPrecommit == 0 {
-		c.TimeoutPrecommit = 100
+		c.TimeoutPrecommit = 20
 	}
 	if c.TimeoutCommit == 0 {
-		c.TimeoutCommit = 100
+		c.TimeoutCommit = 20
 	}
 }
 
@@ -369,6 +370,9 @@ func NewCluster(config *CometClusterConfig) (*CometCluster, error) {
 		"--timeout-precommit", strconv.Itoa(c.config.TimeoutPrecommit),
 		"--timeout-commit", strconv.Itoa(c.config.TimeoutCommit),
 		"--debug",
+	}
+	if config.CreateEmptyBlocks {
+		testnetArgs = append(testnetArgs, "--create-empty-blocks")
 	}
 
 	cmd := exec.Command(config.CometBinaryPath, testnetArgs...)

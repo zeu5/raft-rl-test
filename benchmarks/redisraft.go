@@ -62,7 +62,7 @@ func RedisRaftExploration(episodes, horizon int, saveFile string, ctx context.Co
 		Environment: partitionEnv,
 	}))
 
-	c.Run()
+	c.RunWithCtx(ctx)
 	env.Cleanup()
 }
 

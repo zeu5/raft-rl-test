@@ -58,13 +58,14 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 		BaseWorkingDir:      path.Join("/home/snagendra/go/src/github.com/zeu5/raft-rl-test", saveFile, "tmp"),
 		NumNodes:            4,
 		NumRequests:         20,
+		CreateEmptyBlocks:   true,
 	})
 	colors := []cbft.CometColorFunc{cbft.ColorHRS(), cbft.ColorProposal(), cbft.ColorNumVotes(), cbft.ColorProposer()}
 
 	partitionEnvConfig := types.PartitionEnvConfig{
 		Painter:                cbft.NewCometStatePainter(colors...),
 		Env:                    env,
-		TicketBetweenPartition: 3,
+		TicketBetweenPartition: 1,
 		MaxMessagesPerTick:     100,
 		StaySameStateUpto:      2,
 		NumReplicas:            4,
@@ -73,16 +74,23 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 		MaxInactive:            2,
 		WithByzantine:          false,
 		// Enables storing the time values in the partition environment
-		RecordStats: true,
+		RecordStats: false,
 	}
 
-	c := types.NewComparison(runs, saveFile, true)
+	c := types.NewComparison(runs, saveFile, false)
 
 	// Record the stats (time values) to the file
 	c.AddEAnalysis(types.RecordPartitionStats(saveFile))
 	c.AddAnalysis("crashes", cbft.CrashesAnalyzer(saveFile), types.NoopComparator())
-	c.AddAnalysis("logs", cbft.RecordLogsAnalyzer(saveFile), types.NoopComparator())
-	c.AddAnalysis("states", cbft.RecordStateTraceAnalyzer(saveFile), types.NoopComparator())
+
+	bugs := []types.BugDesc{
+		{Name: "Round1", Check: cbft.ReachedRound1()},
+		{Name: "DifferentProposers", Check: cbft.DifferentProposers()},
+	}
+	c.AddAnalysis("bugs", types.BugAnalyzer(saveFile, bugs...), types.BugComparator(saveFile))
+	c.AddAnalysis("bugs_logs", cbft.BugLogRecorder(saveFile, bugs...), types.NoopComparator())
+	// c.AddAnalysis("logs", cbft.RecordLogsAnalyzer(saveFile), types.NoopComparator())
+	// c.AddAnalysis("states", cbft.RecordStateTraceAnalyzer(saveFile), types.NoopComparator())
 
 	rm, ok := getCometPredicateHeirarchy(machine)
 	if !ok {
@@ -115,7 +123,7 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 		Environment: types.NewPartitionEnv(partitionEnvConfig),
 	}))
 
-	c.Run()
+	c.RunWithCtx(ctx)
 	env.Cleanup()
 }
 
