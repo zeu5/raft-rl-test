@@ -22,6 +22,7 @@ type RedisEntry struct {
 	Term    int
 	DataLen int
 	Index   int
+	Type    int
 }
 
 func (r RedisEntry) Copy() RedisEntry {
@@ -30,11 +31,27 @@ func (r RedisEntry) Copy() RedisEntry {
 		Term:    r.Term,
 		DataLen: r.DataLen,
 		Index:   r.Index,
+		Type:    r.Type,
 	}
 }
 
 func (r RedisEntry) String() string {
-	return fmt.Sprintf("[ID:%s | I:%d | T:%d | Len:%d]", r.ID, r.Index, r.Term, r.DataLen)
+	return fmt.Sprintf("[ID:%s | Type:%s | I:%d | T:%d | Len:%d]", r.ID, EntryTypeToString(r.Type), r.Index, r.Term, r.DataLen)
+}
+
+func EntryTypeToString(val int) string {
+	switch val {
+	case 0:
+		return "NORMAL"
+	case 1:
+		return "ADD_NONVOTING_NODE"
+	case 2:
+		return "ADD_NODE"
+	case 3:
+		return "NO_OP"
+	default:
+		return strconv.Itoa(val)
+	}
 }
 
 // the state of a node
@@ -497,12 +514,12 @@ func (c *Cluster) GetLogs() string {
 	return strings.Join(logLines, "\n")
 }
 
-func (c *Cluster) Execute(args ...string) error {
-	node := c.Nodes[1]
+func (c *Cluster) Execute(id int, args ...string) error {
+	node := c.Nodes[id]
 	return node.Execute(args...)
 }
 
-func (c *Cluster) ExecuteAsync(args ...string) error {
-	node := c.Nodes[1]
+func (c *Cluster) ExecuteAsync(id int, args ...string) error {
+	node := c.Nodes[id]
 	return node.ExecuteAsync(args...)
 }

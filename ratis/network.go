@@ -119,7 +119,7 @@ func (n *InterceptNetwork) handleMessage(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to unmarshal request"})
 		return
 	}
-	fmt.Println("Received message of type: " + m.Type)
+	fmt.Printf("Received message: %v\n", m)
 	parsedMessage := make(map[string]interface{})
 	if err := json.Unmarshal(data, &parsedMessage); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to unmarshal request"})
@@ -172,7 +172,7 @@ func (n *InterceptNetwork) handleReplica(c *gin.Context) {
 	n.nodes[uint64(nodeID)] = nodeAddr
 	n.lock.Unlock()
 
-	fmt.Println("Received replica")
+	fmt.Printf("Received replica: %s\n", nodeAddr)
 
 	c.JSON(http.StatusOK, gin.H{"message": "ok"})
 }
@@ -188,6 +188,23 @@ func (n *InterceptNetwork) Start() {
 		defer cancel()
 		n.server.Shutdown(ctx)
 	}()
+
+	// For debugging purposes only
+	go n.deliverLoop()
+}
+
+func (n *InterceptNetwork) deliverLoop() {
+	for {
+		select {
+		case <-n.ctx.Done():
+			return
+		default:
+		}
+		for mID := range n.GetAllMessages() {
+			n.SendMessage(mID)
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
 }
 
 func (n *InterceptNetwork) Reset() {
@@ -228,7 +245,7 @@ func (n *InterceptNetwork) SendMessage(id string) {
 	if !ok {
 		return
 	}
-
+	fmt.Printf("Sending message: %v\n", m)
 	bs, err := json.Marshal(m)
 	if err != nil {
 		return
@@ -249,6 +266,8 @@ func (n *InterceptNetwork) SendMessage(id string) {
 	if err == nil {
 		io.ReadAll(resp.Body)
 		resp.Body.Close()
+	} else {
+		fmt.Printf("Error sending message: %s\n", err)
 	}
 
 	n.lock.Lock()

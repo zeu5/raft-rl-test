@@ -855,7 +855,7 @@ func (p *PartitionEnv) handleRequest(a Action) *Partition {
 	nextState := copyPartition(p.CurPartition)
 	if nextState.CanDeliverRequest && len(nextState.PendingRequests) > 0 {
 		nextRequest := nextState.PendingRequests[0]
-		s := p.UnderlyingEnv.ReceiveRequest(nextRequest)
+		s := p.UnderlyingEnv.ReceiveRequest(nextRequest) // call on the underlying environment
 
 		newPartition := make([][]uint64, len(nextState.Partition))
 		for i := range nextState.Partition {
@@ -884,8 +884,8 @@ func (p *PartitionEnv) handleRequest(a Action) *Partition {
 		sort.Sort(PartitionSlice(nextStatePartition))
 		nextState.Partition = nextStatePartition
 		nextState.RepeatCount = 0
-		nextState.PendingRequests = s.PendingRequests()
-		nextState.CanDeliverRequest = s.CanDeliverRequest()
+		nextState.PendingRequests = s.PendingRequests()     // reducing the number of pending requests is managed in the underlying env
+		nextState.CanDeliverRequest = s.CanDeliverRequest() // same for conditions to enable requests delivery
 
 		return nextState
 	}

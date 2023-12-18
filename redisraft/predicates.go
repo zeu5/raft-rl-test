@@ -212,7 +212,7 @@ func AllInTermAtleast(minTerm int) types.RewardFuncSingle {
 	}
 }
 
-// returns true if there is at least one log with entries in two different terms
+// returns true if there is at least one log with entries in two different terms, consider only NORMAL entries
 func EntriesInDifferentTerms() types.RewardFuncSingle {
 	return func(s types.State) bool {
 		ps, ok := s.(*types.Partition)
@@ -223,12 +223,32 @@ func EntriesInDifferentTerms() types.RewardFuncSingle {
 			rState := state.(*RedisNodeState)
 			terms := make(map[int]bool)
 			for _, entry := range rState.Logs {
-				terms[entry.Term] = true
+				if EntryTypeToString(entry.Type) == "NORMAL" {
+					terms[entry.Term] = true
+				}
 			}
 			if len(terms) > 1 {
 				return true
 			}
 		}
 		return false
+	}
+}
+
+// returns true if all nodes have at least the given commit value
+// PROBLEM if we work with crashes?
+func NodesSyncCommitValue(val int) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		ps, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+		for _, state := range ps.ReplicaStates {
+			rState := state.(*RedisNodeState)
+			if rState.Commit < val {
+				return false
+			}
+		}
+		return true
 	}
 }

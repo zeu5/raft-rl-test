@@ -12,15 +12,46 @@ import (
 	"github.com/zeu5/raft-rl-test/types"
 )
 
-func getRedisPredicateHeirarchy(name string) (*policies.RewardMachine, bool) {
+// return the list of PHs corresponding to the given command, returns empty list if unknown value
+func getSetOfMachines(command string) []string {
+	switch command {
+	case "OnlyFollowersAndLeader":
+		return []string{"OnlyFollowersAndLeader"}
+	case "ElectLeader":
+		return []string{"OnlyFollowersAndLeader"}
+	case "Term2":
+		return []string{"OnlyFollowersAndLeader"}
+	case "IndexAtLeast4":
+		return []string{"OnlyFollowersAndLeader"}
+	case "ConnectedNodes":
+		return []string{"OnlyFollowersAndLeader"}
+	case "Bug1":
+		return []string{"OnlyFollowersAndLeader"}
+	case "AllInSync":
+		return []string{"OnlyFollowersAndLeader"}
+	case "MinTerm":
+		return []string{"OnlyFollowersAndLeader"}
+	case "OutOfSync":
+		return []string{"OnlyFollowersAndLeader"}
+	case "EntriesDifferentTerms":
+		return []string{"OnlyFollowersAndLeader"}
+	default:
+		return []string{}
+	}
+}
+
+func getRedisPredicateHeirarchy(name string) (*policies.RewardMachine, bool, bool) {
 	var machine *policies.RewardMachine = nil
+	oneTime := false
 	switch name {
 	case "OnlyFollowersAndLeader":
 		// This is always true initially
 		machine = policies.NewRewardMachine(redisraft.OnlyFollowersAndLeader())
+		oneTime = true
 	case "ElectLeader":
 		// This is also always true. The system starts with a config where the leader is elected
 		machine = policies.NewRewardMachine(redisraft.LeaderElected())
+		oneTime = true
 	case "Term2":
 		machine = policies.NewRewardMachine(redisraft.TermNumber(2))
 	case "IndexAtLeast4":
@@ -47,7 +78,7 @@ func getRedisPredicateHeirarchy(name string) (*policies.RewardMachine, bool) {
 	case "EntriesDifferentTerms":
 		machine = policies.NewRewardMachine(redisraft.EntriesInDifferentTerms())
 	}
-	return machine, machine != nil
+	return machine, oneTime, machine != nil
 }
 
 func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx context.Context) {
@@ -58,14 +89,15 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		ID:                  1,
 		InterceptListenAddr: "localhost:7074",
 		WorkingDir:          path.Join(saveFile, "tmp"),
-		NumRequests:         3,
+		NumRequests:         5,
 
-		RequestTimeout:  25,  // heartbeat in milliseconds (fixed or variable?)
-		ElectionTimeout: 120, // election timeout in milliseconds (from specified value to its double)
+		RequestTimeout:  30,  // heartbeat in milliseconds (fixed or variable?)
+		ElectionTimeout: 250, // election timeout in milliseconds (from specified value to its double)
 
 		TickLength: 20,
 	}
 	env := redisraft.NewRedisRaftEnv(ctx, &clusterConfig, path.Join(saveFile, "tickLength"))
+	env.SetPrintStats(true) // to print the episode stats
 	defer env.Cleanup()
 
 	// abstraction for both plot and RL
@@ -79,6 +111,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 	availableColors["boundedTerm10"] = redisraft.ColorBoundedTerm(10) // current term, bounded to the passed value
 	availableColors["applied"] = redisraft.ColorApplied()
 	availableColors["snapshot"] = redisraft.ColorSnapshot()
+	availableColors["log"] = redisraft.ColorLog()
 
 	chosenColors := []string{
 		"state",
@@ -88,6 +121,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		"boundedTerm10",
 		"index",
 		"snapshot",
+		"log",
 	}
 
 	colors := make([]redisraft.RedisRaftColorFunc, 0)
@@ -104,7 +138,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		MaxMessagesPerTick:     100,
 		StaySameStateUpto:      5,
 		NumReplicas:            3,
-		WithCrashes:            true,
+		WithCrashes:            false,
 		CrashLimit:             10,
 		MaxInactive:            0,
 	}
@@ -120,23 +154,33 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		types.BugDesc{Name: "ReducedLog", Check: redisraft.ReducedLog()},
 		types.BugDesc{Name: "ModifiedLog", Check: redisraft.ModifiedLog()},
 		types.BugDesc{Name: "InconsistentLogs", Check: redisraft.InconsistentLogs()},
-		types.BugDesc{Name: "True", Check: redisraft.TruePredicate()},
+		// types.BugDesc{Name: "True", Check: redisraft.TruePredicate()},
+		types.BugDesc{Name: "DifferentTermsEntris", Check: redisraft.EntriesInDifferentTermsDummy()},
 	), types.BugComparator(path.Join(saveFile, "bugs")))
-	rm, ok := getRedisPredicateHeirarchy(machine)
-	if !ok {
-		return
+
+	machines := getSetOfMachines(machine)
+	pHierarchiesPolicies := make(map[string]*policies.RewardMachinePolicy) // map of PH policies
+	for _, pHierName := range machines {                                   // for each of them create it and create an analyzer
+		rm, oneTime, ok := getRedisPredicateHeirarchy(machine)
+		if !ok { // if something goes wrong just skip it
+			continue
+		}
+		RMPolicy := policies.NewRewardMachinePolicy(rm, oneTime)
+		pHierarchiesPolicies[pHierName] = RMPolicy
+
+		// c.AddAnalysis("plot", redisraft.CoverageAnalyzer(colors...), redisraft.CoverageComparator(saveFile))
+		c.AddAnalysis(pHierName, policies.RewardMachineAnalyzer(RMPolicy), policies.RewardMachineCoverageComparator(saveFile, pHierName))
 	}
-	RMPolicy := policies.NewRewardMachinePolicy(rm, false)
 
-	// c.AddAnalysis("plot", redisraft.CoverageAnalyzer(colors...), redisraft.CoverageComparator(saveFile))
-	c.AddAnalysis("rm", policies.RewardMachineAnalyzer(RMPolicy), policies.RewardMachineCoverageComparator(saveFile))
+	for pHierName, policy := range pHierarchiesPolicies {
+		c.AddExperiment(types.NewExperiment(pHierName, &types.AgentConfig{
+			Episodes:    episodes,
+			Horizon:     horizon,
+			Policy:      policy,
+			Environment: types.NewPartitionEnv(partitionEnvConfig),
+		}))
+	}
 
-	c.AddExperiment(types.NewExperiment("predHierarchy", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      RMPolicy,
-		Environment: types.NewPartitionEnv(partitionEnvConfig),
-	}))
 	c.AddExperiment(types.NewExperiment("random", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
@@ -149,6 +193,16 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.05),
 		Environment: types.NewPartitionEnv(partitionEnvConfig),
 	}))
+
+	// strict := policies.NewStrictPolicy(types.NewRandomPolicy())
+	// strict.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
+
+	// c.AddExperiment(types.NewExperiment("Strict", &types.AgentConfig{
+	// 	Episodes:    episodes,
+	// 	Horizon:     horizon,
+	// 	Policy:      strict,
+	// 	Environment: types.NewPartitionEnv(partitionEnvConfig),
+	// }))
 
 	// print config file
 	configPath := path.Join(saveFile, "config.txt")

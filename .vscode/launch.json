@@ -120,6 +120,16 @@
             ]
         },
         {
+            "name": "Run ratis debug",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "ratis-debug"
+            ]
+        },
+        {
             "name": "Run rsl reward machine",
             "type": "go",
             "request": "launch",
@@ -216,6 +226,23 @@
                 "Commit1",
                 "--save",
                 "results_debug",
+            ]
+        },
+        {
+            "name": "Redis-raft debug",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "redisraft-rm",
+                "EntriesDifferentTerms",
+                "-e",
+                "5",
+                "--save",
+                "result_debug",
+                "--horizon",
+                "100"
             ]
         },
         {

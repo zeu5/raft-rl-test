@@ -9,6 +9,7 @@ import (
 	"github.com/zeu5/raft-rl-test/types"
 )
 
+// parser of the info string received from a redis node
 func ParseInfo(info string) *RedisNodeState {
 	r := &RedisNodeState{
 		Params: make(map[string]string),
@@ -105,6 +106,11 @@ func ParseInfo(info string) *RedisNodeState {
 						dataLen, err := strconv.Atoi(val)
 						if err == nil {
 							newEntry.DataLen = dataLen
+						}
+					case "type":
+						entryType, err := strconv.Atoi(val)
+						if err == nil {
+							newEntry.Type = entryType
 						}
 					}
 				}
