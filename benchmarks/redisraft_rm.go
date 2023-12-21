@@ -18,23 +18,27 @@ func getSetOfMachines(command string) []string {
 	case "OnlyFollowersAndLeader":
 		return []string{"OnlyFollowersAndLeader"}
 	case "ElectLeader":
-		return []string{"OnlyFollowersAndLeader"}
+		return []string{"ElectLeader"}
 	case "Term2":
-		return []string{"OnlyFollowersAndLeader"}
+		return []string{"Term2"}
 	case "IndexAtLeast4":
-		return []string{"OnlyFollowersAndLeader"}
+		return []string{"IndexAtLeast4"}
 	case "ConnectedNodes":
-		return []string{"OnlyFollowersAndLeader"}
+		return []string{"ConnectedNodes"}
 	case "Bug1":
-		return []string{"OnlyFollowersAndLeader"}
+		return []string{"Bug1"}
 	case "AllInSync":
-		return []string{"OnlyFollowersAndLeader"}
+		return []string{"AllInSync"}
 	case "MinTerm":
-		return []string{"OnlyFollowersAndLeader"}
+		return []string{"MinTerm"}
 	case "OutOfSync":
-		return []string{"OnlyFollowersAndLeader"}
+		return []string{"OutOfSync"}
 	case "EntriesDifferentTerms":
-		return []string{"OnlyFollowersAndLeader"}
+		return []string{"EntriesDifferentTerms"}
+	case "Set1":
+		return []string{"EntriesDifferentTerms", "EntriesDifferentTermsSteps", "LogDifference3", "SyncTo6WithPReq5"}
+	case "Set2":
+		return []string{"EntriesDifferentTerms", "EntriesDifferentTermsSteps", "LogDifference3", "SyncTo6WithPReq5", "SyncTo7WithPReq5", "Sync7_LogDifference3", "Sync6_LogDifference4"}
 	default:
 		return []string{}
 	}
@@ -77,7 +81,59 @@ func getRedisPredicateHeirarchy(name string) (*policies.RewardMachine, bool, boo
 		machine.AddState(redisraft.OutOfSyncBy(2), "OutOfSync")
 	case "EntriesDifferentTerms":
 		machine = policies.NewRewardMachine(redisraft.EntriesInDifferentTerms())
+	case "EntriesDifferentTermsSteps":
+		machine = policies.NewRewardMachine(redisraft.EntriesInDifferentTerms())
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(4).And(redisraft.PendingRequestsAtLeast(5)), "SyncAll4PReq5")
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(6).And(redisraft.PendingRequestsAtLeast(5)), "SyncAll6PReq5")
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(6).And(redisraft.PendingRequestsAtLeast(4)).And(redisraft.AtLeastOneCommittedNormalEntry()), "SyncAll6PReq4Commit1")
+	case "LogDifference3":
+		machine = policies.NewRewardMachine(redisraft.NodesCommitValuesAtLeast(4).And(redisraft.DiffInCommittedEntries(3)))
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(4).And(redisraft.PendingRequestsAtLeast(5)).And(redisraft.OnlyFollowersAndLeaderInTerm(1)), "SyncAll4PReq5")
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(4).And(redisraft.DiffInCommittedEntries(1)), "Diff1")
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(4).And(redisraft.DiffInCommittedEntries(2)), "Diff2")
+		oneTime = true
+	case "SyncTo6WithPReq5":
+		machine = policies.NewRewardMachine(redisraft.NodesCommitValuesAtLeast(6).And(redisraft.PendingRequestsAtLeast(5)))
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(4).And(redisraft.PendingRequestsAtLeast(5)), "SyncAll4PReq5")
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(5).And(redisraft.PendingRequestsAtLeast(5)), "SyncAll5PReq5")
+		oneTime = true
+	case "SyncTo7WithPReq5":
+		machine = policies.NewRewardMachine(redisraft.NodesCommitValuesAtLeast(7).And(redisraft.PendingRequestsAtLeast(5)))
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(4).And(redisraft.PendingRequestsAtLeast(5)), "SyncAll4PReq5")
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(5).And(redisraft.PendingRequestsAtLeast(5)), "SyncAll5PReq5")
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(6).And(redisraft.PendingRequestsAtLeast(5)), "SyncAll6PReq5")
+		oneTime = true
+	case "Sync7_LogDifference4":
+		machine = policies.NewRewardMachine(redisraft.NodesCommitValuesAtLeast(7).And(redisraft.DiffInCommittedEntries(4)))
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(4).And(redisraft.PendingRequestsAtLeast(5)), "SyncAll4PReq5")
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(5).And(redisraft.PendingRequestsAtLeast(5)), "SyncAll5PReq5")
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(6).And(redisraft.PendingRequestsAtLeast(5)), "SyncAll6PReq5")
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(7).And(redisraft.PendingRequestsAtLeast(5)), "SyncAll7PReq5")
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(7).And(redisraft.DiffInCommittedEntries(1)).And(redisraft.PendingRequestsAtLeast(4)), "Diff1_PReq4")
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(7).And(redisraft.DiffInCommittedEntries(2)).And(redisraft.PendingRequestsAtLeast(3)), "Diff2_PReq3")
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(7).And(redisraft.DiffInCommittedEntries(3)).And(redisraft.PendingRequestsAtLeast(2)), "Diff3_PReq2")
+		oneTime = true
+	case "Sync7_LogDifference3":
+		machine = policies.NewRewardMachine(redisraft.NodesCommitValuesAtLeast(7).And(redisraft.DiffInCommittedEntries(3)))
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(4).And(redisraft.PendingRequestsAtLeast(5)), "SyncAll4PReq5")
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(5).And(redisraft.PendingRequestsAtLeast(5)), "SyncAll5PReq5")
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(6).And(redisraft.PendingRequestsAtLeast(5)), "SyncAll6PReq5")
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(7).And(redisraft.PendingRequestsAtLeast(5)), "SyncAll7PReq5")
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(7).And(redisraft.DiffInCommittedEntries(1)).And(redisraft.PendingRequestsAtLeast(4)), "Diff1_PReq4")
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(7).And(redisraft.DiffInCommittedEntries(2)).And(redisraft.PendingRequestsAtLeast(3)), "Diff2_PReq3")
+		oneTime = true
+	case "Sync6_LogDifference4":
+		machine = policies.NewRewardMachine(redisraft.NodesCommitValuesAtLeast(6).And(redisraft.DiffInCommittedEntries(4)))
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(4).And(redisraft.PendingRequestsAtLeast(5)), "SyncAll4PReq5")
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(5).And(redisraft.PendingRequestsAtLeast(5)), "SyncAll5PReq5")
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(6).And(redisraft.PendingRequestsAtLeast(5)), "SyncAll6PReq5")
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(6).And(redisraft.DiffInCommittedEntries(1)).And(redisraft.PendingRequestsAtLeast(4)), "Diff1_PReq4")
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(6).And(redisraft.DiffInCommittedEntries(2)).And(redisraft.PendingRequestsAtLeast(3)), "Diff2_PReq3")
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(6).And(redisraft.DiffInCommittedEntries(3)).And(redisraft.PendingRequestsAtLeast(2)), "Diff3_PReq2")
+		oneTime = true
+
 	}
+
 	return machine, oneTime, machine != nil
 }
 
@@ -89,12 +145,12 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		ID:                  1,
 		InterceptListenAddr: "localhost:7074",
 		WorkingDir:          path.Join(saveFile, "tmp"),
-		NumRequests:         5,
+		NumRequests:         3,
 
-		RequestTimeout:  30,  // heartbeat in milliseconds (fixed or variable?)
-		ElectionTimeout: 250, // election timeout in milliseconds (from specified value to its double)
+		RequestTimeout:  10, // heartbeat in milliseconds (fixed or variable?)
+		ElectionTimeout: 50, // election timeout in milliseconds (from specified value to its double)
 
-		TickLength: 20,
+		TickLength: 5,
 	}
 	env := redisraft.NewRedisRaftEnv(ctx, &clusterConfig, path.Join(saveFile, "tickLength"))
 	env.SetPrintStats(true) // to print the episode stats
@@ -102,11 +158,12 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 
 	// abstraction for both plot and RL
 	availableColors := make(map[string]redisraft.RedisRaftColorFunc)
-	availableColors["state"] = redisraft.ColorState()                 // replica internal state
-	availableColors["commit"] = redisraft.ColorCommit()               // number of committed entries? includes config changes, leader elect, request entry
-	availableColors["leader"] = redisraft.ColorLeader()               // if a replica is leader? boolean?
-	availableColors["vote"] = redisraft.ColorVote()                   // ?
-	availableColors["index"] = redisraft.ColorIndex()                 // next available index to write?
+	availableColors["state"] = redisraft.ColorState()   // replica internal state
+	availableColors["commit"] = redisraft.ColorCommit() // number of committed entries? includes config changes, leader elect, request entry
+	availableColors["leader"] = redisraft.ColorLeader() // if a replica is leader? boolean?
+	availableColors["vote"] = redisraft.ColorVote()     // ?
+	availableColors["index"] = redisraft.ColorIndex()   // next available index to write?
+	availableColors["boundedTerm3"] = redisraft.ColorBoundedTerm(3)
 	availableColors["boundedTerm5"] = redisraft.ColorBoundedTerm(5)   // current term, bounded to the passed value
 	availableColors["boundedTerm10"] = redisraft.ColorBoundedTerm(10) // current term, bounded to the passed value
 	availableColors["applied"] = redisraft.ColorApplied()
@@ -118,9 +175,9 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		"commit",
 		"leader",
 		"vote",
-		"boundedTerm10",
+		"boundedTerm3",
 		"index",
-		"snapshot",
+		// "snapshot",
 		"log",
 	}
 
@@ -155,13 +212,13 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		types.BugDesc{Name: "ModifiedLog", Check: redisraft.ModifiedLog()},
 		types.BugDesc{Name: "InconsistentLogs", Check: redisraft.InconsistentLogs()},
 		// types.BugDesc{Name: "True", Check: redisraft.TruePredicate()},
-		types.BugDesc{Name: "DifferentTermsEntris", Check: redisraft.EntriesInDifferentTermsDummy()},
+		// types.BugDesc{Name: "DifferentTermsEntries", Check: redisraft.EntriesInDifferentTermsDummy()},
 	), types.BugComparator(path.Join(saveFile, "bugs")))
 
 	machines := getSetOfMachines(machine)
 	pHierarchiesPolicies := make(map[string]*policies.RewardMachinePolicy) // map of PH policies
 	for _, pHierName := range machines {                                   // for each of them create it and create an analyzer
-		rm, oneTime, ok := getRedisPredicateHeirarchy(machine)
+		rm, oneTime, ok := getRedisPredicateHeirarchy(pHierName)
 		if !ok { // if something goes wrong just skip it
 			continue
 		}

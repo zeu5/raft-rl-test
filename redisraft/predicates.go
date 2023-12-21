@@ -235,9 +235,10 @@ func EntriesInDifferentTerms() types.RewardFuncSingle {
 	}
 }
 
-// returns true if all nodes have at least the given commit value
+// returns true if all nodes have at least the given commit value.
+//
 // PROBLEM if we work with crashes?
-func NodesSyncCommitValue(val int) types.RewardFuncSingle {
+func NodesCommitValuesAtLeast(val int) types.RewardFuncSingle {
 	return func(s types.State) bool {
 		ps, ok := s.(*types.Partition)
 		if !ok {
@@ -250,5 +251,154 @@ func NodesSyncCommitValue(val int) types.RewardFuncSingle {
 			}
 		}
 		return true
+	}
+}
+
+// returns true if all nodes have at most the given commit value.
+func NodesCommitValuesAtMost(val int) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		ps, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+		for _, state := range ps.ReplicaStates {
+			rState := state.(*RedisNodeState)
+			if rState.Commit > val {
+				return false
+			}
+		}
+		return true
+	}
+}
+
+// returns true if there is at least one NORMAL entry in any of the logs. Also not committed.
+func AtLeastOneNormalEntry() types.RewardFuncSingle {
+	return func(s types.State) bool {
+		ps, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+		for _, state := range ps.ReplicaStates {
+			rState := state.(*RedisNodeState)
+			for _, entry := range rState.Logs {
+				if EntryTypeToString(entry.Type) == "NORMAL" {
+					return true
+				}
+			}
+		}
+		return false
+	}
+}
+
+// returns true if there is at least one committed NORMAL entry in any of the logs.
+func AtLeastOneCommittedNormalEntry() types.RewardFuncSingle {
+	return func(s types.State) bool {
+		ps, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+		for _, state := range ps.ReplicaStates {
+			rState := state.(*RedisNodeState)
+			filteredLog := filterLogCommit(rState.Logs, rState.Commit)
+			for _, entry := range filteredLog {
+				if EntryTypeToString(entry.Type) == "NORMAL" {
+					return true
+				}
+			}
+		}
+		return false
+	}
+}
+
+// returns true if there is at least one committed NORMAL entry in the specified term in any of the logs.
+func AtLeastOneCommittedNormalEntryInTerm(term int) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		ps, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+		for _, state := range ps.ReplicaStates {
+			rState := state.(*RedisNodeState)
+			filteredLog := filterLogCommit(rState.Logs, rState.Commit)
+			for _, entry := range filteredLog {
+				if EntryTypeToString(entry.Type) == "NORMAL" && entry.Term == term {
+					return true
+				}
+			}
+		}
+		return false
+	}
+}
+
+// returns true if all the replicas are in the specified term and either in leader or follower state
+func OnlyFollowersAndLeaderInTerm(term int) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		ps, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+		for _, state := range ps.ReplicaStates {
+			repState := state.(*RedisNodeState)
+			if repState.State != "leader" && repState.State != "follower" || repState.Term != term {
+				return false
+			}
+		}
+		return true
+	}
+}
+
+// returns true if there is the specified gap in the committed logs of two processes, with both logs having at least one entry
+func DiffInCommittedEntries(val int) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		minLength := math.MaxInt
+		maxLength := 0
+		ps, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+		for _, state := range ps.ReplicaStates {
+			rState := state.(*RedisNodeState)
+			filteredLog := filterLogCommit(rState.Logs, rState.Commit)
+			if len(filteredLog) > maxLength {
+				maxLength = len(filteredLog)
+			}
+			if len(filteredLog) < minLength {
+				minLength = len(filteredLog)
+			}
+		}
+		return (maxLength-minLength) >= val && maxLength > 0 && minLength > 0
+	}
+}
+
+// returns true if there is the specified gap in the logs of two processes, with both logs having at least one entry
+func DiffInEntries(val int) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		minLength := math.MaxInt
+		maxLength := 0
+		ps, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+		for _, state := range ps.ReplicaStates {
+			rState := state.(*RedisNodeState)
+			if len(rState.Logs) > maxLength {
+				maxLength = len(rState.Logs)
+			}
+			if len(rState.Logs) < minLength {
+				minLength = len(rState.Logs)
+			}
+		}
+		return (maxLength-minLength) >= val && maxLength > 0 && minLength > 0
+	}
+}
+
+// returns true if there are at least the specified number of pending requests
+func PendingRequestsAtLeast(val int) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		ps, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+		return len(ps.PendingRequests) >= val
 	}
 }

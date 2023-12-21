@@ -236,7 +236,7 @@
             "program": "${workspaceFolder}",
             "args": [
                 "redisraft-rm",
-                "EntriesDifferentTerms",
+                "Set1",
                 "-e",
                 "5",
                 "--save",
