@@ -2,6 +2,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -46,13 +47,18 @@ func (e *Experiment) hasProperties() bool {
 
 // Run the experiment for the specified number of episodes
 // Additionally, for each iteration, check if any of the properties have been satisfied
-func (e *Experiment) Run() {
+func (e *Experiment) Run(ctx context.Context) {
 	agent := NewAgent(e.AgentConfig)
 	// episodeTimes := make([]time.Duration, 0)
 	for i := 0; i < e.Episodes; i++ {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
 		fmt.Printf("\rExperiment: %s, Episode: %d/%d", e.Name, i+1, e.Episodes)
 		// start := time.Now()
-		trace := agent.runEpisode(i)
+		trace := agent.runEpisode(i, ctx)
 		// dur := time.Since(start)
 		// episodeTimes = append(episodeTimes, dur)
 		agent.traces[i] = trace
@@ -171,7 +177,7 @@ func (c *Comparison) Run() {
 
 		names := make([]string, len(c.Experiments))
 		for i, e := range c.Experiments { // index - experiment  in the list of experiments
-			e.Run() // running the algorithm, stores the results
+			e.Run(context.TODO()) // running the algorithm, stores the results
 			for name, a := range c.analyzers {
 				datasets[name][i] = a(run, e.Name, e.Result) // call the analyzer on the experiment results
 			}
@@ -190,6 +196,37 @@ func (c *Comparison) Run() {
 	}
 }
 
-// func (c *Comparison) RunWithCtx(ctx context.Context) {
+func (c *Comparison) RunWithCtx(ctx context.Context) {
+	for run := 0; run < c.runs; run++ { // number of runs
+		fmt.Printf("Run %d\n", run+1)
+		datasets := make(map[string][]DataSet) // array with initial capacity - arrayList
 
-// }
+		for name := range c.analyzers {
+			datasets[name] = make([]DataSet, len(c.Experiments))
+		}
+
+		names := make([]string, len(c.Experiments))
+		for i, e := range c.Experiments { // index - experiment  in the list of experiments
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			e.Run(ctx) // running the algorithm, stores the results
+			for name, a := range c.analyzers {
+				datasets[name][i] = a(run, e.Name, e.Result) // call the analyzer on the experiment results
+			}
+			names[i] = e.Name // policy/experiment name
+			for _, ea := range c.eAnalyzers {
+				ea(run, e)
+			}
+			if c.record {
+				e.Record(run, c.recordPath)
+			}
+			e.Reset(run) //
+		}
+		for name, comp := range c.comparators {
+			comp(run, names, datasets[name]) // make the plots
+		}
+	}
+}

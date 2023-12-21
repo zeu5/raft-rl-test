@@ -67,7 +67,23 @@ func ColorValidValue() CometColorFunc {
 
 func ColorNumVotes() CometColorFunc {
 	return func(s *CometNodeState) (string, interface{}) {
-		return "num_votes", len(s.Votes)
+		votes := make([][]int, 0)
+		for _, v := range s.Votes {
+			prevotes := 0
+			precommits := 0
+			for _, pv := range v.Prevotes {
+				if pv != "nil-Vote" {
+					prevotes += 1
+				}
+			}
+			for _, pcv := range v.Precommits {
+				if pcv != "nil-Vote" {
+					precommits += 1
+				}
+			}
+			votes = append(votes, []int{prevotes, precommits})
+		}
+		return "num_votes", votes
 	}
 }
 

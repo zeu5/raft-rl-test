@@ -84,7 +84,7 @@ func CometExploration(episodes, horizon int, saveFile string, ctx context.Contex
 		Environment: partitionEnv,
 	}))
 
-	c.Run()
+	c.RunWithCtx(ctx)
 	env.Cleanup()
 }
 

@@ -218,3 +218,24 @@ func CrashesAnalyzer(storePath string) types.Analyzer {
 		return nil
 	}
 }
+
+func BugLogRecorder(storePath string, bugs ...types.BugDesc) types.Analyzer {
+	if _, ok := os.Stat(storePath); ok == nil {
+		os.RemoveAll(storePath)
+	}
+	os.MkdirAll(storePath, 0777)
+	return func(run int, s string, traces []*types.Trace) types.DataSet {
+		for i, t := range traces {
+			for _, b := range bugs {
+				bugFound, step := b.Check(t)
+				if bugFound { // swapped order just to debug
+					bugLogPath := path.Join(storePath, strconv.Itoa(run)+"_"+s+"_"+b.Name+"_"+strconv.Itoa(i)+"_step"+strconv.Itoa(step)+".log")
+					s, _, _, _ := t.Last()
+					pS := s.(*types.Partition)
+					recordLogsToFile(pS, bugLogPath)
+				}
+			}
+		}
+		return nil
+	}
+}
