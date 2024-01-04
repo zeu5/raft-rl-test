@@ -93,6 +93,11 @@ The color is assigned based on a configured `Painter` that accepts the `ReplicaS
 type Painter interface {
     Color(ReplicaState) Color
 }
+
+type Color interface {
+    Hash() string
+    Copy() Color
+}
 ```
 
 `PartitionedEnvironment` provides RL with the following additional actions:
