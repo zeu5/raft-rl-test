@@ -195,6 +195,21 @@ func WriteToFile(savePath string, content ...string) {
 	os.WriteFile(savePath, []byte(singleString), 0644)
 }
 
+func AppendToFile(savePath string, content ...string) {
+	f, err := os.OpenFile(savePath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	if err != nil {
+		panic(err)
+	}
+
+	defer f.Close()
+
+	for _, s := range content {
+		if _, err = f.WriteString(s + "\n"); err != nil {
+			panic(err)
+		}
+	}
+}
+
 func RecordPartitionStats(savePath string) EAnalyzer {
 	return func(run int, e *Experiment) {
 		statsSavePath := path.Join(savePath, strconv.Itoa(run)+"_"+e.Name+"_stats.json")

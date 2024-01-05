@@ -178,7 +178,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		"boundedTerm3",
 		"index",
 		// "snapshot",
-		"log",
+		// "log",
 	}
 
 	colors := make([]redisraft.RedisRaftColorFunc, 0)
@@ -199,8 +199,9 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		CrashLimit:             10,
 		MaxInactive:            0,
 	}
+	epTimeOut := 5
 
-	c := types.NewComparison(runs, saveFile, false)
+	c := types.NewComparison(runs, saveFile, false, "epTimes")
 
 	c.AddEAnalysis(types.RecordPartitionStats(saveFile))
 
@@ -265,7 +266,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 	configPath := path.Join(saveFile, "config.txt")
 	types.WriteToFile(configPath, clusterConfig.Printable(), partitionEnvConfig.Printable(), PrintColors(chosenColors))
 
-	c.RunWithCtx(ctx)
+	c.RunWithCtxTimeout(ctx, epTimeOut)
 }
 
 func RedisRaftRMCommand() *cobra.Command {

@@ -45,6 +45,9 @@ func (t *Trace) AppendWithReward(step int, state State, action Action, nextState
 }
 
 func (t *Trace) Len() int {
+	if t == nil {
+		return 0
+	}
 	return len(t.states)
 }
 
