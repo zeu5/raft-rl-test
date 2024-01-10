@@ -9,5 +9,6 @@ __pycache__
 result_*
 
 iter_run.sh
+redis_run.sh
 .nfs*
 *.zip

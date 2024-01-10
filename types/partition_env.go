@@ -1,6 +1,7 @@
 package types
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -96,6 +97,29 @@ type PartitionedSystemEnvironment interface {
 	Stop(uint64)
 	// Start a node
 	Start(uint64)
+}
+
+type PartitionedSystemEnvironmentCtx interface {
+	// Resets the underlying partitioned environment and returns the initial state
+	// Called at the end of each episode
+	ResetCtx(context.Context) (PartitionedSystemState, error)
+	// Progress the clocks of all replicas by 1
+	TickCtx(context.Context) (PartitionedSystemState, error)
+	// Deliver the message and return the resulting state
+	DeliverMessagesCtx([]Message, context.Context) (PartitionedSystemState, error)
+	// Drop a message
+	DropMessagesCtx([]Message, context.Context) (PartitionedSystemState, error)
+	// Receive a request
+	ReceiveRequestCtx(Request, context.Context) (PartitionedSystemState, error)
+	// Stop a node
+	StopCtx(uint64, context.Context) error
+	// Start a node
+	StartCtx(uint64, context.Context) error
+}
+
+type PartitionedSystemEnvironmentUnion interface {
+	PartitionedSystemEnvironment
+	PartitionedSystemEnvironmentCtx
 }
 
 type ByzantineEnvironment interface {
@@ -379,7 +403,7 @@ func copyPartition(p *Partition) *Partition {
 // Implements the "Environment" interface
 type PartitionEnv struct {
 	NumReplicas   int
-	UnderlyingEnv PartitionedSystemEnvironment
+	UnderlyingEnv PartitionedSystemEnvironmentUnion
 	painter       Painter
 	CurPartition  *Partition
 	messages      map[string]Message
@@ -389,11 +413,11 @@ type PartitionEnv struct {
 	stats map[string]interface{}
 }
 
-var _ Environment = &PartitionEnv{}
+var _ EnvironmentUnion = &PartitionEnv{}
 
 type PartitionEnvConfig struct {
 	Painter                Painter
-	Env                    PartitionedSystemEnvironment
+	Env                    PartitionedSystemEnvironmentUnion
 	TicketBetweenPartition int
 	NumReplicas            int
 	MaxMessagesPerTick     int
@@ -924,6 +948,505 @@ func (p *PartitionEnv) Step(a Action) State {
 	return nextState
 }
 
+// WITH CTX
+// methods having also a timeout context to have fine grained control on when to stop if the episode timed out.
+
+func (p *PartitionEnv) StepCtx(a Action, timeoutCtx context.Context) (State, error) {
+	// 1. Change partition
+	// 2. Perform ticks, delivering messages in between
+	// 3. Update states, partitions and return
+
+	start := time.Now()
+	var nextState *Partition = nil
+	var err error
+	switch a.(type) {
+	case *ByzantineAction:
+		nextState, err = p.handleByzantineCtx(a, timeoutCtx)
+	case *StopStartAction:
+		nextState, err = p.handleStartStopCtx(a, timeoutCtx)
+	case *CreatePartitionAction:
+		cs := time.Now()
+		nextState, err = p.handlePartitionCtx(a, timeoutCtx)
+		p.recordStat("partition_times", time.Since(cs))
+	case *KeepSamePartitionAction:
+		ks := time.Now()
+		nextState, err = p.handlePartitionCtx(a, timeoutCtx)
+		p.recordStat("partition_times", time.Since(ks))
+	case *SendRequestAction:
+		rs := time.Now()
+		nextState, err = p.handleRequestCtx(a, timeoutCtx)
+		p.recordStat("request_times", time.Since(rs))
+	}
+	p.recordStat("step_times", stepTime{Action: a, Duration: time.Since(start)})
+
+	if err != nil {
+		return nil, err
+	}
+
+	select {
+	case <-timeoutCtx.Done():
+		return nil, fmt.Errorf("StepCtx : episode timed out")
+	default:
+	}
+
+	p.CurPartition = copyPartition(nextState)
+	return nextState, nil
+}
+
+func (p *PartitionEnv) handleRequestCtx(a Action, timeoutCtx context.Context) (*Partition, error) {
+	_, isSendRequest := a.(*SendRequestAction)
+	if !isSendRequest {
+		return copyPartition(p.CurPartition), fmt.Errorf("handleRequestCtx : action is not send request")
+	}
+
+	nextState := copyPartition(p.CurPartition)
+	if nextState.CanDeliverRequest && len(nextState.PendingRequests) > 0 {
+		nextRequest := nextState.PendingRequests[0]
+		s, err := p.UnderlyingEnv.ReceiveRequestCtx(nextRequest, timeoutCtx) // call on the underlying environment
+		if err != nil {
+			return nil, err
+		}
+
+		newPartition := make([][]uint64, len(nextState.Partition))
+		for i := range nextState.Partition {
+			newPartition[i] = make([]uint64, 0)
+		}
+		for n, part := range nextState.PartitionMap {
+			newPartition[part] = append(newPartition[part], n)
+			rs := s.GetReplicaState(n)
+			color := p.painter.Color(rs)
+			if _, ok := nextState.ActiveNodes[n]; !ok {
+				color = &InActiveColor{Color: color}
+			}
+			nextState.ReplicaColors[n] = color
+			nextState.ReplicaStates[n] = rs
+		}
+
+		nextStatePartition := make([][]Color, len(newPartition))
+		for i, p := range newPartition {
+			partition := make([]Color, len(p))
+			for j, r := range p {
+				partition[j] = nextState.ReplicaColors[r]
+			}
+			sort.Sort(ColorSlice(partition))
+			nextStatePartition[i] = partition
+		}
+		sort.Sort(PartitionSlice(nextStatePartition))
+		nextState.Partition = nextStatePartition
+		nextState.RepeatCount = 0
+		nextState.PendingRequests = s.PendingRequests()     // reducing the number of pending requests is managed in the underlying env
+		nextState.CanDeliverRequest = s.CanDeliverRequest() // same for conditions to enable requests delivery
+
+		return nextState, nil
+	}
+
+	return nextState, nil
+}
+
+func (p *PartitionEnv) handlePartitionCtx(a Action, timeoutCtx context.Context) (*Partition, error) {
+	ca, isChange := a.(*CreatePartitionAction)
+	_, isKeepSame := a.(*KeepSamePartitionAction)
+
+	if !isChange && !isKeepSame {
+		return copyPartition(p.CurPartition), fmt.Errorf("handlePartitionCtx : invalid partition action")
+	}
+	nextState := copyPartition(p.CurPartition)
+	newPartition := make([][]uint64, len(p.CurPartition.Partition))
+	newPartitionMap := make(map[uint64]int)
+
+	if isChange {
+		// 1. Change partition
+		coloredReplicas := make(map[string][]uint64)
+		for r, c := range p.CurPartition.ReplicaColors {
+			cHash := c.Hash()
+			if _, ok := coloredReplicas[cHash]; !ok {
+				coloredReplicas[cHash] = make([]uint64, 0)
+			}
+			coloredReplicas[cHash] = append(coloredReplicas[cHash], r)
+		}
+		newPartition = make([][]uint64, len(ca.Partition))
+		for i, p := range ca.Partition {
+			newPartition[i] = make([]uint64, len(p))
+			for j, c := range p {
+				cHash := c.Hash()
+				nextReplica := coloredReplicas[cHash][0]
+				coloredReplicas[cHash] = coloredReplicas[cHash][1:]
+				newPartition[i][j] = nextReplica
+				newPartitionMap[nextReplica] = i
+			}
+		}
+	} else {
+		for i := range p.CurPartition.Partition {
+			newPartition[i] = make([]uint64, 0)
+		}
+		for r, i := range p.CurPartition.PartitionMap {
+			newPartition[i] = append(newPartition[i], r)
+			newPartitionMap[r] = i
+		}
+	}
+
+	var s PartitionedSystemState = nil
+	var err error
+
+	for i := 0; i < p.config.TicketBetweenPartition; i++ { // for the specified number of ticks between two partitions (action of the agent)
+		select {
+		case <-timeoutCtx.Done():
+			return nil, fmt.Errorf("handlePartitionCtx : episode timed out")
+		default:
+		}
+		messages := make([]Message, 0)
+		if s == nil {
+			for _, m := range p.messages { // in the beginning s is nil, use p.messages (stored from previous partition state)
+				messages = append(messages, m)
+			}
+		} else {
+			for _, m := range s.PendingMessages() { // these are produced in s at every tick?
+				messages = append(messages, m)
+			}
+		}
+
+		mToDeliver := 0
+		if len(messages) > 0 { // if there are messages to deliver
+			p.rand.Shuffle(len(messages), func(i, j int) { // randomize order of messages?
+				messages[i], messages[j] = messages[j], messages[i]
+			})
+
+			mToDeliver = min(len(messages), p.config.MaxMessagesPerTick) // randomly choose how many messages to deliver, up to specified bound
+			messagesToDeliver := make([]Message, 0)
+			messagesToDrop := make([]Message, 0)
+			for j := 0; j < mToDeliver; j++ {
+				if len(messages) > 0 {
+					next := messages[0] // take the first message
+					messages = messages[1:]
+					fromP, fromOk := newPartitionMap[next.From()]
+					toP, toOk := newPartitionMap[next.To()]
+					_, toActive := nextState.ActiveNodes[next.To()]
+					// check if partitioning allows delivery
+					if (!fromOk || !toOk || fromP == toP) && toActive { // deliver it
+						messagesToDeliver = append(messagesToDeliver, next)
+					} else { // drop it
+						messagesToDrop = append(messagesToDrop, next)
+					}
+
+				}
+			}
+			if len(messagesToDeliver) > 0 {
+				_, err = p.UnderlyingEnv.DeliverMessagesCtx(messagesToDeliver, timeoutCtx)
+				if err != nil {
+					return nil, err
+				}
+			}
+			if len(messagesToDrop) > 0 {
+				_, err = p.UnderlyingEnv.DropMessagesCtx(messagesToDrop, timeoutCtx)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+
+		p.recordStat("tick_messages_delivered", mToDeliver)
+		s, err = p.UnderlyingEnv.TickCtx(timeoutCtx) // make the tick pass on the environment
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	p.messages = make(map[string]Message)
+	for k, m := range s.PendingMessages() { // save pending messages for next state
+		p.messages[k] = m
+	}
+
+	for i := 0; i < p.NumReplicas; i++ {
+		id := uint64(i + 1)
+		rs := s.GetReplicaState(id)
+		color := p.painter.Color(rs)
+		if _, ok := nextState.ActiveNodes[id]; !ok {
+			color = &InActiveColor{Color: color}
+		}
+		nextState.ReplicaColors[id] = color // abstraction
+		nextState.ReplicaStates[id] = rs    // actual replica state
+	}
+
+	nextStatePartition := make([][]Color, len(newPartition))
+	for i, p := range newPartition {
+		partition := make([]Color, len(p))
+		for j, r := range p {
+			partition[j] = nextState.ReplicaColors[r]
+		}
+		sort.Sort(ColorSlice(partition))
+		nextStatePartition[i] = partition
+	}
+	sort.Sort(PartitionSlice(nextStatePartition))
+	nextState.Partition = nextStatePartition
+	nextState.PartitionMap = newPartitionMap
+	nextState.PendingRequests = s.PendingRequests()
+	nextState.CanDeliverRequest = s.CanDeliverRequest()
+
+	newRepeatCount := 0
+	if isSamePartition(nextState.Partition, p.CurPartition.Partition) {
+		newRepeatCount = p.CurPartition.RepeatCount + 1
+		if newRepeatCount > p.config.StaySameStateUpto {
+			newRepeatCount = p.config.StaySameStateUpto
+		}
+	}
+	nextState.RepeatCount = newRepeatCount
+
+	select {
+	case <-timeoutCtx.Done():
+		return nil, fmt.Errorf("handlePartitionCtx : episode timed out")
+	default:
+	}
+	return nextState, nil
+}
+
+func (p *PartitionEnv) handleStartStopCtx(a Action, timeoutCtx context.Context) (*Partition, error) {
+	ss, ok := a.(*StopStartAction)
+	if !ok {
+		return copyPartition(p.CurPartition), fmt.Errorf("handleStartStopCtx : episode timed out")
+	}
+
+	// Copy the cur state
+	nextState := copyPartition(p.CurPartition)
+
+	newActive := make(map[uint64]bool)
+	for i := range p.CurPartition.ActiveNodes {
+		newActive[i] = true
+	}
+	if ss.Action == "Stop" {
+		nextState.RemainingCrashes = nextState.RemainingCrashes - 1
+		// Stop random node of the color if active
+		activeNodes := make([]uint64, 0)
+		for node, c := range p.CurPartition.ReplicaColors {
+			if c.Hash() == ss.Color {
+				activeNodes = append(activeNodes, node)
+			}
+		}
+		if len(activeNodes) > 0 {
+			nodeI := p.rand.Intn(len(activeNodes))
+			node := activeNodes[nodeI]
+			start := time.Now()
+
+			err := p.UnderlyingEnv.StopCtx(node, timeoutCtx)
+			if err != nil {
+				return nil, err
+			}
+
+			p.recordStat("stop_times", time.Since(start))
+			delete(newActive, node)
+		}
+	} else if ss.Action == "Start" {
+		// Start a random inactive node
+		inactiveNodes := make([]uint64, 0)
+		for node := range p.CurPartition.ReplicaColors {
+			if _, ok := p.CurPartition.ActiveNodes[node]; !ok {
+				inactiveNodes = append(inactiveNodes, node)
+			}
+		}
+		if len(inactiveNodes) > 0 {
+			nodeI := p.rand.Intn(len(inactiveNodes))
+			node := inactiveNodes[nodeI]
+			start := time.Now()
+
+			err := p.UnderlyingEnv.StartCtx(node, timeoutCtx)
+			if err != nil {
+				return nil, err
+			}
+
+			p.recordStat("start_times", time.Since(start))
+			newActive[node] = true
+		}
+	}
+	// Update active nodes in Partition
+	nextState.ActiveNodes = make(map[uint64]bool)
+	for n := range newActive {
+		nextState.ActiveNodes[n] = true
+	}
+
+	s, err := p.UnderlyingEnv.TickCtx(timeoutCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	p.messages = make(map[string]Message)
+	for k, m := range s.PendingMessages() { // save pending messages for next state
+		p.messages[k] = m
+	}
+
+	for i := 0; i < p.NumReplicas; i++ {
+		id := uint64(i + 1)
+		rs := s.GetReplicaState(id)
+		_, active := nextState.ActiveNodes[id]
+		color := p.painter.Color(rs)
+		if !active {
+			color = &InActiveColor{Color: color}
+		}
+		nextState.ReplicaColors[id] = color // abstraction
+		nextState.ReplicaStates[id] = rs    // actual replica state
+	}
+
+	// Recolor based on active nodes and recompute the partition
+	newPartition := make([][]uint64, len(p.CurPartition.Partition))
+	inactivePart := make([]uint64, 0)
+	newActivePart := make([]uint64, 0)
+	for i := range p.CurPartition.Partition {
+		newPartition[i] = make([]uint64, 0)
+	}
+	for n, part := range p.CurPartition.PartitionMap {
+		_, newActive := newActive[n]
+		_, oldActive := p.CurPartition.ActiveNodes[n]
+
+		if newActive && oldActive {
+			newPartition[part] = append(newPartition[part], n)
+		} else if newActive && !oldActive {
+			newActivePart = append(newActivePart, n)
+		} else {
+			inactivePart = append(inactivePart, n)
+		}
+	}
+	newPartition = append(newPartition, newActivePart)
+	newPartition = append(newPartition, inactivePart)
+
+	tPartition := make([][]uint64, 0)
+	for _, part := range newPartition {
+		if len(part) == 0 {
+			continue
+		}
+		tPartition = append(tPartition, part)
+	}
+	newPartition = tPartition
+	for i, part := range newPartition {
+		for _, node := range part {
+			nextState.PartitionMap[node] = i
+		}
+	}
+
+	nextStatePartition := make([][]Color, len(newPartition))
+	for i, p := range newPartition {
+		partition := make([]Color, len(p))
+		for j, r := range p {
+			partition[j] = nextState.ReplicaColors[r]
+		}
+		sort.Sort(ColorSlice(partition))
+		nextStatePartition[i] = partition
+	}
+	sort.Sort(PartitionSlice(nextStatePartition))
+	nextState.Partition = nextStatePartition
+	nextState.PendingRequests = s.PendingRequests()
+	nextState.CanDeliverRequest = s.CanDeliverRequest()
+
+	if isSamePartition(nextStatePartition, p.CurPartition.Partition) {
+		nextState.RepeatCount = nextState.RepeatCount + 1
+		if nextState.RepeatCount > p.config.StaySameStateUpto {
+			nextState.RepeatCount = p.config.StaySameStateUpto
+		}
+	} else {
+		nextState.RepeatCount = 0
+	}
+
+	select {
+	case <-timeoutCtx.Done():
+		return nil, fmt.Errorf("handleStartStopCtx : episode timed out")
+	default:
+	}
+	return nextState, nil
+}
+
+func (p *PartitionEnv) resetCtx(timeoutCtx context.Context) error {
+	start := time.Now()
+	s, err := p.UnderlyingEnv.ResetCtx(timeoutCtx) // takes the state given by the reset function of the underlying environment
+	if err != nil {
+		return err
+	}
+	p.recordStat("reset_times", time.Since(start))
+
+	colors := make([]Color, p.NumReplicas)
+	curPartition := &Partition{
+		ReplicaColors:      make(map[uint64]Color),
+		PartitionMap:       make(map[uint64]int),
+		ReplicaStates:      make(map[uint64]ReplicaState),
+		Partition:          make([][]Color, 1),
+		RepeatCount:        0,
+		WithCrashes:        p.config.WithCrashes,
+		RemainingCrashes:   p.config.CrashLimit,
+		MaxInactive:        p.config.MaxInactive,
+		ActiveNodes:        make(map[uint64]bool),
+		PendingRequests:    s.PendingRequests(),
+		CanDeliverRequest:  s.CanDeliverRequest(),
+		WithByzantine:      p.config.WithByzantine,
+		RemainingByzantine: p.config.MaxByzantine,
+		ByzantineNodes:     make(map[uint64]bool),
+	}
+	for i := 0; i < p.NumReplicas; i++ {
+		id := uint64(i + 1)
+		rs := s.GetReplicaState(id)
+		color := p.painter.Color(rs)
+		colors[i] = color
+		curPartition.ReplicaStates[id] = rs
+		curPartition.PartitionMap[id] = 0
+		curPartition.ReplicaColors[id] = color
+		curPartition.ActiveNodes[id] = true
+	}
+	sort.Sort(ColorSlice(colors))
+	curPartition.Partition[0] = colors
+
+	select {
+	case <-timeoutCtx.Done():
+		return fmt.Errorf("resetCtx : episode timed out")
+	default:
+	}
+	p.CurPartition = curPartition
+	p.messages = make(map[string]Message)
+	for k, m := range s.PendingMessages() {
+		p.messages[k] = m
+	}
+
+	return nil
+}
+
+func (p *PartitionEnv) ResetCtx(timeoutCtx context.Context) (State, error) { // TODO: propagate errors
+	err := p.resetCtx(timeoutCtx)
+	if err != nil {
+		return nil, err
+	}
+	return copyPartition(p.CurPartition), nil
+}
+
+func (p *PartitionEnv) handleByzantineCtx(a Action, timeoutCtx context.Context) (*Partition, error) {
+	byzEnv, ok := p.UnderlyingEnv.(ByzantineEnvironment)
+	if !ok {
+		return copyPartition(p.CurPartition), fmt.Errorf("handleByzantineCtx : to define")
+	}
+	ba, ok := a.(*ByzantineAction)
+	if !ok {
+		return copyPartition(p.CurPartition), fmt.Errorf("handleByzantineCtx : to define")
+	}
+	nextState := copyPartition(p.CurPartition)
+	nonByzantineFilteredNodes := make([]uint64, 0)
+	for node, c := range p.CurPartition.ReplicaColors {
+		_, byzantine := p.CurPartition.ByzantineNodes[node]
+		if !byzantine && c.Hash() == ba.Color {
+			nonByzantineFilteredNodes = append(nonByzantineFilteredNodes, node)
+		}
+	}
+
+	if len(nonByzantineFilteredNodes) == 0 {
+		return nextState, fmt.Errorf("handleByzantineCtx : to define")
+	}
+
+	select {
+	case <-timeoutCtx.Done():
+		return nil, fmt.Errorf("resetCtx : episode timed out")
+	default:
+	}
+	toMakeByzantine := nonByzantineFilteredNodes[0]
+	byzEnv.BecomeByzantine(toMakeByzantine)
+
+	nextState.RemainingByzantine = nextState.RemainingByzantine - 1
+	nextState.ByzantineNodes[toMakeByzantine] = true
+	return nextState, nil
+}
+
+// UTILIY
 // Used for defining a strict policy
 // To always pick the "KeepSamePartitionAction"
 func PickKeepSame() func(actions []Action) (Action, bool) {

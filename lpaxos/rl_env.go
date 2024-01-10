@@ -1,6 +1,7 @@
 package lpaxos
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -141,7 +142,7 @@ type LPaxosEnv struct {
 	curState *LPaxosState
 }
 
-var _ types.Environment = &LPaxosEnv{}
+var _ types.EnvironmentUnion = &LPaxosEnv{}
 
 func NewLPaxosEnv(c LPaxosEnvConfig) *LPaxosEnv {
 	e := &LPaxosEnv{
@@ -279,4 +280,71 @@ func copyMessagesList(messages []Message) []Message {
 		newMessages[i] = m.Copy()
 	}
 	return newMessages
+}
+
+func (e *LPaxosEnv) StepCtx(a types.Action, timeoutCtx context.Context) (types.State, error) {
+	lAction := a.(*LPaxosAction)
+	switch lAction.Type {
+	case "Deliver":
+		if lAction.Message.Type == CommandMessage {
+			haveLeader := false
+			var leader uint64 = 0
+			for id, n := range e.curState.NodeStates {
+				if n.Leader == id {
+					leader = id
+					haveLeader = true
+					break
+				}
+			}
+			if haveLeader {
+				message := lAction.Message
+				message.T = leader
+				e.nodes[leader].Step(message)
+				delete(e.messages, message.Hash())
+			}
+		} else {
+			message := lAction.Message
+			e.nodes[message.T].Step(message)
+			delete(e.messages, message.Hash())
+		}
+		for _, node := range e.nodes {
+			ticks := 1
+			for i := 0; i < ticks; i++ {
+				node.Tick()
+			}
+		}
+		newState := &LPaxosState{
+			NodeStates:   make(map[uint64]LNodeState),
+			WithTimeouts: e.config.Timeouts,
+		}
+		for id, node := range e.nodes {
+			rd := node.Ready()
+			for _, m := range rd.Messages {
+				e.messages[m.Hash()] = m
+			}
+			newState.NodeStates[id] = node.Status()
+		}
+		newState.Messages = copyMessages(e.messages)
+		e.curState = newState
+		return newState, nil
+	case "Drop":
+		newMessages := make(map[string]Message)
+		for key, message := range e.messages {
+			if message.T != lAction.Node {
+				newMessages[key] = message
+			}
+		}
+		newState := &LPaxosState{
+			NodeStates:   copyNodeStates(e.curState.NodeStates),
+			Messages:     copyMessages(newMessages),
+			WithTimeouts: e.config.Timeouts,
+		}
+		e.curState = newState
+		return newState, nil
+	}
+	return nil, fmt.Errorf("StepCtx : invalid action type")
+}
+
+func (e *LPaxosEnv) ResetCtx(timeoutCtx context.Context) (types.State, error) {
+	return e.Reset(), nil
 }

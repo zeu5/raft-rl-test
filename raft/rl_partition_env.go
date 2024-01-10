@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -221,7 +222,7 @@ func (r RaftMessageWrapper) Copy() RaftMessageWrapper {
 var _ types.Message = RaftMessageWrapper{}
 var _ types.PartitionedSystemState = RaftState{}
 
-var _ types.PartitionedSystemEnvironment = &RaftPartitionEnv{}
+var _ types.PartitionedSystemEnvironmentUnion = &RaftPartitionEnv{}
 
 type RaftPartitionEnv struct {
 	*RaftEnvironment
@@ -442,4 +443,36 @@ func (p *RaftPartitionEnv) dropMessage(m types.Message) types.PartitionedSystemS
 	delete(newState.Messages, m.Hash())
 	p.curState = newState
 	return newState
+}
+
+// CTX
+
+func (r *RaftPartitionEnv) ResetCtx(timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+	return r.Reset(), nil
+}
+
+func (r *RaftPartitionEnv) TickCtx(timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+	return r.Tick(), nil
+}
+
+func (r *RaftPartitionEnv) DeliverMessagesCtx(messages []types.Message, timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+	return r.DeliverMessages(messages), nil
+}
+
+func (r *RaftPartitionEnv) DropMessagesCtx(messages []types.Message, timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+	return r.DropMessages(messages), nil
+}
+
+func (r *RaftPartitionEnv) ReceiveRequestCtx(req types.Request, timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+	return r.ReceiveRequest(req), nil
+}
+
+func (r *RaftPartitionEnv) StopCtx(nodeID uint64, timeoutCtx context.Context) error {
+	r.Stop(nodeID)
+	return nil
+}
+
+func (r *RaftPartitionEnv) StartCtx(nodeID uint64, timeoutCtx context.Context) error {
+	r.Start(nodeID)
+	return nil
 }

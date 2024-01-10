@@ -1,6 +1,7 @@
 package grid
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/zeu5/raft-rl-test/types"
@@ -33,7 +34,7 @@ type Door struct {
 	To   Position
 }
 
-var _ types.Environment = &GridEnvironment{}
+var _ types.EnvironmentUnion = &GridEnvironment{}
 
 func NewGridEnvironment(height, width, grids int, doors ...Door) *GridEnvironment {
 	return &GridEnvironment{
@@ -96,6 +97,58 @@ func (g *GridEnvironment) Step(a types.Action) types.State {
 	}
 	g.CurPos = newPos
 	return newPos
+}
+
+func (g *GridEnvironment) StepCtx(a types.Action, timeoutCtx context.Context) (types.State, error) {
+	movement := a.(*Movement)
+	newPos := &Position{I: g.CurPos.I, J: g.CurPos.J, K: g.CurPos.K}
+	if movement.Direction == "Next" {
+		for _, d := range g.Doors {
+			if d.From.Eq(*g.CurPos) {
+				newPos.I = d.To.I
+				newPos.J = d.To.J
+				newPos.K = d.To.K
+				g.CurPos = newPos
+				return newPos, nil
+			}
+		}
+	}
+
+	switch movement.Direction {
+	case "Nothing":
+	case "Up":
+		newPos.I = min(g.Height-1, g.CurPos.I+1)
+	case "Down":
+		newPos.I = max(0, g.CurPos.I-1)
+	case "Left":
+		newPos.J = max(0, g.CurPos.J-1)
+	case "Right":
+		newPos.J = min(g.Width-1, g.CurPos.J+1)
+	case "Next":
+		for _, d := range g.Doors { // check doors
+			if d.From.Eq(*g.CurPos) { // if there's a door in this position, transition to door.To
+				newPos.I = d.To.I
+				newPos.J = d.To.J
+				newPos.K = d.To.K
+				g.CurPos = newPos
+				return newPos, nil
+			}
+		}
+
+		// if g.CurPos.I == min(g.Height/2, g.Height-1) && g.CurPos.J == min(g.Width/2, g.Width-1) {
+		// 	if g.CurPos.K < g.Grids-1 {
+		// 		newPos.I = 0
+		// 		newPos.J = 0
+		// 		newPos.K = g.CurPos.K + 1
+		// 	}
+		// }
+	}
+	g.CurPos = newPos
+	return newPos, nil
+}
+
+func (g *GridEnvironment) ResetCtx(timeoutCtx context.Context) (types.State, error) {
+	return g.Reset(), nil
 }
 
 type Position struct {

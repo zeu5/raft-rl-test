@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -95,6 +97,7 @@ func dummyHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "ok"})
 }
 
+// copies all the messages from the InterceptNetwork, should not affect the network or other episodes
 func (n *InterceptNetwork) GetAllMessages() map[string]Message {
 	out := make(map[string]Message)
 	n.lock.Lock()
@@ -171,7 +174,7 @@ func (n *InterceptNetwork) Start() {
 		n.server.ListenAndServe()
 	}()
 
-	go func() { // what is this routine doing?
+	go func() { // what is this routine doing? wait for cancel signal and shutdown the server
 		<-n.ctx.Done()
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
@@ -208,7 +211,7 @@ func (n *InterceptNetwork) WaitForNodes(numNodes int) bool {
 }
 
 // send a message from the list given its id
-func (n *InterceptNetwork) SendMessage(id string) {
+func (n *InterceptNetwork) SendMessage(id string) error {
 	n.lock.Lock()
 	m, ok1 := n.messages[id] // get message from the list
 	nodeAddr := ""
@@ -218,13 +221,13 @@ func (n *InterceptNetwork) SendMessage(id string) {
 	n.lock.Unlock()
 
 	if !ok1 { // if message not present, return
-		return
+		return errors.New("SendMessage : read message is invalid")
 	}
 
 	// marshal the message to send it
 	bs, err := json.Marshal(m)
 	if err != nil {
-		return
+		return errors.New("SendMessage : error marshaling the message")
 	}
 
 	// set up http client to send it?
@@ -246,12 +249,16 @@ func (n *InterceptNetwork) SendMessage(id string) {
 	if err == nil { // what happens here?
 		io.ReadAll(resp.Body)
 		resp.Body.Close()
+	} else {
+		return fmt.Errorf(fmt.Sprintf("SendMessage : error with post operation /n%s", err))
 	}
 
 	// take the lock and delete the sent message from the list
 	n.lock.Lock()
 	delete(n.messages, id)
 	n.lock.Unlock()
+
+	return nil
 }
 
 // delete a message from the list given its id, if there is no such message => no-op

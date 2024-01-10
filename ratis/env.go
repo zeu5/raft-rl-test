@@ -68,7 +68,7 @@ func NewRatisRaftEnv(ctx context.Context, clusterConfig *RatisClusterConfig) *Ra
 	return e
 }
 
-func (r RatisRaftEnv) ReceiveRequest(types.Request) types.PartitionedSystemState {
+func (r *RatisRaftEnv) ReceiveRequest(types.Request) types.PartitionedSystemState {
 	newState := r.curState.Copy()
 	r.curState = newState
 	return newState
@@ -155,4 +155,36 @@ func (r *RatisRaftEnv) Tick() types.PartitionedSystemState {
 	return newState
 }
 
-var _ types.PartitionedSystemEnvironment = &RatisRaftEnv{}
+var _ types.PartitionedSystemEnvironmentUnion = &RatisRaftEnv{}
+
+// CTX
+
+func (r *RatisRaftEnv) ResetCtx(timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+	return r.Reset(), nil
+}
+
+func (r *RatisRaftEnv) TickCtx(timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+	return r.Tick(), nil
+}
+
+func (r *RatisRaftEnv) DeliverMessagesCtx(messages []types.Message, timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+	return r.DeliverMessages(messages), nil
+}
+
+func (r *RatisRaftEnv) DropMessagesCtx(messages []types.Message, timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+	return r.DropMessages(messages), nil
+}
+
+func (r *RatisRaftEnv) ReceiveRequestCtx(req types.Request, timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+	return r.ReceiveRequest(req), nil
+}
+
+func (r *RatisRaftEnv) StopCtx(nodeID uint64, timeoutCtx context.Context) error {
+	r.Stop(nodeID)
+	return nil
+}
+
+func (r *RatisRaftEnv) StartCtx(nodeID uint64, timeoutCtx context.Context) error {
+	r.Start(nodeID)
+	return nil
+}

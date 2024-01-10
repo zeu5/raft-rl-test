@@ -49,7 +49,7 @@ func PaxosPart(episodes, horizon int, saveFile string, requests int) {
 	c.Run()
 }
 
-func getLPaxosPartEnv(config lpaxos.LPaxosEnvConfig, part bool) types.Environment {
+func getLPaxosPartEnv(config lpaxos.LPaxosEnvConfig, part bool) types.EnvironmentUnion {
 	if part {
 		colors := []lpaxos.LColorFunc{lpaxos.ColorStep(), lpaxos.ColorDecided(), lpaxos.ColorLeader()}
 		return types.NewPartitionEnv(types.PartitionEnvConfig{

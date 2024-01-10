@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -245,6 +246,8 @@ type RaftEnvironment struct {
 	rand     *rand.Rand
 }
 
+var _ types.EnvironmentUnion = &RaftEnvironment{}
+
 func NewRaftEnvironment(config RaftEnvironmentConfig) *RaftEnvironment {
 	r := &RaftEnvironment{
 		config:   config,
@@ -409,6 +412,83 @@ func (r *RaftEnvironment) Step(action types.Action) types.State {
 		return newState
 	}
 	return nil
+}
+
+func (r *RaftEnvironment) StepCtx(action types.Action, timeoutCtx context.Context) (types.State, error) {
+	raftAction := action.(*RaftAction)
+	switch raftAction.Type {
+	case "DeliverMessage":
+		// MsgProp - test harness messages are handled specially
+		// These messages need to be delivered to the leader
+		// If there is no leader then just don't do anything
+		if raftAction.Message.Type == pb.MsgProp {
+			haveLeader := false
+			leader := uint64(0)
+			for id, node := range r.nodes {
+				if node.Status().RaftState == raft.StateLeader {
+					haveLeader = true
+					leader = id
+					break
+				}
+			}
+			if haveLeader {
+				message := raftAction.Message
+				message.To = leader
+				r.nodes[leader].Step((message))
+				delete(r.messages, msgKey(message))
+			}
+		} else {
+			node := r.nodes[raftAction.Message.To]
+			node.Step(raftAction.Message)
+			delete(r.messages, msgKey(raftAction.Message))
+		}
+		// Take random number of ticks and update node states
+		for _, node := range r.nodes {
+			node.Tick()
+		}
+		// Update the state and return it
+		newState := RaftState{
+			NodeStates:   make(map[uint64]raft.Status),
+			WithTimeouts: r.config.Timeouts,
+		}
+		for id, node := range r.nodes {
+			if node.HasReady() {
+				ready := node.Ready()
+				if !raft.IsEmptySnap(ready.Snapshot) {
+					r.storages[id].ApplySnapshot(ready.Snapshot)
+				}
+				r.storages[id].Append(ready.Entries)
+				// Checking for new messages
+				for _, message := range ready.Messages {
+					r.messages[msgKey(message)] = message
+				}
+				node.Advance(ready)
+			}
+			newState.NodeStates[id] = node.Status()
+		}
+		newState.Messages = copyMessages(r.messages)
+		r.curState = newState
+		return newState, nil
+	case "TimeoutProcess":
+		newMessages := make(map[string]pb.Message)
+		for key, message := range r.messages {
+			if message.To != raftAction.Replica {
+				newMessages[key] = message
+			}
+		}
+		newState := RaftState{
+			NodeStates:   copyNodeStates(r.curState.NodeStates),
+			Messages:     copyMessages(newMessages),
+			WithTimeouts: r.config.Timeouts,
+		}
+		r.curState = newState
+		return newState, nil
+	}
+	return nil, fmt.Errorf("StepCtx : invalid action type")
+}
+
+func (r *RaftEnvironment) ResetCtx(timeoutCtx context.Context) (types.State, error) {
+	return r.Reset(), nil
 }
 
 func copyNodeStates(nodeStates map[uint64]raft.Status) map[uint64]raft.Status {

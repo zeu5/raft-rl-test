@@ -86,6 +86,8 @@ type CometEnv struct {
 	curState *CometClusterState
 }
 
+var _ types.PartitionedSystemEnvironmentUnion = &CometEnv{}
+
 // For a given config, should only be instantiated once since it spins up a sever and binds the addr:port
 func NewCometEnv(ctx context.Context, clusterConfig *CometClusterConfig) *CometEnv {
 	e := &CometEnv{
@@ -239,4 +241,34 @@ func (r *CometEnv) Tick() types.PartitionedSystemState {
 	return newState
 }
 
-var _ types.PartitionedSystemEnvironment = &CometEnv{}
+// CTX
+
+func (r *CometEnv) ResetCtx(timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+	return r.Reset(), nil
+}
+
+func (r *CometEnv) TickCtx(timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+	return r.Tick(), nil
+}
+
+func (r *CometEnv) DeliverMessagesCtx(messages []types.Message, timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+	return r.DeliverMessages(messages), nil
+}
+
+func (r *CometEnv) DropMessagesCtx(messages []types.Message, timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+	return r.DropMessages(messages), nil
+}
+
+func (r *CometEnv) ReceiveRequestCtx(req types.Request, timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+	return r.ReceiveRequest(req), nil
+}
+
+func (r *CometEnv) StopCtx(nodeID uint64, timeoutCtx context.Context) error {
+	r.Stop(nodeID)
+	return nil
+}
+
+func (r *CometEnv) StartCtx(nodeID uint64, timeoutCtx context.Context) error {
+	r.Start(nodeID)
+	return nil
+}

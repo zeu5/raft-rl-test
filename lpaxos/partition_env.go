@@ -1,6 +1,7 @@
 package lpaxos
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -95,7 +96,7 @@ type LPaxosPartitionEnv struct {
 	*LPaxosEnv
 }
 
-var _ types.PartitionedSystemEnvironment = &LPaxosPartitionEnv{}
+var _ types.PartitionedSystemEnvironmentUnion = &LPaxosPartitionEnv{}
 
 func NewLPaxosPartitionEnv(c LPaxosEnvConfig) *LPaxosPartitionEnv {
 	return &LPaxosPartitionEnv{
@@ -225,4 +226,36 @@ func (l *LPaxosPartitionEnv) DropMessages(messages []types.Message) types.Partit
 		s = l.dropMessage(m)
 	}
 	return s
+}
+
+// CTX
+
+func (r *LPaxosPartitionEnv) ResetCtx(timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+	return r.Reset(), nil
+}
+
+func (r *LPaxosPartitionEnv) TickCtx(timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+	return r.Tick(), nil
+}
+
+func (r *LPaxosPartitionEnv) DeliverMessagesCtx(messages []types.Message, timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+	return r.DeliverMessages(messages), nil
+}
+
+func (r *LPaxosPartitionEnv) DropMessagesCtx(messages []types.Message, timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+	return r.DropMessages(messages), nil
+}
+
+func (r *LPaxosPartitionEnv) ReceiveRequestCtx(req types.Request, timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+	return r.ReceiveRequest(req), nil
+}
+
+func (r *LPaxosPartitionEnv) StopCtx(nodeID uint64, timeoutCtx context.Context) error {
+	r.Stop(nodeID)
+	return nil
+}
+
+func (r *LPaxosPartitionEnv) StartCtx(nodeID uint64, timeoutCtx context.Context) error {
+	r.Start(nodeID)
+	return nil
 }

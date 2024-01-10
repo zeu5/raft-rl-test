@@ -86,7 +86,7 @@ func RSLExploration() {
 	c.Run()
 }
 
-func GetRSLEnvironment(c rsl.RSLEnvConfig, colors []rsl.RSLColorFunc) types.Environment {
+func GetRSLEnvironment(c rsl.RSLEnvConfig, colors []rsl.RSLColorFunc) types.EnvironmentUnion {
 	return types.NewPartitionEnv(types.PartitionEnvConfig{
 		Painter:                rsl.NewRSLPainter(colors...),
 		Env:                    rsl.NewRLSPartitionEnv(c),

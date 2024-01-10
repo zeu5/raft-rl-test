@@ -44,7 +44,7 @@ func Raft(episodes, horizon int, saveFile string) {
 	c.Run()
 }
 
-func getRaftEnv(config raft.RaftEnvironmentConfig, abstractor string) types.Environment {
+func getRaftEnv(config raft.RaftEnvironmentConfig, abstractor string) types.EnvironmentUnion {
 	if abstractor == "none" {
 		return raft.NewRaftEnvironment(config)
 	}

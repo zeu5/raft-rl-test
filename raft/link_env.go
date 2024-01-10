@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -168,6 +169,73 @@ func (r *LinkRaftEnvironment) Reset() types.State {
 }
 
 func (r *LinkRaftEnvironment) Step(action types.Action) types.State {
+	linkAction := action.(*LinkAction)
+	message, ok := r.popMessage(linkAction.From, linkAction.To)
+	if !ok {
+		return r.curState
+	}
+	switch linkAction.Action {
+	case "Deliver":
+		if message.Type == pb.MsgProp {
+			haveLeader := false
+			leader := uint64(0)
+			for id, node := range r.nodes {
+				if node.Status().RaftState == raft.StateLeader {
+					haveLeader = true
+					leader = id
+					break
+				}
+			}
+			if haveLeader {
+				message.To = leader
+				r.nodes[leader].Step((message))
+			} else {
+				r.addMessage(message)
+			}
+		} else {
+			node := r.nodes[message.To]
+			node.Step(message)
+		}
+		// Take random number of ticks and update node states
+		for _, node := range r.nodes {
+			ticks := 6
+			for i := 0; i < ticks; i++ {
+				node.Tick()
+			}
+		}
+		newState := &LinkRaftState{
+			NodeStates: make(map[uint64]raft.Status),
+			Timeouts:   r.config.Timeouts,
+		}
+		for id, node := range r.nodes {
+			if node.HasReady() {
+				ready := node.Ready()
+				if !raft.IsEmptySnap(ready.Snapshot) {
+					r.storages[id].ApplySnapshot(ready.Snapshot)
+				}
+				r.storages[id].Append(ready.Entries)
+				for _, message := range ready.Messages {
+					r.addMessage(message)
+				}
+				node.Advance(ready)
+			}
+			newState.NodeStates[id] = node.Status()
+		}
+		newState.MessageLinks = r.messages
+		r.curState = newState
+		return newState
+	case "Drop":
+		newState := &LinkRaftState{
+			NodeStates:   r.curState.NodeStates,
+			MessageLinks: r.messages,
+		}
+		r.curState = newState
+		return newState
+	}
+	return nil
+}
+
+func (r *LinkRaftEnvironment) StepCtx(action types.Action, timeoutCtx context.Context) types.State {
 	linkAction := action.(*LinkAction)
 	message, ok := r.popMessage(linkAction.From, linkAction.To)
 	if !ok {

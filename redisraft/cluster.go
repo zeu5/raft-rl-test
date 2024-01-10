@@ -194,17 +194,17 @@ func (r *RedisNode) Start() error {
 	return r.process.Start()
 }
 
-func (r *RedisNode) Cleanup() {
-	os.RemoveAll(r.config.WorkingDir)
+func (r *RedisNode) Cleanup() error {
+	return os.RemoveAll(r.config.WorkingDir)
 }
 
 func (r *RedisNode) Stop() error {
 	if r.ctx == nil || r.process == nil {
-		return errors.New("redis server not started")
+		return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Stop : redis server not started", r.ID))
 	}
 	select {
 	case <-r.ctx.Done():
-		return errors.New("redis server already stopped")
+		return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Stop : redis server already stopped", r.ID))
 	default:
 	}
 	r.cancel()
@@ -213,18 +213,28 @@ func (r *RedisNode) Stop() error {
 	r.cancel = func() {}
 	r.process = nil
 
+	if err != nil {
+		return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Stop : \n%s", r.ID, err))
+	}
 	return err
 }
 
 func (r *RedisNode) Terminate() error {
-	r.Stop()
-	r.Cleanup()
+	err := r.Stop()
+	if err != nil {
+		return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Terminate : \n%s", r.ID, err))
+	}
+
+	err = r.Cleanup()
+	if err != nil {
+		return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Terminate : \n%s", r.ID, err))
+	}
 
 	stdout := strings.ToLower(r.stdout.String())
 	stderr := strings.ToLower(r.stderr.String())
 
 	if strings.Contains(stdout, "redis bug report") || strings.Contains(stderr, "redis bug report") {
-		return errors.New("failed to terminate: redis crashed")
+		return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Terminate : failed to terminate, redis crashed", r.ID))
 	}
 	return nil
 }

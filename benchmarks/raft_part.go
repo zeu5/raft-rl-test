@@ -69,7 +69,7 @@ func RaftPart(episodes, horizon int, saveFile string) {
 	c.Run()
 }
 
-func getRaftPartEnv(config raft.RaftEnvironmentConfig, colors []raft.RaftColorFunc) types.Environment {
+func getRaftPartEnv(config raft.RaftEnvironmentConfig, colors []raft.RaftColorFunc) types.EnvironmentUnion {
 	return types.NewPartitionEnv(types.PartitionEnvConfig{
 		Painter:                raft.NewRaftStatePainter(colors...),  // pass the abstraction to env
 		Env:                    raft.NewPartitionEnvironment(config), // actual environment
@@ -82,7 +82,7 @@ func getRaftPartEnv(config raft.RaftEnvironmentConfig, colors []raft.RaftColorFu
 	})
 }
 
-func getRaftPartEnvCfg(config raft.RaftEnvironmentConfig, colors []raft.RaftColorFunc, rlConfig raft.RLConfig) types.Environment {
+func getRaftPartEnvCfg(config raft.RaftEnvironmentConfig, colors []raft.RaftColorFunc, rlConfig raft.RLConfig) types.EnvironmentUnion {
 
 	return types.NewPartitionEnv(types.PartitionEnvConfig{
 		Painter:                raft.NewRaftStatePainter(colors...),  // pass the abstraction to env

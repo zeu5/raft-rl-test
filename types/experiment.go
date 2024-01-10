@@ -90,55 +90,14 @@ func (e *Experiment) Run(ctx context.Context) {
 // Additionally, for each iteration, check if any of the properties have been satisfied
 func (e *Experiment) RunWithTimeout(ctx context.Context, timeOut int, savePath string) {
 	agent := NewAgent(e.AgentConfig)
-	timedOut := 0
+
+	var timedOut = new(int)
+	*timedOut = 0
+
 	episodeTimes := make([]time.Duration, 0)
 
 	for i := 0; i < e.Episodes; i++ {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-		fmt.Printf("\rExperiment: %s, Episode: %d/%d, Timed out: %d", e.Name, i+1, e.Episodes, timedOut)
-
-		res := make(chan *Trace) // channel to put the episode trace
-
-		toCtx, toCancel := context.WithTimeout(context.Background(), time.Duration(timeOut)*time.Second)
-
-		start := time.Now()
-
-		go func(ctx context.Context, toCtx context.Context) {
-			trace := agent.runEpisodeWithTimeout(i, ctx, toCtx)
-
-			res <- trace
-
-		}(ctx, toCtx)
-
-		select {
-		case <-toCtx.Done():
-			// Timeout occured
-			timedOut += 1
-			episodeTimes = append(episodeTimes, time.Duration(0))
-
-		case trace := <-res:
-			// episode completed
-			dur := time.Since(start)
-			episodeTimes = append(episodeTimes, dur)
-
-			// trace := <-res
-			agent.traces = append(agent.traces, trace)
-
-			if e.hasProperties() {
-				for i, prop := range e.Properties {
-					if _, ok := prop.Check(trace); ok {
-						e.PropertiesStats[i] += 1
-					}
-				}
-			}
-
-		}
-
-		toCancel() // should it be called?
+		e.runEpisodeWithTimeout(ctx, timeOut, savePath, agent, i, timedOut, &episodeTimes)
 
 		if len(episodeTimes) == 10 {
 			e.printEpTimesMs(episodeTimes, savePath)
@@ -154,6 +113,68 @@ func (e *Experiment) RunWithTimeout(ctx context.Context, timeOut int, savePath s
 			fmt.Printf("Property %d satisfied in %d episodes\n", i+1, count)
 		}
 	}
+}
+
+func (e *Experiment) runEpisodeWithTimeout(ctx context.Context, timeOut int, savePath string, agent *Agent, i int, timedOut *int, episodeTimes *[]time.Duration) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered. Error: ", r)
+
+			return
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
+	fmt.Printf("\rExperiment: %s, Episode: %d/%d, Timed out: %d", e.Name, i+1, e.Episodes, *timedOut)
+
+	res := make(chan *Trace, 1) // channel to put the episode trace
+
+	toCtx, toCancel := context.WithTimeout(context.Background(), time.Duration(timeOut)*time.Second)
+
+	start := time.Now()
+
+	go func(ctx context.Context, toCtx context.Context) {
+		trace, err := agent.runEpisodeWithTimeout(i, ctx, toCtx)
+		select {
+		case <-toCtx.Done():
+			fmt.Println(fmt.Errorf("episode %d - %s", i, err))
+		default:
+			res <- trace
+		}
+		// print here
+		// fmt.Printf("episode goroutine end")
+	}(ctx, toCtx)
+
+	select {
+	case <-toCtx.Done():
+		// Timeout occured
+		*timedOut += 1
+		*episodeTimes = append(*episodeTimes, time.Duration(0))
+
+	case trace := <-res:
+		// episode completed
+		dur := time.Since(start)
+		*episodeTimes = append(*episodeTimes, dur)
+
+		// trace := <-res
+		agent.traces = append(agent.traces, trace)
+
+		if e.hasProperties() {
+			for i, prop := range e.Properties {
+				if _, ok := prop.Check(trace); ok {
+					e.PropertiesStats[i] += 1
+				}
+			}
+		}
+
+	}
+
+	toCancel() // should it be called?
+	close(res)
 }
 
 func (e *Experiment) printEpTimesMs(epTimes []time.Duration, basePath string) {

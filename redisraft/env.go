@@ -2,6 +2,7 @@ package redisraft
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -91,6 +92,8 @@ type RedisRaftEnv struct {
 	savePath          string
 	printStats        bool // if true, store stats to files -- needs to be set with the setter method
 }
+
+var _ types.PartitionedSystemEnvironmentUnion = &RedisRaftEnv{}
 
 // For a given config, should only be instantiated once since it spins up a sever and binds the addr:port
 func NewRedisRaftEnv(ctx context.Context, clusterConfig *ClusterConfig, savePath ...string) *RedisRaftEnv {
@@ -468,6 +471,401 @@ func (r *RedisRaftEnv) Tick() types.PartitionedSystemState {
 	r.curState = newState
 	return newState
 }
+
+// CTX
+
+func (r *RedisRaftEnv) ResetCtx(timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+	// fmt.Print("Reset function") // DEBUG
+	if r.cluster != nil {
+		e := r.cluster.Destroy()
+		if e != nil {
+			return nil, e
+		}
+	}
+	r.network.Reset()
+	r.cluster = NewCluster(r.clusterConfig)
+
+	// try to restart the cluster for a few times until it does not return an error
+	trials := 0
+	var err error
+	for {
+		select {
+		case <-timeoutCtx.Done():
+			return nil, errors.New("ResetCtx : episode timed out")
+		default:
+		}
+
+		err := r.cluster.Start()
+		if err == nil || trials > 5 {
+			break
+		} else {
+			if r.cluster != nil {
+				r.cluster.Destroy()
+			}
+			r.network.Reset()
+			r.cluster = NewCluster(r.clusterConfig)
+			trials++
+			time.Sleep(2 * time.Second)
+		}
+	}
+
+	if err != nil {
+		return nil, errors.New("ResetCtx : failed to start cluster after 5 retries")
+	}
+
+	r.network.WaitForNodes(r.clusterConfig.NumNodes)
+
+	newState := &RedisClusterState{
+		NodeStates: r.cluster.GetNodeStates(),
+		Messages:   r.network.GetAllMessages(),
+		Requests:   make([]RedisRequest, r.clusterConfig.NumRequests),
+	}
+	for i := 0; i < r.clusterConfig.NumRequests; i++ {
+		req := RedisRequest{Type: "Incr"}
+		// if rand.Intn(2) == 1 {
+		// 	req.Type = "Get"
+		// }
+		newState.Requests[i] = req.Copy()
+	}
+
+	select {
+	case <-timeoutCtx.Done():
+		return nil, errors.New("ResetCtx : episode timed out")
+	default:
+	}
+
+	r.curState = newState
+
+	if len(r.timeTickDurations[r.timeEpIndex]) > 0 { // time stats
+		// fmt.Print("printing one episode\n") // DEBUG
+		if r.printStats {
+			fileName := fmt.Sprintf("ticks_episode_%d", r.timeEpIndex) // start counting episodes from zero
+			filePath := path.Join(r.savePath, fileName)
+			text := ""
+			text = fmt.Sprintf("%s Number of ticks: %d\n", text, len(r.timeTickDurations[r.timeEpIndex]))
+			for i := 0; i < len(r.timeTickDurations[r.timeEpIndex]); i++ {
+				text = fmt.Sprintf("%s %d", text, r.timeTickDurations[r.timeEpIndex][i])
+			}
+			// fmt.Print(text) // DEBUG
+			types.WriteToFile(filePath, text)
+
+			fileName = fmt.Sprintf("timeStats_episode_%d", r.timeEpIndex) // start counting episodes from zero
+			filePath = path.Join(r.savePath, fileName)
+			text = PrintableTimeStats(r.timeStats)
+			text = text + "\n" + PrintableIntStats(r.intStats)
+			types.WriteToFile(filePath, text)
+
+			// set up new list and index
+			r.timeTickDurations = append(r.timeTickDurations, make([]int64, 0)) // add a new episode as a list
+			r.timeEpIndex = len(r.timeTickDurations) - 1                        // set the current episode index as the last entry in the list of lists
+		} else { // just reset ticks list
+			r.timeTickDurations[r.timeEpIndex] = make([]int64, 0)
+		}
+
+		r.ResetStats() // reset stats lists for the new episode
+	}
+
+	// for tick length recording
+	// fmt.Print("update list") // DEBUG
+
+	r.timeLastRecorded = time.Now().UnixMicro() // store current system time
+
+	return newState, nil
+}
+
+func (r *RedisRaftEnv) StartCtx(nodeID uint64, timeoutCtx context.Context) error {
+	if r.cluster == nil {
+		return errors.New("StartCtx : Cluster is nil")
+	}
+	node, ok := r.cluster.GetNode(int(nodeID))
+	if !ok {
+		return fmt.Errorf(fmt.Sprintf("StartCtx : Failed to get node %d", int(nodeID)))
+	}
+
+	start := time.Now()
+
+	e := node.Start()
+	if e != nil {
+		return e
+	}
+
+	dur := time.Since(start)
+
+	r.UpdateTimeStatsCtx("start_times", dur, timeoutCtx) // time stats
+
+	return nil
+}
+
+func (r *RedisRaftEnv) StopCtx(nodeID uint64, timeoutCtx context.Context) error {
+	if r.cluster == nil {
+		return errors.New("StopCtx : Cluster is nil")
+	}
+	node, ok := r.cluster.GetNode(int(nodeID))
+	if !ok {
+		return fmt.Errorf(fmt.Sprintf("StopCtx : Failed to get node %d", int(nodeID)))
+	}
+
+	start := time.Now()
+
+	e := node.Stop() // TODO: check the error?
+	if e != nil {
+		return e
+	}
+
+	dur := time.Since(start)
+
+	r.UpdateTimeStatsCtx("stop_times", dur, timeoutCtx) // time stats
+
+	return nil
+}
+
+func (r *RedisRaftEnv) CleanupCtx() {
+	if r.cluster != nil {
+		r.cluster.Destroy()
+		r.cluster = nil
+	}
+}
+
+func (r *RedisRaftEnv) DeliverMessagesCtx(messages []types.Message, timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+	select {
+	case <-timeoutCtx.Done():
+		return nil, errors.New("DeliverMessagesCtx : episode timed out")
+	default:
+	}
+	start := time.Now() // time stats
+
+	wg := new(sync.WaitGroup)    // create WaitGroup
+	for _, m := range messages { // foreach message
+		rm, ok := m.(Message) // cast into redis message
+		if !ok {              // if fails return current state?
+			return r.curState, fmt.Errorf("DeliverMessagesCtx : failed to cast into Message")
+		}
+		wg.Add(1) // increase waitgroup counter
+
+		// routine calling the send message and decreasing the counter upon completion
+		go func(rm Message, wg *sync.WaitGroup) {
+			err := r.network.SendMessage(rm.ID)
+			if err != nil {
+				fmt.Println("DeliverMessagesCtx : error sending message ", err) // TODO: propagate the error???
+			}
+			wg.Done()
+		}(rm, wg)
+	}
+	wg.Wait() // wait for all routines to return
+
+	dur := time.Since(start)                                 // time stats
+	r.UpdateTimeStatsCtx("DeliverMessages", dur, timeoutCtx) // time stats
+
+	newState := &RedisClusterState{
+		NodeStates: make(map[uint64]*RedisNodeState),
+		Requests:   copyRequests(r.curState.Requests),
+	}
+	for id, s := range r.curState.NodeStates {
+		newState.NodeStates[id] = s.Copy()
+	}
+	start2 := time.Now() // time stats
+
+	newState.Messages = r.network.GetAllMessages()
+	r.UpdateIntStatsCtx("NumberOfMessages", len(messages), timeoutCtx) // int stats
+
+	dur2 := time.Since(start2)                               // time stats
+	r.UpdateTimeStatsCtx("GetAllMessages", dur2, timeoutCtx) // time stats
+
+	select {
+	case <-timeoutCtx.Done():
+		return nil, errors.New("DeliverMessagesCtx : episode timed out")
+	default:
+	}
+	r.curState = newState
+
+	return newState, nil
+}
+
+func (r *RedisRaftEnv) DropMessagesCtx(messages []types.Message, timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+	select {
+	case <-timeoutCtx.Done():
+		return nil, errors.New("DropMessagesCtx : episode timed out")
+	default:
+	}
+
+	start := time.Now() // time stats
+
+	wg := new(sync.WaitGroup)
+	for _, m := range messages {
+		rm, ok := m.(Message)
+		if !ok {
+			return r.curState, fmt.Errorf("DropMessagesCtx : failed to cast into Message")
+		}
+
+		wg.Add(1)
+
+		go func(rm Message, wg *sync.WaitGroup) {
+			r.network.DeleteMessage(rm.ID)
+			wg.Done()
+		}(rm, wg)
+	}
+	wg.Wait()
+
+	newState := &RedisClusterState{
+		NodeStates: make(map[uint64]*RedisNodeState),
+		Requests:   copyRequests(r.curState.Requests),
+	}
+	for id, s := range r.curState.NodeStates {
+		newState.NodeStates[id] = s.Copy()
+	}
+
+	start2 := time.Now() // time stats
+
+	newState.Messages = r.network.GetAllMessages()
+	r.UpdateIntStatsCtx("NumberOfMessages", len(messages), timeoutCtx) // int stats
+
+	dur2 := time.Since(start2)                               // time stats
+	r.UpdateTimeStatsCtx("GetAllMessages", dur2, timeoutCtx) // time stats
+
+	select {
+	case <-timeoutCtx.Done():
+		return nil, errors.New("DeliverMessagesCtx : episode timed out")
+	default:
+	}
+	r.curState = newState
+
+	dur := time.Since(start)                              // time stats
+	r.UpdateTimeStatsCtx("DropMessages", dur, timeoutCtx) // time stats
+
+	return newState, nil
+}
+
+func (r *RedisRaftEnv) TickCtx(timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+	time.Sleep(time.Duration(r.clusterConfig.TickLength) * time.Millisecond)
+	select {
+	case <-timeoutCtx.Done():
+		return nil, errors.New("TickCtx : episode timed out")
+	default:
+	}
+
+	timeCurrent := time.Now().UnixMicro()                                                           // read current time
+	timeDifference := timeCurrent - r.timeLastRecorded                                              // compute difference with previously stored
+	r.timeLastRecorded = timeCurrent                                                                // store new time
+	r.timeTickDurations[r.timeEpIndex] = append(r.timeTickDurations[r.timeEpIndex], timeDifference) // add an entry in the episode with the recorded time gap
+
+	start := time.Now()
+
+	nStates := r.cluster.GetNodeStates()
+
+	dur := time.Since(start)                               // time stats
+	r.UpdateTimeStatsCtx("GetNodeStates", dur, timeoutCtx) // time stats
+
+	start = time.Now()
+
+	messages := r.network.GetAllMessages()
+	r.UpdateIntStatsCtx("NumberOfMessages", len(messages), timeoutCtx) // int stats
+
+	dur = time.Since(start)                                 // time stats
+	r.UpdateTimeStatsCtx("GetAllMessages", dur, timeoutCtx) // time stats
+
+	newState := &RedisClusterState{
+		NodeStates: nStates,
+		Messages:   messages,
+		Requests:   copyRequests(r.curState.Requests),
+	}
+
+	select {
+	case <-timeoutCtx.Done():
+		return nil, errors.New("TickCtx : episode timed out")
+	default:
+	}
+	r.curState = newState
+	return newState, nil
+}
+
+func (r *RedisRaftEnv) ReceiveRequestCtx(req types.Request, timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+	select {
+	case <-timeoutCtx.Done():
+		return nil, errors.New("ReceiveRequestCtx : episode timed out")
+	default:
+	}
+
+	newState := &RedisClusterState{
+		NodeStates: make(map[uint64]*RedisNodeState),
+		Requests:   make([]RedisRequest, 0),
+		Messages:   r.network.GetAllMessages(),
+	}
+	for n, s := range r.curState.NodeStates {
+		newState.NodeStates[n] = s.Copy()
+	}
+
+	haveLeader := false
+	leaderId := 0
+	for id, s := range r.curState.NodeStates {
+		if s.State == "leader" {
+			haveLeader = true
+			leaderId = int(id)
+			break
+		}
+	}
+
+	remainingRequests := make([]RedisRequest, len(r.curState.Requests))
+	for i, re := range r.curState.Requests {
+		remainingRequests[i] = re.Copy()
+	}
+
+	select {
+	case <-timeoutCtx.Done():
+		return nil, errors.New("ReceiveRequestCtx : episode timed out")
+	default:
+	}
+	if haveLeader {
+		redisReq := req.(RedisRequest)
+		if redisReq.Type == "Incr" {
+			r.cluster.ExecuteAsync(leaderId, "INCR", "test")
+		} else {
+			r.cluster.ExecuteAsync(leaderId, "GET", "test")
+		}
+		remainingRequests = remainingRequests[1:]
+	}
+
+	for _, re := range remainingRequests {
+		newState.Requests = append(newState.Requests, re.Copy())
+	}
+
+	start := time.Now() // time stats
+
+	newState.NodeStates = r.cluster.GetNodeStates()
+
+	dur := time.Since(start)                                                 // time stats
+	r.timeStats["GetNodeStates"] = append(r.timeStats["GetNodeStates"], dur) // time stats
+
+	select {
+	case <-timeoutCtx.Done():
+		return nil, errors.New("ReceiveRequestCtx : episode timed out")
+	default:
+	}
+
+	r.curState = newState
+	return newState, nil
+}
+
+// check context before updating time stats, should be safe for concurrent writing if an episode is timed out
+func (r *RedisRaftEnv) UpdateTimeStatsCtx(key string, value time.Duration, timeoutCtx context.Context) {
+	select {
+	case <-timeoutCtx.Done():
+		return
+	default:
+	}
+	r.timeStats[key] = append(r.timeStats[key], value)
+}
+
+// check context before updating time stats, should be safe for concurrent writing if an episode is timed out
+func (r *RedisRaftEnv) UpdateIntStatsCtx(key string, value int, timeoutCtx context.Context) {
+	select {
+	case <-timeoutCtx.Done():
+		return
+	default:
+	}
+	r.intStats[key] = append(r.intStats[key], value)
+}
+
+// UTILITY
 
 // reset time stats lists
 func (r *RedisRaftEnv) ResetStats() {

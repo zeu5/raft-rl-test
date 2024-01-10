@@ -65,7 +65,7 @@ func Paxos(episodes, horizon, runs int, saveFile string) {
 	c.Run()
 }
 
-func getLPaxosEnv(config lpaxos.LPaxosEnvConfig, abs string) types.Environment {
+func getLPaxosEnv(config lpaxos.LPaxosEnvConfig, abs string) types.EnvironmentUnion {
 	if abs == "none" {
 		return lpaxos.NewLPaxosEnv(config)
 	}

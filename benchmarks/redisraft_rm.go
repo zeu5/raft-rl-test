@@ -147,13 +147,13 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		WorkingDir:          path.Join(saveFile, "tmp"),
 		NumRequests:         3,
 
-		RequestTimeout:  10, // heartbeat in milliseconds (fixed or variable?)
-		ElectionTimeout: 50, // election timeout in milliseconds (from specified value to its double)
+		RequestTimeout:  15, // heartbeat in milliseconds (fixed or variable?)
+		ElectionTimeout: 90, // election timeout in milliseconds (from specified value to its double)
 
-		TickLength: 5,
+		TickLength: 10,
 	}
 	env := redisraft.NewRedisRaftEnv(ctx, &clusterConfig, path.Join(saveFile, "tickLength"))
-	env.SetPrintStats(true) // to print the episode stats
+	// env.SetPrintStats(true) // to print the episode stats
 	defer env.Cleanup()
 
 	// abstraction for both plot and RL
@@ -199,7 +199,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		CrashLimit:             10,
 		MaxInactive:            0,
 	}
-	epTimeOut := 5
+	epTimeOut := 6
 
 	c := types.NewComparison(runs, saveFile, false, "epTimes")
 
@@ -239,16 +239,16 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		}))
 	}
 
-	c.AddExperiment(types.NewExperiment("random", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      types.NewRandomPolicy(),
-		Environment: types.NewPartitionEnv(partitionEnvConfig),
-	}))
 	c.AddExperiment(types.NewExperiment("rl", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
 		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.05),
+		Environment: types.NewPartitionEnv(partitionEnvConfig),
+	}))
+	c.AddExperiment(types.NewExperiment("random", &types.AgentConfig{
+		Episodes:    episodes,
+		Horizon:     horizon,
+		Policy:      types.NewRandomPolicy(),
 		Environment: types.NewPartitionEnv(partitionEnvConfig),
 	}))
 
