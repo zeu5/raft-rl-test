@@ -16,6 +16,7 @@ type State struct {
 
 func (s *State) String() string {
 	out := "\n"
+	out += "Key: " + s.Key + "\n"
 	partitionMap := make(map[string]int)
 	for k, v := range s.State["PartitionMap"].(map[string]interface{}) {
 		partitionMap[k] = int(v.(float64))

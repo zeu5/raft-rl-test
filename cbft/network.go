@@ -156,6 +156,14 @@ func (n *InterceptNetwork) GetAllMessages() map[string]Message {
 	return out
 }
 
+func (n *InterceptNetwork) MessageCount() int {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
+	// count := len(n.messages)
+	return len(n.messages)
+}
+
 func (n *InterceptNetwork) handleMessage(c *gin.Context) {
 	m := Message{}
 	if err := c.ShouldBindJSON(&m); err != nil {

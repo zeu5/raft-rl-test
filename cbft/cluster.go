@@ -247,11 +247,13 @@ func (r *CometNode) Info() (*CometNodeState, error) {
 		newState.Height, _ = strconv.Atoi(hrs[0])
 		newState.Round, _ = strconv.Atoi(hrs[1])
 		step, _ := strconv.Atoi(hrs[2])
+		// Collapsing newheight and newround to propose. There are internal state transitions that RL has no effect over
+		// Also, this reduces the nondeterminism in the initial state
 		switch step {
 		case 1:
-			newState.Step = "RoundStepNewHeight"
+			newState.Step = "RoundStepPropose" //"RoundStepNewHeight"
 		case 2:
-			newState.Step = "RoundStepNewRound"
+			newState.Step = "RoundStepPropose" //"RoundStepNewRound"
 		case 3:
 			newState.Step = "RoundStepPropose"
 		case 4:
@@ -318,7 +320,7 @@ type CometClusterConfig struct {
 
 func (c *CometClusterConfig) SetDefaults() {
 	if c.TimeoutPropose == 0 {
-		c.TimeoutPropose = 100
+		c.TimeoutPropose = 500
 	}
 	if c.TimeoutPrevote == 0 {
 		c.TimeoutPrevote = 20
