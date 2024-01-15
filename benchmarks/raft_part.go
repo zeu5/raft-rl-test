@@ -77,7 +77,7 @@ func getRaftPartEnv(config raft.RaftEnvironmentConfig, colors []raft.RaftColorFu
 		MaxMessagesPerTick:     100,                                  // upper bound of random num of delivered messages
 		StaySameStateUpto:      5,                                    // counter to distinguish consecutive states
 		NumReplicas:            config.Replicas,
-		WithCrashes:            false,
+		WithCrashes:            true,
 		CrashLimit:             100,
 	})
 }

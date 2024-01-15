@@ -2,7 +2,6 @@ package benchmarks
 
 import (
 	"fmt"
-	"path"
 
 	"github.com/spf13/cobra"
 	"github.com/zeu5/raft-rl-test/policies"
@@ -35,6 +34,8 @@ func getPredHierEtcd(name string) (*policies.RewardMachine, bool, bool) {
 	case "Term1":
 		machine = policies.NewRewardMachine(raft.AllInTerm(3))
 		oneTime = false
+	case "Leader":
+		machine = policies.NewRewardMachine(raft.InState(r.StateLeader))
 	}
 
 	return machine, oneTime, machine != nil
@@ -143,18 +144,18 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 	// colors ... , expanded list, can omit the argument
 	// Analyzer takes the path to save data and colors... is the abstraction used to plot => makes the datasets
 	// PlotComparator => makes plots from data
-	c := types.NewComparison(runs, saveFile, true)
+	c := types.NewComparison(runs, saveFile, false)
 
 	// here you add different traces analysis and comparators -- to process traces into a dataset (analyzer) and output the results (comparator)
-	c.AddAnalysis("Plot", raft.RaftAnalyzer(saveFile, colors...), raft.RaftPlotComparator(saveFile))
-	c.AddAnalysis("Bugs", types.BugAnalyzer(
-		path.Join(saveFile, "bugs"),
-		types.BugDesc{Name: "MultipleLeaders", Check: raft.MultipleLeaders()},
-		types.BugDesc{Name: "ReducedLog", Check: raft.ReducedLog()},
-		types.BugDesc{Name: "ModifiedLog", Check: raft.ModifiedLog()},
-		types.BugDesc{Name: "InconsistentLogs", Check: raft.InconsistentLogs()},
-		// types.BugDesc{Name: "DummyBug2", Check: raft.DummyBug2()},
-	), types.BugComparator(saveFile))
+	// c.AddAnalysis("Plot", raft.RaftAnalyzer(saveFile, colors...), raft.RaftPlotComparator(saveFile))
+	// c.AddAnalysis("Bugs", types.BugAnalyzer(
+	// 	path.Join(saveFile, "bugs"),
+	// 	types.BugDesc{Name: "MultipleLeaders", Check: raft.MultipleLeaders()},
+	// 	types.BugDesc{Name: "ReducedLog", Check: raft.ReducedLog()},
+	// 	types.BugDesc{Name: "ModifiedLog", Check: raft.ModifiedLog()},
+	// 	types.BugDesc{Name: "InconsistentLogs", Check: raft.InconsistentLogs()},
+	// 	// types.BugDesc{Name: "DummyBug2", Check: raft.DummyBug2()},
+	// ), types.BugComparator(saveFile))
 
 	// c.AddAnalysis("CommitOnlyOneEntry", policies.RewardMachineAnalyzer(PredHierarchy_3), policies.RewardMachineCoverageComparator(saveFile))
 	c.AddAnalysis(PredHierName, policies.RewardMachineAnalyzer(PHPolicy), policies.RewardMachineCoverageComparator(saveFile, PredHierName))

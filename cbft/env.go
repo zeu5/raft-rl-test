@@ -82,6 +82,7 @@ type CometEnv struct {
 	clusterConfig *CometClusterConfig
 	network       *InterceptNetwork
 	cluster       *CometCluster
+	ctx           context.Context
 
 	curState *CometClusterState
 }
@@ -94,6 +95,7 @@ func NewCometEnv(ctx context.Context, clusterConfig *CometClusterConfig) *CometE
 		clusterConfig: clusterConfig,
 		network:       NewInterceptNetwork(ctx, clusterConfig.InterceptListenPort),
 		cluster:       nil,
+		ctx:           ctx,
 	}
 	e.network.Start()
 	return e
@@ -231,7 +233,10 @@ func (r *CometEnv) Cleanup() {
 }
 
 func (r *CometEnv) Tick() types.PartitionedSystemState {
-	time.Sleep(20 * time.Millisecond)
+	select {
+	case <-time.After(30 * time.Millisecond):
+	case <-r.ctx.Done():
+	}
 	newState := &CometClusterState{
 		NodeStates: r.cluster.GetNodeStates(),
 		Messages:   r.network.GetAllMessages(),
