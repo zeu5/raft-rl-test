@@ -52,6 +52,7 @@ func GridReward(episodes, horizon int, saveFile string, height, width, grids int
 			Policy:      types.NewRandomPolicy(),
 			Environment: grid.NewGridEnvironment(height, width, grids, doors...),
 		},
+		types.RepConfigOff(),
 	))
 	c.AddExperiment(types.NewExperiment(
 		"NegReward-Part",
@@ -61,6 +62,7 @@ func GridReward(episodes, horizon int, saveFile string, height, width, grids int
 			Policy:      policies.NewSoftMaxNegFreqPolicy(0.3, 0.7, 1),
 			Environment: grid.NewGridEnvironment(height, width, grids, doors...),
 		},
+		types.RepConfigOff(),
 	))
 
 	c.AddExperiment(types.NewExperiment(
@@ -71,6 +73,7 @@ func GridReward(episodes, horizon int, saveFile string, height, width, grids int
 			Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.02),
 			Environment: grid.NewGridEnvironment(height, width, grids, doors...),
 		},
+		types.RepConfigOff(),
 	))
 
 	c.Run()

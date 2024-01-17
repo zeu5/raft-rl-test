@@ -172,13 +172,13 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 		Horizon:     horizon,
 		Policy:      types.NewRandomPolicy(),
 		Environment: getRaftPartEnvCfg(raftConfig, colors, rlConfig),
-	}))
+	}, types.RepConfigOff()))
 	c.AddExperiment(types.NewExperiment("BonusMaxRL", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
 		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.95, 0.05),
 		Environment: getRaftPartEnvCfg(raftConfig, colors, rlConfig),
-	}))
+	}, types.RepConfigOff()))
 	// c.AddExperiment(types.NewExperiment("PredHierarchy_1", &types.AgentConfig{
 	// 	Episodes:    episodes,
 	// 	Horizon:     horizon,
@@ -199,7 +199,7 @@ func EtcdRaftBugs(episodes, horizon int, savePath string) {
 		Horizon:     horizon,
 		Policy:      PHPolicy,
 		Environment: getRaftPartEnvCfg(raftConfig, colors, rlConfig),
-	}))
+	}, types.RepConfigOff()))
 	// c.AddExperiment(types.NewExperiment("PredHierarchy_3", &types.AgentConfig{
 	// 	Episodes:    episodes,
 	// 	Horizon:     horizon,

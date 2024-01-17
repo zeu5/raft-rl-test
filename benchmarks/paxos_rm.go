@@ -49,6 +49,7 @@ func PaxosRewardMachine(episodes, horizon, runs int, saveFile string) {
 			Policy:      types.NewRandomPolicy(),
 			Environment: getLPaxosPartEnv(lPaxosConfig, true),
 		},
+		types.RepConfigOff(),
 	))
 
 	strictPolicy := policies.NewStrictPolicy(types.NewRandomPolicy())
@@ -61,6 +62,7 @@ func PaxosRewardMachine(episodes, horizon, runs int, saveFile string) {
 			Policy:      strictPolicy,
 			Environment: getLPaxosPartEnv(lPaxosConfig, true),
 		},
+		types.RepConfigOff(),
 	))
 
 	c.AddExperiment(types.NewExperiment(
@@ -71,6 +73,7 @@ func PaxosRewardMachine(episodes, horizon, runs int, saveFile string) {
 			Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
 			Environment: getLPaxosPartEnv(lPaxosConfig, true),
 		},
+		types.RepConfigOff(),
 	))
 	c.AddExperiment(types.NewExperiment(
 		"RewardMachine",
@@ -80,6 +83,7 @@ func PaxosRewardMachine(episodes, horizon, runs int, saveFile string) {
 			Policy:      policies.NewRewardMachinePolicy(guideRM, false),
 			Environment: getLPaxosPartEnv(lPaxosConfig, true),
 		},
+		types.RepConfigOff(),
 	))
 	c.Run()
 }

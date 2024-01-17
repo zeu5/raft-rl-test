@@ -26,6 +26,7 @@ func PaxosPart(episodes, horizon int, saveFile string, requests int) {
 			Policy:      types.NewRandomPolicy(),
 			Environment: getLPaxosPartEnv(lPaxosConfig, true),
 		},
+		types.RepConfigOff(),
 	))
 	c.AddExperiment(types.NewExperiment(
 		"NegReward-Part",
@@ -35,6 +36,7 @@ func PaxosPart(episodes, horizon int, saveFile string, requests int) {
 			Policy:      types.NewSoftMaxNegPolicy(0.1, 0.99, 1),
 			Environment: getLPaxosPartEnv(lPaxosConfig, true),
 		},
+		types.RepConfigOff(),
 	))
 	c.AddExperiment(types.NewExperiment(
 		"BonusMaxRL-Part",
@@ -44,6 +46,7 @@ func PaxosPart(episodes, horizon int, saveFile string, requests int) {
 			Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
 			Environment: getLPaxosPartEnv(lPaxosConfig, true),
 		},
+		types.RepConfigOff(),
 	))
 
 	c.Run()

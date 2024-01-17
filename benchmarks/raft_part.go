@@ -52,19 +52,19 @@ func RaftPart(episodes, horizon int, saveFile string) {
 		Horizon:     horizon,
 		Policy:      policies.NewBonusPolicyGreedyReward(0.1, 0.99, 0.05),
 		Environment: getRaftPartEnv(raftConfig, colors),
-	}))
+	}, types.RepConfigOff()))
 	c.AddExperiment(types.NewExperiment("RL", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
 		Policy:      policies.NewSoftMaxNegFreqPolicy(0.3, 0.7, 1), // policies.NewSoftMaxNegFreqPolicy(0.3,0.7,1)
 		Environment: getRaftPartEnv(raftConfig, colors),
-	}))
+	}, types.RepConfigOff()))
 	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
 		Policy:      types.NewRandomPolicy(),
 		Environment: getRaftPartEnv(raftConfig, colors),
-	}))
+	}, types.RepConfigOff()))
 
 	c.Run()
 }

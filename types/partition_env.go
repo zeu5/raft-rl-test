@@ -1,7 +1,6 @@
 package types
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -102,19 +101,19 @@ type PartitionedSystemEnvironment interface {
 type PartitionedSystemEnvironmentCtx interface {
 	// Resets the underlying partitioned environment and returns the initial state
 	// Called at the end of each episode
-	ResetCtx(context.Context) (PartitionedSystemState, error)
+	ResetCtx(*EpisodeContext) (PartitionedSystemState, error)
 	// Progress the clocks of all replicas by 1
-	TickCtx(context.Context) (PartitionedSystemState, error)
+	TickCtx(*EpisodeContext) (PartitionedSystemState, error)
 	// Deliver the message and return the resulting state
-	DeliverMessagesCtx([]Message, context.Context) (PartitionedSystemState, error)
+	DeliverMessagesCtx([]Message, *EpisodeContext) (PartitionedSystemState, error)
 	// Drop a message
-	DropMessagesCtx([]Message, context.Context) (PartitionedSystemState, error)
+	DropMessagesCtx([]Message, *EpisodeContext) (PartitionedSystemState, error)
 	// Receive a request
-	ReceiveRequestCtx(Request, context.Context) (PartitionedSystemState, error)
+	ReceiveRequestCtx(Request, *EpisodeContext) (PartitionedSystemState, error)
 	// Stop a node
-	StopCtx(uint64, context.Context) error
+	StopCtx(uint64, *EpisodeContext) error
 	// Start a node
-	StartCtx(uint64, context.Context) error
+	StartCtx(uint64, *EpisodeContext) error
 }
 
 type PartitionedSystemEnvironmentUnion interface {
@@ -951,7 +950,7 @@ func (p *PartitionEnv) Step(a Action) State {
 // WITH CTX
 // methods having also a timeout context to have fine grained control on when to stop if the episode timed out.
 
-func (p *PartitionEnv) StepCtx(a Action, timeoutCtx context.Context) (State, error) {
+func (p *PartitionEnv) StepCtx(a Action, epCtx *EpisodeContext) (State, error) {
 	// 1. Change partition
 	// 2. Perform ticks, delivering messages in between
 	// 3. Update states, partitions and return
@@ -961,30 +960,28 @@ func (p *PartitionEnv) StepCtx(a Action, timeoutCtx context.Context) (State, err
 	var err error
 	switch a.(type) {
 	case *ByzantineAction:
-		nextState, err = p.handleByzantineCtx(a, timeoutCtx)
+		nextState, err = p.handleByzantineCtx(a, epCtx)
+		epCtx.Report.AddTimeEntry(time.Since(start), "byzantine_action_times", "partitionEnv.StepCtx")
 	case *StopStartAction:
-		nextState, err = p.handleStartStopCtx(a, timeoutCtx)
+		nextState, err = p.handleStartStopCtx(a, epCtx)
+		epCtx.Report.AddTimeEntry(time.Since(start), "start_stop_action_times", "partitionEnv.StepCtx")
 	case *CreatePartitionAction:
-		cs := time.Now()
-		nextState, err = p.handlePartitionCtx(a, timeoutCtx)
-		p.recordStat("partition_times", time.Since(cs))
+		nextState, err = p.handlePartitionCtx(a, epCtx)
+		epCtx.Report.AddTimeEntry(time.Since(start), "create_partition_action_times", "partitionEnv.StepCtx")
 	case *KeepSamePartitionAction:
-		ks := time.Now()
-		nextState, err = p.handlePartitionCtx(a, timeoutCtx)
-		p.recordStat("partition_times", time.Since(ks))
+		nextState, err = p.handlePartitionCtx(a, epCtx)
+		epCtx.Report.AddTimeEntry(time.Since(start), "keep_partition_action_times", "partitionEnv.StepCtx")
 	case *SendRequestAction:
-		rs := time.Now()
-		nextState, err = p.handleRequestCtx(a, timeoutCtx)
-		p.recordStat("request_times", time.Since(rs))
+		nextState, err = p.handleRequestCtx(a, epCtx)
+		epCtx.Report.AddTimeEntry(time.Since(start), "request_action_times", "partitionEnv.StepCtx")
 	}
-	p.recordStat("step_times", stepTime{Action: a, Duration: time.Since(start)})
 
 	if err != nil {
 		return nil, err
 	}
 
 	select {
-	case <-timeoutCtx.Done():
+	case <-epCtx.TimeoutContext.Done():
 		return nil, fmt.Errorf("StepCtx : episode timed out")
 	default:
 	}
@@ -993,7 +990,7 @@ func (p *PartitionEnv) StepCtx(a Action, timeoutCtx context.Context) (State, err
 	return nextState, nil
 }
 
-func (p *PartitionEnv) handleRequestCtx(a Action, timeoutCtx context.Context) (*Partition, error) {
+func (p *PartitionEnv) handleRequestCtx(a Action, epCtx *EpisodeContext) (*Partition, error) {
 	_, isSendRequest := a.(*SendRequestAction)
 	if !isSendRequest {
 		return copyPartition(p.CurPartition), fmt.Errorf("handleRequestCtx : action is not send request")
@@ -1002,7 +999,7 @@ func (p *PartitionEnv) handleRequestCtx(a Action, timeoutCtx context.Context) (*
 	nextState := copyPartition(p.CurPartition)
 	if nextState.CanDeliverRequest && len(nextState.PendingRequests) > 0 {
 		nextRequest := nextState.PendingRequests[0]
-		s, err := p.UnderlyingEnv.ReceiveRequestCtx(nextRequest, timeoutCtx) // call on the underlying environment
+		s, err := p.UnderlyingEnv.ReceiveRequestCtx(nextRequest, epCtx) // call on the underlying environment
 		if err != nil {
 			return nil, err
 		}
@@ -1043,7 +1040,9 @@ func (p *PartitionEnv) handleRequestCtx(a Action, timeoutCtx context.Context) (*
 	return nextState, nil
 }
 
-func (p *PartitionEnv) handlePartitionCtx(a Action, timeoutCtx context.Context) (*Partition, error) {
+func (p *PartitionEnv) handlePartitionCtx(a Action, epCtx *EpisodeContext) (*Partition, error) {
+	var start time.Time
+
 	ca, isChange := a.(*CreatePartitionAction)
 	_, isKeepSame := a.(*KeepSamePartitionAction)
 
@@ -1090,7 +1089,7 @@ func (p *PartitionEnv) handlePartitionCtx(a Action, timeoutCtx context.Context) 
 
 	for i := 0; i < p.config.TicketBetweenPartition; i++ { // for the specified number of ticks between two partitions (action of the agent)
 		select {
-		case <-timeoutCtx.Done():
+		case <-epCtx.TimeoutContext.Done():
 			return nil, fmt.Errorf("handlePartitionCtx : episode timed out")
 		default:
 		}
@@ -1106,6 +1105,9 @@ func (p *PartitionEnv) handlePartitionCtx(a Action, timeoutCtx context.Context) 
 		}
 
 		mToDeliver := 0
+
+		epCtx.Report.AddIntEntry(len(messages), "messages_total_number", "partitionEnv.handlePartitionCtx")
+
 		if len(messages) > 0 { // if there are messages to deliver
 			p.rand.Shuffle(len(messages), func(i, j int) { // randomize order of messages?
 				messages[i], messages[j] = messages[j], messages[i]
@@ -1130,22 +1132,31 @@ func (p *PartitionEnv) handlePartitionCtx(a Action, timeoutCtx context.Context) 
 
 				}
 			}
+
+			epCtx.Report.AddIntEntry(len(messages), "messages_to_deliver_number", "partitionEnv.handlePartitionCtx")
+			epCtx.Report.AddIntEntry(len(messages), "messages_to_drop_number", "partitionEnv.handlePartitionCtx")
+
 			if len(messagesToDeliver) > 0 {
-				_, err = p.UnderlyingEnv.DeliverMessagesCtx(messagesToDeliver, timeoutCtx)
+				start = time.Now()
+				_, err = p.UnderlyingEnv.DeliverMessagesCtx(messagesToDeliver, epCtx)
+				epCtx.Report.AddTimeEntry(time.Since(start), "deliver_messages_times", "partitionEnv.handlePartitionCtx")
 				if err != nil {
 					return nil, err
 				}
 			}
 			if len(messagesToDrop) > 0 {
-				_, err = p.UnderlyingEnv.DropMessagesCtx(messagesToDrop, timeoutCtx)
+				start = time.Now()
+				_, err = p.UnderlyingEnv.DropMessagesCtx(messagesToDrop, epCtx)
+				epCtx.Report.AddTimeEntry(time.Since(start), "drop_messages_times", "partitionEnv.handlePartitionCtx")
 				if err != nil {
 					return nil, err
 				}
 			}
 		}
 
-		p.recordStat("tick_messages_delivered", mToDeliver)
-		s, err = p.UnderlyingEnv.TickCtx(timeoutCtx) // make the tick pass on the environment
+		start = time.Now()
+		s, err = p.UnderlyingEnv.TickCtx(epCtx) // make the tick pass on the environment
+		epCtx.Report.AddTimeEntry(time.Since(start), "tick_times", "partitionEnv.handlePartitionCtx")
 		if err != nil {
 			return nil, err
 		}
@@ -1192,14 +1203,14 @@ func (p *PartitionEnv) handlePartitionCtx(a Action, timeoutCtx context.Context) 
 	nextState.RepeatCount = newRepeatCount
 
 	select {
-	case <-timeoutCtx.Done():
+	case <-epCtx.TimeoutContext.Done():
 		return nil, fmt.Errorf("handlePartitionCtx : episode timed out")
 	default:
 	}
 	return nextState, nil
 }
 
-func (p *PartitionEnv) handleStartStopCtx(a Action, timeoutCtx context.Context) (*Partition, error) {
+func (p *PartitionEnv) handleStartStopCtx(a Action, epCtx *EpisodeContext) (*Partition, error) {
 	ss, ok := a.(*StopStartAction)
 	if !ok {
 		return copyPartition(p.CurPartition), fmt.Errorf("handleStartStopCtx : episode timed out")
@@ -1226,7 +1237,7 @@ func (p *PartitionEnv) handleStartStopCtx(a Action, timeoutCtx context.Context) 
 			node := activeNodes[nodeI]
 			start := time.Now()
 
-			err := p.UnderlyingEnv.StopCtx(node, timeoutCtx)
+			err := p.UnderlyingEnv.StopCtx(node, epCtx)
 			if err != nil {
 				return nil, err
 			}
@@ -1247,7 +1258,7 @@ func (p *PartitionEnv) handleStartStopCtx(a Action, timeoutCtx context.Context) 
 			node := inactiveNodes[nodeI]
 			start := time.Now()
 
-			err := p.UnderlyingEnv.StartCtx(node, timeoutCtx)
+			err := p.UnderlyingEnv.StartCtx(node, epCtx)
 			if err != nil {
 				return nil, err
 			}
@@ -1262,7 +1273,7 @@ func (p *PartitionEnv) handleStartStopCtx(a Action, timeoutCtx context.Context) 
 		nextState.ActiveNodes[n] = true
 	}
 
-	s, err := p.UnderlyingEnv.TickCtx(timeoutCtx)
+	s, err := p.UnderlyingEnv.TickCtx(epCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -1344,20 +1355,20 @@ func (p *PartitionEnv) handleStartStopCtx(a Action, timeoutCtx context.Context) 
 	}
 
 	select {
-	case <-timeoutCtx.Done():
+	case <-epCtx.TimeoutContext.Done():
 		return nil, fmt.Errorf("handleStartStopCtx : episode timed out")
 	default:
 	}
 	return nextState, nil
 }
 
-func (p *PartitionEnv) resetCtx(timeoutCtx context.Context) error {
+func (p *PartitionEnv) resetCtx(epCtx *EpisodeContext) error {
 	start := time.Now()
-	s, err := p.UnderlyingEnv.ResetCtx(timeoutCtx) // takes the state given by the reset function of the underlying environment
+	s, err := p.UnderlyingEnv.ResetCtx(epCtx) // takes the state given by the reset function of the underlying environment
 	if err != nil {
 		return err
 	}
-	p.recordStat("reset_times", time.Since(start))
+	epCtx.Report.AddTimeEntry(time.Since(start), "env_reset_times", "partitionEnv.resetCtx")
 
 	colors := make([]Color, p.NumReplicas)
 	curPartition := &Partition{
@@ -1390,7 +1401,7 @@ func (p *PartitionEnv) resetCtx(timeoutCtx context.Context) error {
 	curPartition.Partition[0] = colors
 
 	select {
-	case <-timeoutCtx.Done():
+	case <-epCtx.TimeoutContext.Done():
 		return fmt.Errorf("resetCtx : episode timed out")
 	default:
 	}
@@ -1403,15 +1414,15 @@ func (p *PartitionEnv) resetCtx(timeoutCtx context.Context) error {
 	return nil
 }
 
-func (p *PartitionEnv) ResetCtx(timeoutCtx context.Context) (State, error) { // TODO: propagate errors
-	err := p.resetCtx(timeoutCtx)
+func (p *PartitionEnv) ResetCtx(epCtx *EpisodeContext) (State, error) { // TODO: propagate errors
+	err := p.resetCtx(epCtx)
 	if err != nil {
 		return nil, err
 	}
 	return copyPartition(p.CurPartition), nil
 }
 
-func (p *PartitionEnv) handleByzantineCtx(a Action, timeoutCtx context.Context) (*Partition, error) {
+func (p *PartitionEnv) handleByzantineCtx(a Action, epCtx *EpisodeContext) (*Partition, error) {
 	byzEnv, ok := p.UnderlyingEnv.(ByzantineEnvironment)
 	if !ok {
 		return copyPartition(p.CurPartition), fmt.Errorf("handleByzantineCtx : to define")
@@ -1434,7 +1445,7 @@ func (p *PartitionEnv) handleByzantineCtx(a Action, timeoutCtx context.Context) 
 	}
 
 	select {
-	case <-timeoutCtx.Done():
+	case <-epCtx.TimeoutContext.Done():
 		return nil, fmt.Errorf("resetCtx : episode timed out")
 	default:
 	}

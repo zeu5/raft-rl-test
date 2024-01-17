@@ -106,13 +106,13 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 		Horizon:     horizon,
 		Policy:      RMPolicy,
 		Environment: types.NewPartitionEnv(partitionEnvConfig),
-	}))
+	}, types.RepConfigOff()))
 	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
 		Policy:      types.NewRandomPolicy(),
 		Environment: types.NewPartitionEnv(partitionEnvConfig),
-	}))
+	}, types.RepConfigOff()))
 	strict := policies.NewStrictPolicy(types.NewRandomPolicy())
 	strict.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
 
@@ -121,7 +121,7 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 		Horizon:     horizon,
 		Policy:      strict,
 		Environment: types.NewPartitionEnv(partitionEnvConfig),
-	}))
+	}, types.RepConfigOff()))
 
 	c.RunWithCtx(ctx)
 	env.Cleanup()

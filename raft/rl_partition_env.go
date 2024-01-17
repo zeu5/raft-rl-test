@@ -1,7 +1,6 @@
 package raft
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -447,32 +446,32 @@ func (p *RaftPartitionEnv) dropMessage(m types.Message) types.PartitionedSystemS
 
 // CTX
 
-func (r *RaftPartitionEnv) ResetCtx(timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+func (r *RaftPartitionEnv) ResetCtx(epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	return r.Reset(), nil
 }
 
-func (r *RaftPartitionEnv) TickCtx(timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+func (r *RaftPartitionEnv) TickCtx(epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	return r.Tick(), nil
 }
 
-func (r *RaftPartitionEnv) DeliverMessagesCtx(messages []types.Message, timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+func (r *RaftPartitionEnv) DeliverMessagesCtx(messages []types.Message, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	return r.DeliverMessages(messages), nil
 }
 
-func (r *RaftPartitionEnv) DropMessagesCtx(messages []types.Message, timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+func (r *RaftPartitionEnv) DropMessagesCtx(messages []types.Message, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	return r.DropMessages(messages), nil
 }
 
-func (r *RaftPartitionEnv) ReceiveRequestCtx(req types.Request, timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+func (r *RaftPartitionEnv) ReceiveRequestCtx(req types.Request, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	return r.ReceiveRequest(req), nil
 }
 
-func (r *RaftPartitionEnv) StopCtx(nodeID uint64, timeoutCtx context.Context) error {
+func (r *RaftPartitionEnv) StopCtx(nodeID uint64, epCtx *types.EpisodeContext) error {
 	r.Stop(nodeID)
 	return nil
 }
 
-func (r *RaftPartitionEnv) StartCtx(nodeID uint64, timeoutCtx context.Context) error {
+func (r *RaftPartitionEnv) StartCtx(nodeID uint64, epCtx *types.EpisodeContext) error {
 	r.Start(nodeID)
 	return nil
 }

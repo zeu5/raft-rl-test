@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 )
 
 type AgentConfig struct {
@@ -101,14 +102,27 @@ EPISODE_LOOP:
 }
 
 // run a single episode and return the resulting trace
-func (a *Agent) runEpisodeWithTimeout(episode int, ctx context.Context, timeOutCtx context.Context) (*Trace, error) {
+func (a *Agent) runEpisodeWithTimeout(episode int, ctx context.Context, epCtx *EpisodeContext) (*Trace, error) {
+	var start time.Time
+	var duration time.Duration
+
 	select {
-	case <-timeOutCtx.Done():
+	case <-epCtx.TimeoutContext.Done():
 		return nil, errors.New("episode timed out")
 	default:
 
 	}
-	state := a.environment.Reset()
+
+	start = time.Now()
+	state, err := a.environment.ResetCtx(epCtx)
+	duration = time.Since(start)
+
+	if err != nil {
+		return nil, err
+	}
+
+	epCtx.Report.AddTimeEntry(duration, "reset_time", "agent.runEpisodeWithTimeout")
+
 	trace := NewTrace()
 	actions := state.Actions()
 
@@ -121,30 +135,37 @@ func (a *Agent) runEpisodeWithTimeout(episode int, ctx context.Context, timeOutC
 			fmt.Println("Stopping!")
 			return nil, errors.New("stopping")
 			// break EPISODE_LOOP
-		case <-timeOutCtx.Done():
+		case <-epCtx.TimeoutContext.Done():
 			return nil, errors.New("runEpisodeWithTimeout : episode timed out")
 		default:
 		}
+
+		epCtx.Report.setEpisodeStep(i) // set the current episode step in the report
+
 		if len(actions) == 0 {
 			break
 		}
+
+		start = time.Now()
 		nextAction, ok := a.policy.NextAction(i, state, actions)
+		duration = time.Since(start)
+		epCtx.Report.AddTimeEntry(duration, "next_action_time", "agent.runEpisodeWithTimeout")
+
 		if !ok {
 			break
 		}
-		// start := time.Now()
-		// actionName := reflect.TypeOf(nextAction).Elem().Name()
-		nextState, err := a.environment.StepCtx(nextAction, timeOutCtx)
+
+		start = time.Now()
+		nextState, err := a.environment.StepCtx(nextAction, epCtx)
+		duration = time.Since(start)
+		epCtx.Report.AddTimeEntry(duration, "step_time", "agent.runEpisodeWithTimeout")
+
 		if err != nil {
 			return nil, err
 		}
-		// dur := time.Since(start)
-		// if _, ok := stepTimes[actionName]; !ok {
-		// 	stepTimes[actionName] = make([]time.Duration, 0)
-		// }
-		// stepTimes[actionName] = append(stepTimes[actionName], dur)
+
 		select {
-		case <-timeOutCtx.Done():
+		case <-epCtx.TimeoutContext.Done():
 			return nil, errors.New("runEpisodeWithTimeout : episode timed out")
 		default:
 
@@ -160,7 +181,7 @@ func (a *Agent) runEpisodeWithTimeout(episode int, ctx context.Context, timeOutC
 	case <-ctx.Done():
 		fmt.Println("Stopping!")
 		return nil, errors.New("stopping")
-	case <-timeOutCtx.Done():
+	case <-epCtx.TimeoutContext.Done():
 		return nil, errors.New("runEpisodeWithTimeout : episode timed out")
 	default:
 		a.policy.UpdateIteration(episode, trace)

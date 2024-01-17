@@ -75,6 +75,7 @@ func GridRewardMachine(episodes, horizon int, height, width, grids int, runs int
 			Policy:      types.NewRandomPolicy(),
 			Environment: grid.NewGridEnvironment(height, width, grids, doors...),
 		},
+		types.RepConfigOff(),
 	))
 	c.AddExperiment(types.NewExperiment(
 		"Exploration",
@@ -84,6 +85,7 @@ func GridRewardMachine(episodes, horizon int, height, width, grids int, runs int
 			Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.05),
 			Environment: grid.NewGridEnvironment(height, width, grids, doors...),
 		},
+		types.RepConfigOff(),
 	))
 	// c.AddExperiment(types.NewExperiment(
 	// 	"Exploration-Softmax",
@@ -102,6 +104,7 @@ func GridRewardMachine(episodes, horizon int, height, width, grids int, runs int
 			Policy:      policies.NewRewardMachinePolicy(rm, false),
 			Environment: grid.NewGridEnvironment(height, width, grids, doors...),
 		},
+		types.RepConfigOff(),
 	))
 
 	c.Run()

@@ -1,7 +1,5 @@
 package types
 
-import "context"
-
 // Environment that RL observes
 type Environment interface {
 	// Reset called at the end of each episode
@@ -13,9 +11,9 @@ type Environment interface {
 // Ctx methods to propagate the context for timeOut setting
 type EnvironmentCtx interface {
 	// Reset called at the end of each episode
-	ResetCtx(context.Context) (State, error)
+	ResetCtx(*EpisodeContext) (State, error)
 	// Step function with context to cancel it
-	StepCtx(Action, context.Context) (State, error)
+	StepCtx(Action, *EpisodeContext) (State, error)
 }
 
 // Env implementing both standard and Ctx methods

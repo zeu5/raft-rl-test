@@ -46,21 +46,21 @@ func RedisRaftExploration(episodes, horizon int, saveFile string, ctx context.Co
 		Horizon:     horizon,
 		Policy:      policies.NewSoftMaxNegFreqPolicy(0.1, 0.99, 1),
 		Environment: partitionEnv,
-	}))
+	}, types.RepConfigOff()))
 
 	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
 		Policy:      types.NewRandomPolicy(),
 		Environment: partitionEnv,
-	}))
+	}, types.RepConfigOff()))
 
 	c.AddExperiment(types.NewExperiment("BonusMax", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
 		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
 		Environment: partitionEnv,
-	}))
+	}, types.RepConfigOff()))
 
 	c.RunWithCtx(ctx)
 	env.Cleanup()

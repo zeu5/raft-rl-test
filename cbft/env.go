@@ -243,32 +243,32 @@ func (r *CometEnv) Tick() types.PartitionedSystemState {
 
 // CTX
 
-func (r *CometEnv) ResetCtx(timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+func (r *CometEnv) ResetCtx(epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	return r.Reset(), nil
 }
 
-func (r *CometEnv) TickCtx(timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+func (r *CometEnv) TickCtx(epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	return r.Tick(), nil
 }
 
-func (r *CometEnv) DeliverMessagesCtx(messages []types.Message, timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+func (r *CometEnv) DeliverMessagesCtx(messages []types.Message, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	return r.DeliverMessages(messages), nil
 }
 
-func (r *CometEnv) DropMessagesCtx(messages []types.Message, timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+func (r *CometEnv) DropMessagesCtx(messages []types.Message, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	return r.DropMessages(messages), nil
 }
 
-func (r *CometEnv) ReceiveRequestCtx(req types.Request, timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+func (r *CometEnv) ReceiveRequestCtx(req types.Request, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	return r.ReceiveRequest(req), nil
 }
 
-func (r *CometEnv) StopCtx(nodeID uint64, timeoutCtx context.Context) error {
+func (r *CometEnv) StopCtx(nodeID uint64, epCtx *types.EpisodeContext) error {
 	r.Stop(nodeID)
 	return nil
 }
 
-func (r *CometEnv) StartCtx(nodeID uint64, timeoutCtx context.Context) error {
+func (r *CometEnv) StartCtx(nodeID uint64, epCtx *types.EpisodeContext) error {
 	r.Start(nodeID)
 	return nil
 }

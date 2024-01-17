@@ -27,19 +27,19 @@ func Raft(episodes, horizon int, saveFile string) {
 		Horizon:     horizon,
 		Policy:      types.NewSoftMaxNegPolicy(0.3, 0.7, 1),
 		Environment: getRaftEnv(raftConfig, abstracter),
-	}))
+	}, types.RepConfigOff()))
 	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
 		Policy:      types.NewRandomPolicy(),
 		Environment: getRaftEnv(raftConfig, abstracter),
-	}))
+	}, types.RepConfigOff()))
 	c.AddExperiment(types.NewExperiment("BonusMaxRL", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
 		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0),
 		Environment: getRaftEnv(raftConfig, abstracter),
-	}))
+	}, types.RepConfigOff()))
 
 	c.Run()
 }

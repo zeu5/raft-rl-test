@@ -199,9 +199,9 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		CrashLimit:             10,
 		MaxInactive:            0,
 	}
-	epTimeOut := 6
+	epTimeOut := 5
 
-	c := types.NewComparison(runs, saveFile, false, "epTimes")
+	c := types.NewComparison(runs, saveFile, false)
 
 	c.AddEAnalysis(types.RecordPartitionStats(saveFile))
 
@@ -236,7 +236,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 			Horizon:     horizon,
 			Policy:      policy,
 			Environment: types.NewPartitionEnv(partitionEnvConfig),
-		}))
+		}, types.RepConfigOff()))
 	}
 
 	c.AddExperiment(types.NewExperiment("rl", &types.AgentConfig{
@@ -244,13 +244,13 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		Horizon:     horizon,
 		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.05),
 		Environment: types.NewPartitionEnv(partitionEnvConfig),
-	}))
+	}, types.RepConfigStandard()))
 	c.AddExperiment(types.NewExperiment("random", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
 		Policy:      types.NewRandomPolicy(),
 		Environment: types.NewPartitionEnv(partitionEnvConfig),
-	}))
+	}, types.RepConfigStandard()))
 
 	// strict := policies.NewStrictPolicy(types.NewRandomPolicy())
 	// strict.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
@@ -264,7 +264,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 
 	// print config file
 	configPath := path.Join(saveFile, "config.txt")
-	types.WriteToFile(configPath, clusterConfig.Printable(), partitionEnvConfig.Printable(), PrintColors(chosenColors))
+	types.WriteToFile(configPath, ExperimentParametersPrintable(), clusterConfig.Printable(), partitionEnvConfig.Printable(), PrintColors(chosenColors))
 
 	c.RunWithCtxTimeout(ctx, epTimeOut)
 }

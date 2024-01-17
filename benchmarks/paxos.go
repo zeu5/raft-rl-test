@@ -32,6 +32,7 @@ func Paxos(episodes, horizon, runs int, saveFile string) {
 			Policy:      types.NewSoftMaxNegPolicy(0.3, 0.7, 1),
 			Environment: getLPaxosEnv(lPaxosConfig, abstracter),
 		},
+		types.RepConfigOff(),
 	))
 	c.AddExperiment(types.NewExperiment(
 		"Random",
@@ -41,6 +42,7 @@ func Paxos(episodes, horizon, runs int, saveFile string) {
 			Policy:      types.NewRandomPolicy(),
 			Environment: getLPaxosEnv(lPaxosConfig, abstracter),
 		},
+		types.RepConfigOff(),
 	))
 	c.AddExperiment(types.NewExperiment(
 		"BonusMaxRL",
@@ -50,6 +52,7 @@ func Paxos(episodes, horizon, runs int, saveFile string) {
 			Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
 			Environment: getLPaxosEnv(lPaxosConfig, abstracter),
 		},
+		types.RepConfigOff(),
 	))
 	c.AddExperiment(types.NewExperiment(
 		"BonusSoftMaxRL",
@@ -59,6 +62,7 @@ func Paxos(episodes, horizon, runs int, saveFile string) {
 			Policy:      policies.NewBonusPolicySoftMax(0.1, 0.99, 0.01),
 			Environment: getLPaxosEnv(lPaxosConfig, abstracter),
 		},
+		types.RepConfigOff(),
 	))
 
 	// Invoking the different experiments

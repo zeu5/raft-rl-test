@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"path"
 	"strconv"
@@ -21,22 +22,26 @@ type Experiment struct {
 	Properties []*Monitor
 	// Number of time each property was satisfied
 	PropertiesStats []int
+
+	ReportsPrintConfig *ReportsPrintConfig
 }
 
 // NewExperiment creates a new experiment instance
-func NewExperiment(name string, config *AgentConfig) *Experiment {
+func NewExperiment(name string, config *AgentConfig, repConfig *ReportsPrintConfig) *Experiment {
 	return &Experiment{
 		AgentConfig:     config,
 		Name:            name,
 		Result:          make([]*Trace, 0),
 		Properties:      make([]*Monitor, 0),
 		PropertiesStats: make([]int, 0),
+
+		ReportsPrintConfig: repConfig,
 	}
 }
 
 // NewExperimentWithProperties creates a new experiment instance with the specified properties
-func NewExperimentWithProperties(name string, config *AgentConfig, properties []*Monitor, record bool) *Experiment {
-	e := NewExperiment(name, config)
+func NewExperimentWithProperties(name string, config *AgentConfig, repConfig *ReportsPrintConfig, properties []*Monitor, record bool) *Experiment {
+	e := NewExperiment(name, config, repConfig)
 	e.Properties = properties
 	e.PropertiesStats = make([]int, len(properties))
 	return e
@@ -92,12 +97,14 @@ func (e *Experiment) RunWithTimeout(ctx context.Context, timeOut int, savePath s
 	agent := NewAgent(e.AgentConfig)
 
 	var timedOut = new(int)
+	var withError = new(int)
 	*timedOut = 0
+	*withError = 0
 
 	episodeTimes := make([]time.Duration, 0)
 
 	for i := 0; i < e.Episodes; i++ {
-		e.runEpisodeWithTimeout(ctx, timeOut, savePath, agent, i, timedOut, &episodeTimes)
+		e.runEpisodeWithTimeout(ctx, timeOut, savePath, agent, i, timedOut, withError, &episodeTimes)
 
 		if len(episodeTimes) == 10 {
 			e.printEpTimesMs(episodeTimes, savePath)
@@ -115,7 +122,7 @@ func (e *Experiment) RunWithTimeout(ctx context.Context, timeOut int, savePath s
 	}
 }
 
-func (e *Experiment) runEpisodeWithTimeout(ctx context.Context, timeOut int, savePath string, agent *Agent, i int, timedOut *int, episodeTimes *[]time.Duration) {
+func (e *Experiment) runEpisodeWithTimeout(ctx context.Context, timeOut int, savePath string, agent *Agent, i int, timedOut *int, withError *int, episodeTimes *[]time.Duration) {
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Println("Recovered. Error: ", r)
@@ -129,30 +136,54 @@ func (e *Experiment) runEpisodeWithTimeout(ctx context.Context, timeOut int, sav
 		return
 	default:
 	}
-	fmt.Printf("\rExperiment: %s, Episode: %d/%d, Timed out: %d", e.Name, i+1, e.Episodes, *timedOut)
+	fmt.Printf("\rExperiment: %s, Episode: %d/%d, Timed out: %d, With Error: %d", e.Name, i+1, e.Episodes, *timedOut, *withError)
 
-	res := make(chan *Trace, 1) // channel to put the episode trace
+	res := make(chan *Trace, 1)    // channel to put the episode trace
+	errChan := make(chan error, 1) // channel to put errors
 
-	toCtx, toCancel := context.WithTimeout(context.Background(), time.Duration(timeOut)*time.Second)
+	EpCtx := NewEpisodeContext(i, e.Name, timeOut)
 
 	start := time.Now()
 
-	go func(ctx context.Context, toCtx context.Context) {
-		trace, err := agent.runEpisodeWithTimeout(i, ctx, toCtx)
+	go func(ctx context.Context, EpCtx *EpisodeContext) {
+		start := time.Now()
+		trace, err := agent.runEpisodeWithTimeout(i, ctx, EpCtx)
+		EpCtx.Report.AddTimeEntry(time.Since(start), "return_time", "experiment.runEpisodeWithTimeout")
+
 		select {
-		case <-toCtx.Done():
-			fmt.Println(fmt.Errorf("episode %d - %s", i, err))
+		case <-EpCtx.TimeoutContext.Done():
+			if e.ReportsPrintConfig.PrintIfTimeout {
+				e.handleEpRep(EpCtx.Report, savePath, fmt.Sprintf("Timed out: %dms", timeOut*1000))
+			}
+
 		default:
-			res <- trace
+			if err != nil { // send the error on the channel
+				errChan <- err
+
+				if e.ReportsPrintConfig.PrintIfError {
+					e.handleEpRep(EpCtx.Report, savePath, "Error", err.Error())
+				}
+			} else { // send the trace on the channel
+				res <- trace
+
+				if rand.Float32() < e.ReportsPrintConfig.Sampling {
+					e.handleEpRep(EpCtx.Report, savePath, "Sampling")
+				}
+			}
 		}
 		// print here
 		// fmt.Printf("episode goroutine end")
-	}(ctx, toCtx)
+	}(ctx, EpCtx)
 
 	select {
-	case <-toCtx.Done():
-		// Timeout occured
+	case <-EpCtx.TimeoutContext.Done():
+		// Timeout occurred
 		*timedOut += 1
+		*episodeTimes = append(*episodeTimes, time.Duration(0))
+
+	case <-errChan:
+		// Error occurred
+		*withError += 1
 		*episodeTimes = append(*episodeTimes, time.Duration(0))
 
 	case trace := <-res:
@@ -173,8 +204,9 @@ func (e *Experiment) runEpisodeWithTimeout(ctx context.Context, timeOut int, sav
 
 	}
 
-	toCancel() // should it be called?
+	EpCtx.ToCancel() // should it be called?
 	close(res)
+	close(errChan)
 }
 
 func (e *Experiment) printEpTimesMs(epTimes []time.Duration, basePath string) {
@@ -195,6 +227,74 @@ func (e *Experiment) printEpTimesS(epTimes []time.Duration, basePath string) {
 	folderPath := path.Join(basePath, "epTimes")
 	filePath := path.Join(folderPath, e.Name+"_seconds.txt")
 	AppendToFile(filePath, tSeconds)
+}
+
+// print different versions of the episode report based on the experiment.ReportsPrintConfig
+func (e *Experiment) handleEpRep(epReport EpisodeReport, basePath string, additionalInfo ...string) {
+	if e.ReportsPrintConfig.PrintStd {
+		e.printEpReport(epReport, basePath, additionalInfo...)
+	}
+
+	if e.ReportsPrintConfig.PrintValues {
+		e.printEpReportValues(epReport, basePath, additionalInfo...)
+	}
+
+	if e.ReportsPrintConfig.PrintTimeline {
+		e.printEpReportTimeline(epReport, basePath, additionalInfo...)
+	}
+}
+
+// prints the episode report
+func (e *Experiment) printEpReport(epReport EpisodeReport, basePath string, additionalInfo ...string) {
+	folderPath := path.Join(basePath, "epReports")
+	filePath := path.Join(folderPath, fmt.Sprintf("%s_%d_report.txt", epReport.ExperimentName, epReport.EpisodeNumber))
+
+	result := fmt.Sprintf("Exp: %s - Episode: %d\n\n", epReport.ExperimentName, epReport.EpisodeNumber)
+
+	for _, info := range additionalInfo {
+		result = fmt.Sprintf("%s%s\n", result, info)
+	}
+
+	result = fmt.Sprintf("%s\n", result)
+	result = fmt.Sprintf("%s%s\n", result, epReport.StringPerType())
+
+	WriteToFile(filePath, result)
+}
+
+// prints the episode report (only values)
+func (e *Experiment) printEpReportValues(epReport EpisodeReport, basePath string, additionalInfo ...string) {
+	folderPath := path.Join(basePath, "epReports")
+	filePath := path.Join(folderPath, fmt.Sprintf("%s_%d_report_values.txt", epReport.ExperimentName, epReport.EpisodeNumber))
+
+	result := fmt.Sprintf("Exp: %s - Episode: %d\n\n", epReport.ExperimentName, epReport.EpisodeNumber)
+
+	for _, info := range additionalInfo {
+		result = fmt.Sprintf("%s%s\n", result, info)
+	}
+
+	result = fmt.Sprintf("%s\n", result)
+	result = fmt.Sprintf("%s%s\n", result, epReport.StringPerTypeValues())
+
+	WriteToFile(filePath, result)
+}
+
+// prints the episode report timeline (all the entries in chronological order)
+func (e *Experiment) printEpReportTimeline(epReport EpisodeReport, basePath string, additionalInfo ...string) {
+	// fmt.Printf("len %d\n", len(epReport.Timeline))
+
+	folderPath := path.Join(basePath, "epReports")
+	filePath := path.Join(folderPath, fmt.Sprintf("%s_%d_report_timeline.txt", epReport.ExperimentName, epReport.EpisodeNumber))
+
+	result := fmt.Sprintf("Exp: %s - Episode: %d\n\n", epReport.ExperimentName, epReport.EpisodeNumber)
+
+	for _, info := range additionalInfo {
+		result = fmt.Sprintf("%s%s\n", result, info)
+	}
+
+	result = fmt.Sprintf("%s\n", result)
+	result = fmt.Sprintf("%s%s\n", result, epReport.StringTimeline())
+
+	WriteToFile(filePath, result)
 }
 
 func (e *Experiment) Record(run int, basePath string) {
@@ -250,7 +350,8 @@ type Comparison struct {
 }
 
 // NewComparison creates a comparison instance
-func NewComparison(runs int, recordPath string, record bool, foldersToCreate ...string) *Comparison {
+func NewComparison(runs int, recordPath string, record bool) *Comparison {
+	foldersToCreate := []string{"epTimes", "epReports"}
 	for _, s := range foldersToCreate {
 		fldPath := path.Join(recordPath, s)
 		if _, ok := os.Stat(fldPath); ok == nil {

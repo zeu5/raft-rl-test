@@ -1,6 +1,10 @@
 package benchmarks
 
-import "github.com/spf13/cobra"
+import (
+	"fmt"
+
+	"github.com/spf13/cobra"
+)
 
 var (
 	episodes int
@@ -34,4 +38,13 @@ func GetRootCommand() *cobra.Command {
 	rootCommand.AddCommand(CometRMCommand())
 	rootCommand.AddCommand(RatisDebugCommand())
 	return rootCommand
+}
+
+func ExperimentParametersPrintable() string {
+	result := "ExperimentParameters: \n"
+	result = fmt.Sprintf("%s Runs: %d\n", result, runs)
+	result = fmt.Sprintf("%s Episodes: %d\n", result, episodes)
+	result = fmt.Sprintf("%s Horizon: %d\n", result, horizon)
+
+	return result
 }

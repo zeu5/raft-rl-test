@@ -1,7 +1,6 @@
 package rsl
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -365,32 +364,32 @@ func ColorLogLength() RSLColorFunc {
 
 // CTX
 
-func (r *RSLPartitionEnv) ResetCtx(timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+func (r *RSLPartitionEnv) ResetCtx(epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	return r.Reset(), nil
 }
 
-func (r *RSLPartitionEnv) TickCtx(timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+func (r *RSLPartitionEnv) TickCtx(epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	return r.Tick(), nil
 }
 
-func (r *RSLPartitionEnv) DeliverMessagesCtx(messages []types.Message, timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+func (r *RSLPartitionEnv) DeliverMessagesCtx(messages []types.Message, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	return r.DeliverMessages(messages), nil
 }
 
-func (r *RSLPartitionEnv) DropMessagesCtx(messages []types.Message, timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+func (r *RSLPartitionEnv) DropMessagesCtx(messages []types.Message, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	return r.DropMessages(messages), nil
 }
 
-func (r *RSLPartitionEnv) ReceiveRequestCtx(req types.Request, timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+func (r *RSLPartitionEnv) ReceiveRequestCtx(req types.Request, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	return r.ReceiveRequest(req), nil
 }
 
-func (r *RSLPartitionEnv) StopCtx(nodeID uint64, timeoutCtx context.Context) error {
+func (r *RSLPartitionEnv) StopCtx(nodeID uint64, epCtx *types.EpisodeContext) error {
 	r.Stop(nodeID)
 	return nil
 }
 
-func (r *RSLPartitionEnv) StartCtx(nodeID uint64, timeoutCtx context.Context) error {
+func (r *RSLPartitionEnv) StartCtx(nodeID uint64, epCtx *types.EpisodeContext) error {
 	r.Start(nodeID)
 	return nil
 }

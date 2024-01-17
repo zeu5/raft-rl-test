@@ -1,7 +1,6 @@
 package lpaxos
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -282,7 +281,7 @@ func copyMessagesList(messages []Message) []Message {
 	return newMessages
 }
 
-func (e *LPaxosEnv) StepCtx(a types.Action, timeoutCtx context.Context) (types.State, error) {
+func (e *LPaxosEnv) StepCtx(a types.Action, epCtx *types.EpisodeContext) (types.State, error) {
 	lAction := a.(*LPaxosAction)
 	switch lAction.Type {
 	case "Deliver":
@@ -345,6 +344,6 @@ func (e *LPaxosEnv) StepCtx(a types.Action, timeoutCtx context.Context) (types.S
 	return nil, fmt.Errorf("StepCtx : invalid action type")
 }
 
-func (e *LPaxosEnv) ResetCtx(timeoutCtx context.Context) (types.State, error) {
+func (e *LPaxosEnv) ResetCtx(epCtx *types.EpisodeContext) (types.State, error) {
 	return e.Reset(), nil
 }

@@ -1,7 +1,6 @@
 package grid
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/zeu5/raft-rl-test/types"
@@ -99,7 +98,7 @@ func (g *GridEnvironment) Step(a types.Action) types.State {
 	return newPos
 }
 
-func (g *GridEnvironment) StepCtx(a types.Action, timeoutCtx context.Context) (types.State, error) {
+func (g *GridEnvironment) StepCtx(a types.Action, epCtx *types.EpisodeContext) (types.State, error) {
 	movement := a.(*Movement)
 	newPos := &Position{I: g.CurPos.I, J: g.CurPos.J, K: g.CurPos.K}
 	if movement.Direction == "Next" {
@@ -147,7 +146,7 @@ func (g *GridEnvironment) StepCtx(a types.Action, timeoutCtx context.Context) (t
 	return newPos, nil
 }
 
-func (g *GridEnvironment) ResetCtx(timeoutCtx context.Context) (types.State, error) {
+func (g *GridEnvironment) ResetCtx(epCtx *types.EpisodeContext) (types.State, error) {
 	return g.Reset(), nil
 }
 

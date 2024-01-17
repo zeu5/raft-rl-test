@@ -36,19 +36,19 @@ func RaftRM(episodes, horizon int, savePath string) {
 		Horizon:     horizon,
 		Policy:      policies.NewSoftMaxNegFreqPolicy(0.3, 0.7, 1),
 		Environment: getRaftPartEnv(raftConfig, colors),
-	}))
+	}, types.RepConfigOff()))
 	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
 		Policy:      types.NewRandomPolicy(),
 		Environment: getRaftPartEnv(raftConfig, colors),
-	}))
+	}, types.RepConfigOff()))
 	c.AddExperiment(types.NewExperiment("BonusMaxRL", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
 		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
 		Environment: getRaftPartEnv(raftConfig, colors),
-	}))
+	}, types.RepConfigOff()))
 
 	c.Run()
 }

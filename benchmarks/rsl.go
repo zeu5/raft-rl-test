@@ -49,6 +49,7 @@ func RSLExploration() {
 			Policy:      types.NewRandomPolicy(),
 			Environment: GetRSLEnvironment(config, colors),
 		},
+		types.RepConfigOff(),
 	))
 	// strictPolicy := policies.NewStrictPolicy(types.NewRandomPolicy())
 	// strictPolicy.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
@@ -72,6 +73,7 @@ func RSLExploration() {
 			Policy:      policies.NewSoftMaxNegFreqPolicy(0.1, 0.99, 1),
 			Environment: GetRSLEnvironment(config, colors),
 		},
+		types.RepConfigOff(),
 	))
 	c.AddExperiment(types.NewExperiment(
 		"BonusMax",
@@ -81,6 +83,7 @@ func RSLExploration() {
 			Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.05),
 			Environment: GetRSLEnvironment(config, colors),
 		},
+		types.RepConfigOff(),
 	))
 
 	c.Run()

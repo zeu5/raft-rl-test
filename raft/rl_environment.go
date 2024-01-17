@@ -1,7 +1,6 @@
 package raft
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -414,7 +413,7 @@ func (r *RaftEnvironment) Step(action types.Action) types.State {
 	return nil
 }
 
-func (r *RaftEnvironment) StepCtx(action types.Action, timeoutCtx context.Context) (types.State, error) {
+func (r *RaftEnvironment) StepCtx(action types.Action, epCtx *types.EpisodeContext) (types.State, error) {
 	raftAction := action.(*RaftAction)
 	switch raftAction.Type {
 	case "DeliverMessage":
@@ -487,7 +486,7 @@ func (r *RaftEnvironment) StepCtx(action types.Action, timeoutCtx context.Contex
 	return nil, fmt.Errorf("StepCtx : invalid action type")
 }
 
-func (r *RaftEnvironment) ResetCtx(timeoutCtx context.Context) (types.State, error) {
+func (r *RaftEnvironment) ResetCtx(epCtx *types.EpisodeContext) (types.State, error) {
 	return r.Reset(), nil
 }
 

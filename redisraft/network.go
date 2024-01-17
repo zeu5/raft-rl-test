@@ -250,7 +250,7 @@ func (n *InterceptNetwork) SendMessage(id string) error {
 		io.ReadAll(resp.Body)
 		resp.Body.Close()
 	} else {
-		return fmt.Errorf(fmt.Sprintf("SendMessage : error with post operation /n%s", err))
+		return fmt.Errorf(fmt.Sprintf("SendMessage : error with post operation \n%s", err))
 	}
 
 	// take the lock and delete the sent message from the list

@@ -58,14 +58,14 @@ func CometExploration(episodes, horizon int, saveFile string, ctx context.Contex
 		Horizon:     horizon,
 		Policy:      types.NewSoftMaxNegPolicy(0.1, 0.99, 1),
 		Environment: partitionEnv,
-	}))
+	}, types.RepConfigOff()))
 
 	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
 		Policy:      types.NewRandomPolicy(),
 		Environment: partitionEnv,
-	}))
+	}, types.RepConfigOff()))
 
 	// strict := policies.NewStrictPolicy(types.NewRandomPolicy())
 	// strict.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
@@ -82,7 +82,7 @@ func CometExploration(episodes, horizon int, saveFile string, ctx context.Contex
 		Horizon:     horizon,
 		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
 		Environment: partitionEnv,
-	}))
+	}, types.RepConfigOff()))
 
 	c.RunWithCtx(ctx)
 	env.Cleanup()

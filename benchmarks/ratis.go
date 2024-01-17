@@ -50,7 +50,7 @@ func RatisExploration(episodes, horizon int, saveFile string, ctx context.Contex
 		Horizon:     horizon,
 		Policy:      types.NewRandomPolicy(),
 		Environment: partitionEnv,
-	}))
+	}, types.RepConfigOff()))
 
 	// c.AddExperiment(types.NewExperiment("BonusMax", &types.AgentConfig{
 	// 	Episodes:    episodes,

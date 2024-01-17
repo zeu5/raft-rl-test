@@ -27,6 +27,7 @@ func PaxosReward(episodes, horizon int, saveFile string) {
 			Policy:      types.NewRandomPolicy(),
 			Environment: getLPaxosPartEnv(lPaxosConfig, true),
 		},
+		types.RepConfigOff(),
 	))
 	c.AddExperiment(types.NewExperiment(
 		"Biased-Policy",
@@ -36,6 +37,7 @@ func PaxosReward(episodes, horizon int, saveFile string) {
 			Policy:      policies.NewGuidedPolicy(nil, 0.2, 0.95, 0.02),
 			Environment: getLPaxosPartEnv(lPaxosConfig, true),
 		},
+		types.RepConfigOff(),
 	))
 
 	strictPolicy := policies.NewStrictPolicy(types.NewRandomPolicy())
@@ -49,6 +51,7 @@ func PaxosReward(episodes, horizon int, saveFile string) {
 			Policy:      strictPolicy,
 			Environment: getLPaxosPartEnv(lPaxosConfig, true),
 		},
+		types.RepConfigOff(),
 	))
 
 	c.Run()

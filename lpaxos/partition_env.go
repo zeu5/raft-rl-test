@@ -1,7 +1,6 @@
 package lpaxos
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -230,32 +229,32 @@ func (l *LPaxosPartitionEnv) DropMessages(messages []types.Message) types.Partit
 
 // CTX
 
-func (r *LPaxosPartitionEnv) ResetCtx(timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+func (r *LPaxosPartitionEnv) ResetCtx(epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	return r.Reset(), nil
 }
 
-func (r *LPaxosPartitionEnv) TickCtx(timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+func (r *LPaxosPartitionEnv) TickCtx(epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	return r.Tick(), nil
 }
 
-func (r *LPaxosPartitionEnv) DeliverMessagesCtx(messages []types.Message, timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+func (r *LPaxosPartitionEnv) DeliverMessagesCtx(messages []types.Message, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	return r.DeliverMessages(messages), nil
 }
 
-func (r *LPaxosPartitionEnv) DropMessagesCtx(messages []types.Message, timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+func (r *LPaxosPartitionEnv) DropMessagesCtx(messages []types.Message, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	return r.DropMessages(messages), nil
 }
 
-func (r *LPaxosPartitionEnv) ReceiveRequestCtx(req types.Request, timeoutCtx context.Context) (types.PartitionedSystemState, error) {
+func (r *LPaxosPartitionEnv) ReceiveRequestCtx(req types.Request, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	return r.ReceiveRequest(req), nil
 }
 
-func (r *LPaxosPartitionEnv) StopCtx(nodeID uint64, timeoutCtx context.Context) error {
+func (r *LPaxosPartitionEnv) StopCtx(nodeID uint64, epCtx *types.EpisodeContext) error {
 	r.Stop(nodeID)
 	return nil
 }
 
-func (r *LPaxosPartitionEnv) StartCtx(nodeID uint64, timeoutCtx context.Context) error {
+func (r *LPaxosPartitionEnv) StartCtx(nodeID uint64, epCtx *types.EpisodeContext) error {
 	r.Start(nodeID)
 	return nil
 }
