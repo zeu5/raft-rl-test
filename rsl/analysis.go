@@ -47,30 +47,49 @@ func newRSLPartState(s types.State, colors ...RSLColorFunc) *rslState {
 	return &rslState{nodeStates: make(map[uint64]*rslColoredState)}
 }
 
-func CoverageAnalyzer(colors ...RSLColorFunc) types.Analyzer {
-	return func(run int, s string, t []*types.Trace) types.DataSet {
-		c := make([]int, 0)
-		states := make(map[string]bool)
-		for _, trace := range t {
-			for i := 0; i < trace.Len(); i++ {
-				state, _, _, _ := trace.Get(i)
-				rslState := newRSLPartState(state, colors...)
-				rslStateHash := rslState.Hash()
-				if _, ok := states[rslStateHash]; !ok {
-					states[rslStateHash] = true
-				}
-			}
-			c = append(c, len(states))
-		}
-		return c
+type CoverageAnalyzer struct {
+	colors          []RSLColorFunc
+	uniqueStates    map[string]bool
+	numUniqueStates []int
+}
+
+func NewCoverageAnalyzer(colors ...RSLColorFunc) *CoverageAnalyzer {
+	return &CoverageAnalyzer{
+		colors:          colors,
+		uniqueStates:    make(map[string]bool),
+		numUniqueStates: make([]int, 0),
 	}
 }
+
+func (ca *CoverageAnalyzer) Analyze(_, run int, s string, trace *types.Trace) {
+	for j := 0; j < trace.Len(); j++ {
+		s, _, _, _ := trace.Get(j)
+		sHash := newRSLPartState(s, ca.colors...).Hash()
+		if _, ok := ca.uniqueStates[sHash]; !ok {
+			ca.uniqueStates[sHash] = true
+		}
+	}
+	ca.numUniqueStates = append(ca.numUniqueStates, len(ca.uniqueStates))
+}
+
+func (ca *CoverageAnalyzer) DataSet() types.DataSet {
+	out := make([]int, len(ca.numUniqueStates))
+	copy(out, ca.numUniqueStates)
+	return out
+}
+
+func (ca *CoverageAnalyzer) Reset() {
+	ca.uniqueStates = make(map[string]bool)
+	ca.numUniqueStates = make([]int, 0)
+}
+
+var _ types.Analyzer = (*CoverageAnalyzer)(nil)
 
 func CoverageComparator(plotPath string) types.Comparator {
 	if _, err := os.Stat(plotPath); err != nil {
 		os.Mkdir(plotPath, os.ModePerm)
 	}
-	return func(run int, s []string, ds []types.DataSet) {
+	return func(run, _ int, s []string, ds []types.DataSet) {
 		p := plot.New()
 
 		p.Title.Text = "Comparison"

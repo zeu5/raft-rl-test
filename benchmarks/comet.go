@@ -42,30 +42,35 @@ func CometExploration(episodes, horizon int, saveFile string, ctx context.Contex
 		MaxByzantine:           1,
 	})
 
-	c := types.NewComparison(runs, saveFile, false)
+	c := types.NewComparison(&types.ComparisonConfig{
+		Runs:         runs,
+		Episodes:     episodes,
+		Horizon:      horizon,
+		Record:       false,
+		RecordPath:   saveFile,
+		ReportConfig: types.RepConfigOff(),
+	})
 
-	c.AddAnalysis("plot", cbft.CoverageAnalyzer(colors...), cbft.CoverageComparator(saveFile))
+	c.AddAnalysis("plot", cbft.NewCoverageAnalyzer(colors...), cbft.CoverageComparator(saveFile))
 	// c.AddAnalysis("logs", cbft.RecordLogsAnalyzer(saveFile), types.NoopComparator())
 	// c.AddAnalysis("state_trace", cbft.RecordStateTraceAnalyzer(saveFile), types.NoopComparator())
-	c.AddAnalysis("crashes", cbft.CrashesAnalyzer(saveFile), types.NoopComparator())
-	c.AddAnalysis("bugs", types.BugAnalyzer(saveFile,
+	c.AddAnalysis("crashes", cbft.NewCrashesAnalyzer(saveFile), types.NoopComparator())
+	c.AddAnalysis("bugs", types.NewBugAnalyzer(saveFile,
 		types.BugDesc{Name: "Round1", Check: cbft.ReachedRound1()},
 		types.BugDesc{Name: "DifferentProposers", Check: cbft.DifferentProposers()},
 	), types.BugComparator(saveFile))
 
-	c.AddExperiment(types.NewExperiment("NegReward", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      types.NewSoftMaxNegPolicy(0.1, 0.99, 1),
-		Environment: partitionEnv,
-	}, types.RepConfigOff()))
+	c.AddExperiment(types.NewExperiment(
+		"NegReward",
+		types.NewSoftMaxNegPolicy(0.1, 0.99, 1),
+		partitionEnv,
+	))
 
-	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      types.NewRandomPolicy(),
-		Environment: partitionEnv,
-	}, types.RepConfigOff()))
+	c.AddExperiment(types.NewExperiment(
+		"Random",
+		types.NewRandomPolicy(),
+		partitionEnv,
+	))
 
 	// strict := policies.NewStrictPolicy(types.NewRandomPolicy())
 	// strict.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
@@ -77,14 +82,13 @@ func CometExploration(episodes, horizon int, saveFile string, ctx context.Contex
 	// 	Environment: partitionEnv,
 	// }))
 
-	c.AddExperiment(types.NewExperiment("BonusMax", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
-		Environment: partitionEnv,
-	}, types.RepConfigOff()))
+	c.AddExperiment(types.NewExperiment(
+		"BonusMax",
+		policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
+		partitionEnv,
+	))
 
-	c.RunWithCtx(ctx)
+	c.Run(ctx)
 	env.Cleanup()
 }
 

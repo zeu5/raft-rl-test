@@ -32,11 +32,17 @@ func RatisExploration(episodes, horizon int, saveFile string, ctx context.Contex
 		WithCrashes:            false,
 	})
 
-	c := types.NewComparison(runs, saveFile, false)
+	c := types.NewComparison(&types.ComparisonConfig{
+		Runs:         runs,
+		Episodes:     episodes,
+		Horizon:      horizon,
+		Record:       false,
+		RecordPath:   saveFile,
+		ReportConfig: types.RepConfigOff(),
+	})
 
-	c.AddAnalysis("plot", ratis.CoverageAnalyzer(colors...), ratis.CoverageComparator(saveFile))
-	c.AddAnalysis("bugs", ratis.BugAnalyzer(saveFile), ratis.BugComparator())
-	c.AddAnalysis("logs", ratis.LogAnalyzer(saveFile), types.NoopComparator())
+	c.AddAnalysis("plot", ratis.NewCoverageAnalyzer(colors...), ratis.CoverageComparator(saveFile))
+	c.AddAnalysis("logs", ratis.NewLogAnalyzer(saveFile), types.NoopComparator())
 
 	// c.AddExperiment(types.NewExperiment("NegReward", &types.AgentConfig{
 	// 	Episodes:    episodes,
@@ -45,12 +51,7 @@ func RatisExploration(episodes, horizon int, saveFile string, ctx context.Contex
 	// 	Environment: partitionEnv,
 	// }))
 
-	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      types.NewRandomPolicy(),
-		Environment: partitionEnv,
-	}, types.RepConfigOff()))
+	c.AddExperiment(types.NewExperiment("Random", types.NewRandomPolicy(), partitionEnv))
 
 	// c.AddExperiment(types.NewExperiment("BonusMax", &types.AgentConfig{
 	// 	Episodes:    episodes,
@@ -59,7 +60,7 @@ func RatisExploration(episodes, horizon int, saveFile string, ctx context.Contex
 	// 	Environment: partitionEnv,
 	// }))
 
-	c.Run()
+	c.Run(ctx)
 	env.Cleanup()
 }
 

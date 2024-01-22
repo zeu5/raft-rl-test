@@ -209,59 +209,7 @@ func (n *InterceptNetwork) WaitForNodes(numNodes int) bool {
 	}
 	return true
 }
-
-// send a message from the list given its id
-func (n *InterceptNetwork) SendMessage(id string) error {
-	n.lock.Lock()
-	m, ok1 := n.messages[id] // get message from the list
-	nodeAddr := ""
-	if ok1 { // if present, read the target node address
-		nodeAddr = n.nodes[m.To()]
-	}
-	n.lock.Unlock()
-
-	if !ok1 { // if message not present, return
-		return errors.New("SendMessage : read message is invalid")
-	}
-
-	// marshal the message to send it
-	bs, err := json.Marshal(m)
-	if err != nil {
-		return errors.New("SendMessage : error marshaling the message")
-	}
-
-	// set up http client to send it?
-	client := &http.Client{
-		Transport: &http.Transport{
-			DialContext: (&net.Dialer{
-				Timeout:   5 * time.Second,
-				KeepAlive: 5 * time.Second,
-			}).DialContext,
-			TLSHandshakeTimeout:   5 * time.Second,
-			ResponseHeaderTimeout: 5 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-			DisableKeepAlives:     true,
-		},
-	}
-
-	// send the message over http
-	resp, err := client.Post("http://"+nodeAddr+"/message", "application/json", bytes.NewBuffer(bs))
-	if err == nil { // what happens here?
-		io.ReadAll(resp.Body)
-		resp.Body.Close()
-	} else {
-		return fmt.Errorf(fmt.Sprintf("SendMessage : error with post operation \n%s", err))
-	}
-
-	// take the lock and delete the sent message from the list
-	n.lock.Lock()
-	delete(n.messages, id)
-	n.lock.Unlock()
-
-	return nil
-}
-
-func (n *InterceptNetwork) SendMessageCtx(id string, epCtx *types.EpisodeContext) error {
+func (n *InterceptNetwork) SendMessage(id string, epCtx *types.EpisodeContext) error {
 	var start time.Time
 
 	start = time.Now()

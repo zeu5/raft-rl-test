@@ -67,24 +67,44 @@ func NewRatisRaftEnv(ctx context.Context, clusterConfig *RatisClusterConfig) *Ra
 	e.network.Start()
 	return e
 }
+func (r *RatisRaftEnv) Cleanup() {
+	if r.cluster != nil {
+		r.cluster.Destroy()
+		r.cluster = nil
+	}
+}
 
-func (r *RatisRaftEnv) ReceiveRequest(types.Request) types.PartitionedSystemState {
-	newState := r.curState.Copy()
+var _ types.PartitionedSystemEnvironment = &RatisRaftEnv{}
+
+func (r *RatisRaftEnv) Reset(epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
+	if r.cluster != nil {
+		r.cluster.Destroy()
+	}
+	r.network.Reset()
+	r.cluster = NewCluster(r.clusterConfig)
+	r.cluster.Start()
+
+	r.network.WaitForNodes(r.clusterConfig.NumNodes)
+
+	newState := &RatisClusterState{
+		NodeStates: r.cluster.GetNodeStates(),
+		Messages:   r.network.GetAllMessages(),
+	}
 	r.curState = newState
-	return newState
+	return newState, nil
 }
 
-func (r *RatisRaftEnv) Start(node uint64) {
-	// TODO: Need to implement this
-	panic("should not come here")
+func (r *RatisRaftEnv) Tick(epCtx *types.EpisodeContext, passedTime int) (types.PartitionedSystemState, error) {
+	time.Sleep(20 * time.Millisecond)
+	newState := &RatisClusterState{
+		NodeStates: r.cluster.GetNodeStates(),
+		Messages:   r.network.GetAllMessages(),
+	}
+	r.curState = newState
+	return newState, nil
 }
 
-func (r *RatisRaftEnv) Stop(node uint64) {
-	// TODO: Need to implement this
-	panic("should not come here")
-}
-
-func (r *RatisRaftEnv) DeliverMessages(messages []types.Message) types.PartitionedSystemState {
+func (r *RatisRaftEnv) DeliverMessages(messages []types.Message, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	newState := r.curState.Copy()
 
 	for _, m := range messages {
@@ -96,11 +116,10 @@ func (r *RatisRaftEnv) DeliverMessages(messages []types.Message) types.Partition
 	}
 	newState.Messages = r.network.GetAllMessages()
 	r.curState = newState
-	return newState
+	return newState, nil
 }
 
-func (r *RatisRaftEnv) DropMessages(messages []types.Message) types.PartitionedSystemState {
-
+func (r *RatisRaftEnv) DropMessages(messages []types.Message, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	newState := &RatisClusterState{
 		NodeStates: make(map[uint64]*RatisNodeState),
 	}
@@ -117,74 +136,24 @@ func (r *RatisRaftEnv) DropMessages(messages []types.Message) types.PartitionedS
 	newState.Messages = r.network.GetAllMessages()
 	r.curState = newState
 
-	return newState
+	return newState, nil
 }
 
-func (r *RatisRaftEnv) Reset() types.PartitionedSystemState {
-	if r.cluster != nil {
-		r.cluster.Destroy()
-	}
-	r.network.Reset()
-	r.cluster = NewCluster(r.clusterConfig)
-	r.cluster.Start()
-
-	r.network.WaitForNodes(r.clusterConfig.NumNodes)
-
-	newState := &RatisClusterState{
-		NodeStates: r.cluster.GetNodeStates(),
-		Messages:   r.network.GetAllMessages(),
-	}
+func (r *RatisRaftEnv) ReceiveRequest(req types.Request, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
+	newState := r.curState.Copy()
 	r.curState = newState
-	return newState
+	return newState, nil
 }
 
-func (r *RatisRaftEnv) Cleanup() {
-	if r.cluster != nil {
-		r.cluster.Destroy()
-		r.cluster = nil
-	}
-}
+func (r *RatisRaftEnv) Stop(nodeID uint64, epCtx *types.EpisodeContext) error {
 
-func (r *RatisRaftEnv) Tick() types.PartitionedSystemState {
-	time.Sleep(20 * time.Millisecond)
-	newState := &RatisClusterState{
-		NodeStates: r.cluster.GetNodeStates(),
-		Messages:   r.network.GetAllMessages(),
-	}
-	r.curState = newState
-	return newState
-}
-
-var _ types.PartitionedSystemEnvironmentUnion = &RatisRaftEnv{}
-
-// CTX
-
-func (r *RatisRaftEnv) ResetCtx(epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
-	return r.Reset(), nil
-}
-
-func (r *RatisRaftEnv) TickCtx(epCtx *types.EpisodeContext, passedTime int) (types.PartitionedSystemState, error) {
-	return r.Tick(), nil
-}
-
-func (r *RatisRaftEnv) DeliverMessagesCtx(messages []types.Message, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
-	return r.DeliverMessages(messages), nil
-}
-
-func (r *RatisRaftEnv) DropMessagesCtx(messages []types.Message, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
-	return r.DropMessages(messages), nil
-}
-
-func (r *RatisRaftEnv) ReceiveRequestCtx(req types.Request, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
-	return r.ReceiveRequest(req), nil
-}
-
-func (r *RatisRaftEnv) StopCtx(nodeID uint64, epCtx *types.EpisodeContext) error {
-	r.Stop(nodeID)
+	panic("should not come here")
 	return nil
 }
 
-func (r *RatisRaftEnv) StartCtx(nodeID uint64, epCtx *types.EpisodeContext) error {
-	r.Start(nodeID)
+func (r *RatisRaftEnv) Start(nodeID uint64, epCtx *types.EpisodeContext) error {
+
+	// TODO: Need to implement this
+	panic("should not come here")
 	return nil
 }

@@ -35,29 +35,49 @@ func cometColoredStateHash(state types.State, colors ...CometColorFunc) string {
 	return hex.EncodeToString(hash[:])
 }
 
-func CoverageAnalyzer(colors ...CometColorFunc) types.Analyzer {
-	return func(i int, s string, t []*types.Trace) types.DataSet {
-		c := make([]int, 0)
-		states := make(map[string]bool)
-		for _, trace := range t {
-			for i := 0; i < trace.Len(); i++ {
-				state, _, _, _ := trace.Get(i)
-				stateHash := cometColoredStateHash(state, colors...)
-				if _, ok := states[stateHash]; !ok {
-					states[stateHash] = true
-				}
-			}
-			c = append(c, len(states))
-		}
-		return c
+type CoverageAnalyzer struct {
+	colors       []CometColorFunc
+	states       map[string]bool
+	uniqueStates []int
+}
+
+func NewCoverageAnalyzer(colors ...CometColorFunc) *CoverageAnalyzer {
+	return &CoverageAnalyzer{
+		colors:       colors,
+		states:       make(map[string]bool),
+		uniqueStates: make([]int, 0),
 	}
 }
+
+func (c *CoverageAnalyzer) Analyze(i, iter int, s string, trace *types.Trace) {
+	for step := 0; step < trace.Len(); step++ {
+		s, _, _, _ := trace.Get(step)
+		stateHash := cometColoredStateHash(s, c.colors...)
+		if _, ok := c.states[stateHash]; !ok {
+			c.states[stateHash] = true
+		}
+	}
+	c.uniqueStates = append(c.uniqueStates, len(c.states))
+}
+
+func (c *CoverageAnalyzer) DataSet() types.DataSet {
+	out := make([]int, len(c.uniqueStates))
+	copy(out, c.uniqueStates)
+	return out
+}
+
+func (c *CoverageAnalyzer) Reset() {
+	c.states = make(map[string]bool)
+	c.uniqueStates = make([]int, 0)
+}
+
+var _ types.Analyzer = &CoverageAnalyzer{}
 
 func CoverageComparator(savePath string) types.Comparator {
 	if _, err := os.Stat(savePath); err != nil {
 		os.Mkdir(savePath, os.ModePerm)
 	}
-	return func(run int, s []string, ds []types.DataSet) {
+	return func(run, _ int, s []string, ds []types.DataSet) {
 		p := plot.New()
 
 		p.Title.Text = "Comparison"
@@ -110,18 +130,30 @@ func recordLogsToFile(s *types.Partition, file string) {
 	os.WriteFile(file, bs, 0644)
 }
 
-func RecordLogsAnalyzer(storePath string) types.Analyzer {
-	return func(i int, s string, t []*types.Trace) types.DataSet {
-		for iter, trace := range t {
-			filePath := path.Join(storePath, fmt.Sprintf("%s_%d_%d.log", s, i, iter))
-			s, _, _, _ := trace.Last()
+type RecordLogsAnalyzer struct {
+	StorePath string
+}
 
-			pState := s.(*types.Partition)
-			recordLogsToFile(pState, filePath)
-		}
-		return nil
+func NewRecordLogsAnalyzer(storePath string) *RecordLogsAnalyzer {
+	return &RecordLogsAnalyzer{
+		StorePath: storePath,
 	}
 }
+
+func (r *RecordLogsAnalyzer) Analyze(i, iter int, s string, trace *types.Trace) {
+	filePath := path.Join(r.StorePath, fmt.Sprintf("%s_%d_%d.log", s, i, iter))
+	state, _, _, _ := trace.Last()
+	pState := state.(*types.Partition)
+	recordLogsToFile(pState, filePath)
+}
+
+func (r *RecordLogsAnalyzer) DataSet() types.DataSet {
+	return nil
+}
+
+func (e *RecordLogsAnalyzer) Reset() {}
+
+var _ types.Analyzer = &RecordLogsAnalyzer{}
 
 func stateToLines(s *types.Partition) []string {
 	lines := make([]string, 0)
@@ -177,65 +209,102 @@ func recordTraceToFile(trace *types.Trace, filePath string) {
 	os.WriteFile(filePath, bs, 0644)
 }
 
-func RecordStateTraceAnalyzer(storePath string) types.Analyzer {
-	return func(i int, s string, t []*types.Trace) types.DataSet {
-		for iter, trace := range t {
-			filePath := path.Join(storePath, fmt.Sprintf("%s_%d_%d_states.log", s, i, iter))
-			recordTraceToFile(trace, filePath)
-		}
-		return nil
+type RecordStateTraceAnalyzer struct {
+	StorePath string
+}
+
+func NewRecordStateTraceAnalyzer(storePath string) *RecordStateTraceAnalyzer {
+	return &RecordStateTraceAnalyzer{
+		StorePath: storePath,
 	}
 }
 
-func CrashesAnalyzer(storePath string) types.Analyzer {
-	return func(i int, s string, t []*types.Trace) types.DataSet {
-		for iter, trace := range t {
-			haveCrash := false
-			for step := 0; step < trace.Len(); step++ {
-				s, _, _, _ := trace.Get(step)
-				ps := s.(*types.Partition)
-				for _, rs := range ps.ReplicaStates {
-					crs := rs.(*CometNodeState)
-					if strings.Contains(crs.LogStdout, "panic") || strings.Contains(crs.LogStderr, "panic") {
-						haveCrash = true
-					}
-				}
-				if haveCrash {
-					break
-				}
-			}
-			if haveCrash {
-				stateFilePath := path.Join(storePath, fmt.Sprintf("%s_%d_%d_states.log", s, i, iter))
-				logFilePath := path.Join(storePath, fmt.Sprintf("%s_%d_%d.log", s, i, iter))
+func (r *RecordStateTraceAnalyzer) Analyze(i, iter int, s string, trace *types.Trace) {
+	filePath := path.Join(r.StorePath, fmt.Sprintf("%s_%d_%d_states.log", s, i, iter))
+	recordTraceToFile(trace, filePath)
+}
 
-				s, _, _, _ := trace.Last()
-				pState := s.(*types.Partition)
+func (r *RecordStateTraceAnalyzer) DataSet() types.DataSet {
+	return nil
+}
 
-				recordLogsToFile(pState, logFilePath)
-				recordTraceToFile(trace, stateFilePath)
-			}
-		}
-		return nil
+func (e *RecordStateTraceAnalyzer) Reset() {}
+
+var _ types.Analyzer = &RecordStateTraceAnalyzer{}
+
+type CrashesAnalyzer struct {
+	StorePath string
+}
+
+func NewCrashesAnalyzer(storePath string) *CrashesAnalyzer {
+	return &CrashesAnalyzer{
+		StorePath: storePath,
 	}
 }
 
-func BugLogRecorder(storePath string, bugs ...types.BugDesc) types.Analyzer {
-	if _, ok := os.Stat(storePath); ok == nil {
-		os.RemoveAll(storePath)
-	}
-	os.MkdirAll(storePath, 0777)
-	return func(run int, s string, traces []*types.Trace) types.DataSet {
-		for i, t := range traces {
-			for _, b := range bugs {
-				bugFound, step := b.Check(t)
-				if bugFound { // swapped order just to debug
-					bugLogPath := path.Join(storePath, strconv.Itoa(run)+"_"+s+"_"+b.Name+"_"+strconv.Itoa(i)+"_step"+strconv.Itoa(step)+".log")
-					s, _, _, _ := t.Last()
-					pS := s.(*types.Partition)
-					recordLogsToFile(pS, bugLogPath)
-				}
+func (r *CrashesAnalyzer) Analyze(i, iter int, s string, trace *types.Trace) {
+	haveCrash := false
+	for step := 0; step < trace.Len(); step++ {
+		s, _, _, _ := trace.Get(step)
+		ps := s.(*types.Partition)
+		for _, rs := range ps.ReplicaStates {
+			crs := rs.(*CometNodeState)
+			if strings.Contains(crs.LogStdout, "panic") || strings.Contains(crs.LogStderr, "panic") {
+				haveCrash = true
 			}
 		}
-		return nil
+		if haveCrash {
+			break
+		}
+	}
+	if haveCrash {
+		stateFilePath := path.Join(r.StorePath, fmt.Sprintf("%s_%d_%d_states.log", s, i, iter))
+		logFilePath := path.Join(r.StorePath, fmt.Sprintf("%s_%d_%d.log", s, i, iter))
+
+		s, _, _, _ := trace.Last()
+		pState := s.(*types.Partition)
+
+		recordLogsToFile(pState, logFilePath)
+		recordTraceToFile(trace, stateFilePath)
 	}
 }
+
+func (r *CrashesAnalyzer) DataSet() types.DataSet {
+	return nil
+}
+
+func (e *CrashesAnalyzer) Reset() {}
+
+var _ types.Analyzer = &CrashesAnalyzer{}
+
+type BugLogRecorder struct {
+	StorePath string
+	Bugs      []types.BugDesc
+}
+
+func NewBugLogRecorder(storePath string, bugs ...types.BugDesc) *BugLogRecorder {
+	return &BugLogRecorder{
+		StorePath: storePath,
+		Bugs:      bugs,
+	}
+}
+
+func (r *BugLogRecorder) Analyze(i, iter int, s string, trace *types.Trace) {
+	for _, b := range r.Bugs {
+		bugFound, step := b.Check(trace)
+		if bugFound { // swapped order just to debug
+			bugLogPath := path.Join(r.StorePath, strconv.Itoa(i)+"_"+s+"_"+b.Name+"_"+strconv.Itoa(iter)+"_step"+strconv.Itoa(step)+".log")
+			s, _, _, _ := trace.Last()
+			pS := s.(*types.Partition)
+			recordLogsToFile(pS, bugLogPath)
+		}
+	}
+}
+
+func (r *BugLogRecorder) DataSet() types.DataSet {
+	return nil
+}
+
+func (e *BugLogRecorder) Reset() {}
+
+var _ types.Analyzer = &BugLogRecorder{}

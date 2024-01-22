@@ -221,7 +221,7 @@ func (r RaftMessageWrapper) Copy() RaftMessageWrapper {
 var _ types.Message = RaftMessageWrapper{}
 var _ types.PartitionedSystemState = RaftState{}
 
-var _ types.PartitionedSystemEnvironmentUnion = &RaftPartitionEnv{}
+var _ types.PartitionedSystemEnvironment = &RaftPartitionEnv{}
 
 type RaftPartitionEnv struct {
 	*RaftEnvironment
@@ -233,16 +233,88 @@ func NewPartitionEnvironment(config RaftEnvironmentConfig) *RaftPartitionEnv {
 	}
 }
 
-func (p *RaftPartitionEnv) Reset() types.PartitionedSystemState {
-	s := p.RaftEnvironment.Reset()
-	return s.(RaftState)
+// deliver the specified message in the system and returns the subsequent state, no tick pass?
+func (p *RaftPartitionEnv) deliverMessage(m types.Message) types.PartitionedSystemState {
+	rm := m.(RaftMessageWrapper)
+	node, exists := p.nodes[rm.Message.To]
+	msgK := msgKey(rm.Message)
+	if exists {
+		node.Step(rm.Message)
+	}
+	delete(p.messages, msgK)
+
+	newState := RaftState{
+		NodeStates:   make(map[uint64]raft.Status),
+		WithTimeouts: p.config.Timeouts,
+		Requests:     copyMessagesList(p.curState.Requests),
+		Logs:         make(map[uint64][]pb.Entry),
+		Snapshots:    make(map[uint64]pb.SnapshotMetadata),
+	}
+	for id, node := range p.nodes {
+		if node.HasReady() {
+			ready := node.Ready()
+			if !raft.IsEmptySnap(ready.Snapshot) {
+				p.storages[id].ApplySnapshot(ready.Snapshot)
+				// snap, err := p.storages[id].Snapshot()
+			}
+			if len(ready.Entries) > 0 {
+				p.storages[id].Append(ready.Entries)
+			}
+			for _, message := range ready.Messages {
+				msgK := msgKey(message)
+				p.messages[msgK] = message
+			}
+			node.Advance(ready)
+		}
+		// add status
+		status := node.Status()
+		newState.NodeStates[id] = status
+
+		// add log
+		newState.Logs[id] = make([]pb.Entry, 0)
+		storage := p.storages[id]
+		lastIndex, _ := storage.LastIndex()
+		ents, err := storage.Entries(1, lastIndex+1, 1024*1024) // hardcoded value from link_env.go
+		if err == nil {
+			newState.Logs[id] = copyLog(ents)
+		} else {
+			panic("error in reading entries in the log")
+		}
+
+		// add snapshot
+		snapshot, err := storage.Snapshot()
+		if err == nil {
+			newState.Snapshots[id] = snapshot.Metadata
+		}
+
+	}
+	newState.Messages = copyMessages(p.messages)
+	p.curState = newState
+	return newState
 }
 
-// partition environment in types.partition_env.go will call these two functions multiple times inbetween partition actions
-// it seems they are not using the step function of the underlying environment, they interact directly with the raft code...
+// drops the specified message in the system, no tick pass
+func (p *RaftPartitionEnv) dropMessage(m types.Message) types.PartitionedSystemState {
+	delete(p.messages, m.Hash())
+	newState := RaftState{
+		NodeStates:   copyNodeStates(p.curState.NodeStates),
+		Messages:     copyMessages(p.curState.Messages),
+		Logs:         copyLogs(p.curState.Logs), // copy the logs for the new state
+		Snapshots:    copySnapshots(p.curState.Snapshots),
+		Requests:     copyMessagesList(p.curState.Requests),
+		WithTimeouts: p.config.Timeouts,
+	}
+	delete(newState.Messages, m.Hash())
+	p.curState = newState
+	return newState
+}
 
-// make one tick pass in the system and returns the subsequent env state
-func (p *RaftPartitionEnv) Tick() types.PartitionedSystemState {
+func (r *RaftPartitionEnv) Reset(epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
+	s, err := r.RaftEnvironment.Reset(epCtx)
+	return s.(RaftState), err
+}
+
+func (p *RaftPartitionEnv) Tick(epCtx *types.EpisodeContext, passedTime int) (types.PartitionedSystemState, error) {
 	for _, node := range p.nodes {
 		node.Tick()
 	}
@@ -316,10 +388,26 @@ func (p *RaftPartitionEnv) Tick() types.PartitionedSystemState {
 	newState.Messages = copyMessages(p.messages)
 	newState.Requests = copyMessagesList(p.curState.Requests)
 	p.curState = newState
-	return newState
+	return newState, nil
 }
 
-func (p *RaftPartitionEnv) ReceiveRequest(r types.Request) types.PartitionedSystemState {
+func (l *RaftPartitionEnv) DeliverMessages(messages []types.Message, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
+	var s types.PartitionedSystemState = nil
+	for _, m := range messages {
+		s = l.deliverMessage(m)
+	}
+	return s, nil
+}
+
+func (l *RaftPartitionEnv) DropMessages(messages []types.Message, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
+	var s types.PartitionedSystemState
+	for _, m := range messages {
+		s = l.dropMessage(m)
+	}
+	return s, nil
+}
+
+func (p *RaftPartitionEnv) ReceiveRequest(req types.Request, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	newState := RaftState{
 		NodeStates:   copyNodeStates(p.curState.NodeStates),
 		Messages:     copyMessages(p.curState.Messages),
@@ -340,7 +428,7 @@ func (p *RaftPartitionEnv) ReceiveRequest(r types.Request) types.PartitionedSyst
 	}
 	remainingRequests := p.curState.Requests
 	if haveLeader {
-		message := r.(pb.Message)
+		message := req.(pb.Message)
 		message.To = leader
 		p.nodes[leader].Step((message))
 		remainingRequests = p.curState.Requests[1:]
@@ -349,129 +437,15 @@ func (p *RaftPartitionEnv) ReceiveRequest(r types.Request) types.PartitionedSyst
 		newState.Requests = append(newState.Requests, copyMessage(r))
 	}
 	p.curState = newState
-	return newState
+	return newState, nil
 }
 
-func (l *RaftPartitionEnv) DeliverMessages(messages []types.Message) types.PartitionedSystemState {
-	var s types.PartitionedSystemState = nil
-	for _, m := range messages {
-		s = l.deliverMessage(m)
-	}
-	return s
-}
-
-// deliver the specified message in the system and returns the subsequent state, no tick pass?
-func (p *RaftPartitionEnv) deliverMessage(m types.Message) types.PartitionedSystemState {
-	rm := m.(RaftMessageWrapper)
-	node, exists := p.nodes[rm.Message.To]
-	msgK := msgKey(rm.Message)
-	if exists {
-		node.Step(rm.Message)
-	}
-	delete(p.messages, msgK)
-
-	newState := RaftState{
-		NodeStates:   make(map[uint64]raft.Status),
-		WithTimeouts: p.config.Timeouts,
-		Requests:     copyMessagesList(p.curState.Requests),
-		Logs:         make(map[uint64][]pb.Entry),
-		Snapshots:    make(map[uint64]pb.SnapshotMetadata),
-	}
-	for id, node := range p.nodes {
-		if node.HasReady() {
-			ready := node.Ready()
-			if !raft.IsEmptySnap(ready.Snapshot) {
-				p.storages[id].ApplySnapshot(ready.Snapshot)
-				// snap, err := p.storages[id].Snapshot()
-			}
-			if len(ready.Entries) > 0 {
-				p.storages[id].Append(ready.Entries)
-			}
-			for _, message := range ready.Messages {
-				msgK := msgKey(message)
-				p.messages[msgK] = message
-			}
-			node.Advance(ready)
-		}
-		// add status
-		status := node.Status()
-		newState.NodeStates[id] = status
-
-		// add log
-		newState.Logs[id] = make([]pb.Entry, 0)
-		storage := p.storages[id]
-		lastIndex, _ := storage.LastIndex()
-		ents, err := storage.Entries(1, lastIndex+1, 1024*1024) // hardcoded value from link_env.go
-		if err == nil {
-			newState.Logs[id] = copyLog(ents)
-		} else {
-			panic("error in reading entries in the log")
-		}
-
-		// add snapshot
-		snapshot, err := storage.Snapshot()
-		if err == nil {
-			newState.Snapshots[id] = snapshot.Metadata
-		}
-
-	}
-	newState.Messages = copyMessages(p.messages)
-	p.curState = newState
-	return newState
-}
-
-func (l *RaftPartitionEnv) DropMessages(messages []types.Message) types.PartitionedSystemState {
-	var s types.PartitionedSystemState
-	for _, m := range messages {
-		s = l.dropMessage(m)
-	}
-	return s
-}
-
-// drops the specified message in the system, no tick pass
-func (p *RaftPartitionEnv) dropMessage(m types.Message) types.PartitionedSystemState {
-	delete(p.messages, m.Hash())
-	newState := RaftState{
-		NodeStates:   copyNodeStates(p.curState.NodeStates),
-		Messages:     copyMessages(p.curState.Messages),
-		Logs:         copyLogs(p.curState.Logs), // copy the logs for the new state
-		Snapshots:    copySnapshots(p.curState.Snapshots),
-		Requests:     copyMessagesList(p.curState.Requests),
-		WithTimeouts: p.config.Timeouts,
-	}
-	delete(newState.Messages, m.Hash())
-	p.curState = newState
-	return newState
-}
-
-// CTX
-
-func (r *RaftPartitionEnv) ResetCtx(epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
-	return r.Reset(), nil
-}
-
-func (r *RaftPartitionEnv) TickCtx(epCtx *types.EpisodeContext, passedTime int) (types.PartitionedSystemState, error) {
-	return r.Tick(), nil
-}
-
-func (r *RaftPartitionEnv) DeliverMessagesCtx(messages []types.Message, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
-	return r.DeliverMessages(messages), nil
-}
-
-func (r *RaftPartitionEnv) DropMessagesCtx(messages []types.Message, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
-	return r.DropMessages(messages), nil
-}
-
-func (r *RaftPartitionEnv) ReceiveRequestCtx(req types.Request, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
-	return r.ReceiveRequest(req), nil
-}
-
-func (r *RaftPartitionEnv) StopCtx(nodeID uint64, epCtx *types.EpisodeContext) error {
-	r.Stop(nodeID)
+func (r *RaftPartitionEnv) Stop(nodeID uint64, epCtx *types.EpisodeContext) error {
+	r.RaftEnvironment.Stop(nodeID)
 	return nil
 }
 
-func (r *RaftPartitionEnv) StartCtx(nodeID uint64, epCtx *types.EpisodeContext) error {
-	r.Start(nodeID)
+func (r *RaftPartitionEnv) Start(nodeID uint64, epCtx *types.EpisodeContext) error {
+	r.RaftEnvironment.Start(nodeID)
 	return nil
 }

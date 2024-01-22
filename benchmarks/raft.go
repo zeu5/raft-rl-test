@@ -1,6 +1,8 @@
 package benchmarks
 
 import (
+	"context"
+
 	"github.com/spf13/cobra"
 	"github.com/zeu5/raft-rl-test/policies"
 	"github.com/zeu5/raft-rl-test/raft"
@@ -12,7 +14,7 @@ var requests int
 var abstracter string
 var hierarchy string
 
-func Raft(episodes, horizon int, saveFile string) {
+func Raft(episodes, horizon int, saveFile string, ctx context.Context) {
 	raftConfig := raft.RaftEnvironmentConfig{
 		Replicas:      5,
 		ElectionTick:  15,
@@ -20,31 +22,23 @@ func Raft(episodes, horizon int, saveFile string) {
 		Timeouts:      timeouts,
 		Requests:      requests,
 	}
-	c := types.NewComparison(runs, saveFile, false)
-	c.AddAnalysis("Plot", raft.RaftAnalyzer(saveFile), raft.RaftPlotComparator(saveFile))
-	c.AddExperiment(types.NewExperiment("RL", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      types.NewSoftMaxNegPolicy(0.3, 0.7, 1),
-		Environment: getRaftEnv(raftConfig, abstracter),
-	}, types.RepConfigOff()))
-	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      types.NewRandomPolicy(),
-		Environment: getRaftEnv(raftConfig, abstracter),
-	}, types.RepConfigOff()))
-	c.AddExperiment(types.NewExperiment("BonusMaxRL", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0),
-		Environment: getRaftEnv(raftConfig, abstracter),
-	}, types.RepConfigOff()))
+	c := types.NewComparison(&types.ComparisonConfig{
+		Runs:         runs,
+		Episodes:     episodes,
+		Horizon:      horizon,
+		Record:       false,
+		RecordPath:   saveFile,
+		ReportConfig: types.RepConfigOff(),
+	})
+	c.AddAnalysis("Plot", raft.NewRaftAnalyzer(saveFile), raft.RaftPlotComparator(saveFile))
+	c.AddExperiment(types.NewExperiment("RL", types.NewSoftMaxNegPolicy(0.3, 0.7, 1), getRaftEnv(raftConfig, abstracter)))
+	c.AddExperiment(types.NewExperiment("Random", types.NewRandomPolicy(), getRaftEnv(raftConfig, abstracter)))
+	c.AddExperiment(types.NewExperiment("BonusMaxRL", policies.NewBonusPolicyGreedy(0.1, 0.99, 0), getRaftEnv(raftConfig, abstracter)))
 
-	c.Run()
+	c.Run(ctx)
 }
 
-func getRaftEnv(config raft.RaftEnvironmentConfig, abstractor string) types.EnvironmentUnion {
+func getRaftEnv(config raft.RaftEnvironmentConfig, abstractor string) types.Environment {
 	if abstractor == "none" {
 		return raft.NewRaftEnvironment(config)
 	}
@@ -66,7 +60,7 @@ func RaftCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use: "raft",
 		Run: func(cmd *cobra.Command, args []string) {
-			Raft(episodes, horizon, saveFile)
+			Raft(episodes, horizon, saveFile, context.Background())
 		},
 	}
 	cmd.PersistentFlags().StringVarP(&abstracter, "abstractor", "a", "none", "Abstraction to use")

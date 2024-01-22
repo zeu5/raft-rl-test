@@ -1,13 +1,15 @@
 package benchmarks
 
 import (
+	"context"
+
 	"github.com/spf13/cobra"
 	"github.com/zeu5/raft-rl-test/grid"
 	"github.com/zeu5/raft-rl-test/policies"
 	"github.com/zeu5/raft-rl-test/types"
 )
 
-func GridReward(episodes, horizon int, saveFile string, height, width, grids int, runs int) {
+func GridReward(episodes, horizon int, saveFile string, height, width, grids int, runs int, ctx context.Context) {
 
 	doors := []grid.Door{
 		// from grid 0
@@ -40,43 +42,35 @@ func GridReward(episodes, horizon int, saveFile string, height, width, grids int
 		{From: grid.Position{I: 35, J: 35, K: 3}, To: grid.Position{I: 0, J: 0, K: 4}},
 	}
 
-	c := types.NewComparison(runs, saveFile, false)
+	c := types.NewComparison(&types.ComparisonConfig{
+		Runs:         runs,
+		Episodes:     episodes,
+		Horizon:      horizon,
+		Record:       false,
+		RecordPath:   saveFile,
+		ReportConfig: types.RepConfigOff(),
+	})
 	// c.AddAnalysis("GridPlot", grid.GridAnalyzer, grid.GridDepthComparator())
-	c.AddAnalysis("Coverage", grid.GridCoverageAnalyzer(), grid.GridCoverageComparator())
+	c.AddAnalysis("Coverage", grid.NewGridCoverageAnalyzer(), grid.GridCoverageComparator())
 
 	c.AddExperiment(types.NewExperiment(
 		"Random-Part",
-		&types.AgentConfig{
-			Episodes:    episodes,
-			Horizon:     horizon,
-			Policy:      types.NewRandomPolicy(),
-			Environment: grid.NewGridEnvironment(height, width, grids, doors...),
-		},
-		types.RepConfigOff(),
+		types.NewRandomPolicy(),
+		grid.NewGridEnvironment(height, width, grids, doors...),
 	))
 	c.AddExperiment(types.NewExperiment(
 		"NegReward-Part",
-		&types.AgentConfig{
-			Episodes:    episodes,
-			Horizon:     horizon,
-			Policy:      policies.NewSoftMaxNegFreqPolicy(0.3, 0.7, 1),
-			Environment: grid.NewGridEnvironment(height, width, grids, doors...),
-		},
-		types.RepConfigOff(),
+		policies.NewSoftMaxNegFreqPolicy(0.3, 0.7, 1),
+		grid.NewGridEnvironment(height, width, grids, doors...),
 	))
 
 	c.AddExperiment(types.NewExperiment(
 		"Exploration-Policy",
-		&types.AgentConfig{
-			Episodes:    episodes,
-			Horizon:     horizon,
-			Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.02),
-			Environment: grid.NewGridEnvironment(height, width, grids, doors...),
-		},
-		types.RepConfigOff(),
+		policies.NewBonusPolicyGreedy(0.1, 0.99, 0.02),
+		grid.NewGridEnvironment(height, width, grids, doors...),
 	))
 
-	c.Run()
+	c.Run(ctx)
 }
 
 func GridRewardCommand() *cobra.Command {
@@ -87,7 +81,7 @@ func GridRewardCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use: "grid",
 		Run: func(cmd *cobra.Command, args []string) {
-			GridReward(episodes, horizon, saveFile, height, width, grids, runs)
+			GridReward(episodes, horizon, saveFile, height, width, grids, runs, context.Background())
 		},
 	}
 	cmd.PersistentFlags().IntVar(&height, "height", 40, "Height of each grid")

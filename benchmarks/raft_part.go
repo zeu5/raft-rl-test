@@ -3,13 +3,15 @@ package benchmarks
 // experiment file
 
 import (
+	"context"
+
 	"github.com/spf13/cobra"
 	"github.com/zeu5/raft-rl-test/policies"
 	"github.com/zeu5/raft-rl-test/raft"
 	"github.com/zeu5/raft-rl-test/types"
 )
 
-func RaftPart(episodes, horizon int, saveFile string) {
+func RaftPart(episodes, horizon int, saveFile string, ctx context.Context) {
 	// config of the running system
 	raftConfig := raft.RaftEnvironmentConfig{
 		Replicas:          3,
@@ -28,12 +30,19 @@ func RaftPart(episodes, horizon int, saveFile string) {
 	// colors ... , expanded list, can omit the argument
 	// Analyzer takes the path to save data and colors... is the abstraction used to plot => makes the datasets
 	// PlotComparator => makes plots from data
-	c := types.NewComparison(runs, saveFile, false)
+	c := types.NewComparison(&types.ComparisonConfig{
+		Runs:         runs,
+		Episodes:     episodes,
+		Horizon:      horizon,
+		Record:       true,
+		RecordPath:   saveFile,
+		ReportConfig: types.RepConfigOff(),
+	})
 
 	// here you add different traces analysis and comparators -- to process traces into a dataset (analyzer) and output the results (comparator)
-	c.AddAnalysis("Plot", raft.RaftAnalyzer(saveFile, colors...), raft.RaftPlotComparator(saveFile))
-	c.AddAnalysis("Crashes", types.CrashAnalyzer(), types.CrashComparator(saveFile))
-	c.AddAnalysis("PureCoverage", types.PureCoverage(), types.PureCoveragePlotter(saveFile))
+	c.AddAnalysis("Plot", raft.NewRaftAnalyzer(saveFile, colors...), raft.RaftPlotComparator(saveFile))
+	c.AddAnalysis("Crashes", types.NewCrashAnalyzer(), types.CrashComparator(saveFile))
+	c.AddAnalysis("PureCoverage", types.NewPureCoverageAnalyzer(), types.PureCoveragePlotter(saveFile))
 	// c.AddAnalysis("PartitionCoverage", types.PartitionCoverage(), types.PartitionCoveragePlotter(saveFile))
 
 	// here you add different policies with their parameters
@@ -47,29 +56,14 @@ func RaftPart(episodes, horizon int, saveFile string) {
 	// 	Environment: getRaftPartEnv(raftConfig, colors),
 	// }))
 
-	c.AddExperiment(types.NewExperiment("BonusMaxRL", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      policies.NewBonusPolicyGreedyReward(0.1, 0.99, 0.05),
-		Environment: getRaftPartEnv(raftConfig, colors),
-	}, types.RepConfigOff()))
-	c.AddExperiment(types.NewExperiment("RL", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      policies.NewSoftMaxNegFreqPolicy(0.3, 0.7, 1), // policies.NewSoftMaxNegFreqPolicy(0.3,0.7,1)
-		Environment: getRaftPartEnv(raftConfig, colors),
-	}, types.RepConfigOff()))
-	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      types.NewRandomPolicy(),
-		Environment: getRaftPartEnv(raftConfig, colors),
-	}, types.RepConfigOff()))
+	c.AddExperiment(types.NewExperiment("BonusMaxRL", policies.NewBonusPolicyGreedyReward(0.1, 0.99, 0.05), getRaftPartEnv(raftConfig, colors)))
+	c.AddExperiment(types.NewExperiment("RL", policies.NewSoftMaxNegFreqPolicy(0.3, 0.7, 1), getRaftPartEnv(raftConfig, colors)))
+	c.AddExperiment(types.NewExperiment("Random", types.NewRandomPolicy(), getRaftPartEnv(raftConfig, colors)))
 
-	c.Run()
+	c.Run(ctx)
 }
 
-func getRaftPartEnv(config raft.RaftEnvironmentConfig, colors []raft.RaftColorFunc) types.EnvironmentUnion {
+func getRaftPartEnv(config raft.RaftEnvironmentConfig, colors []raft.RaftColorFunc) types.Environment {
 	return types.NewPartitionEnv(types.PartitionEnvConfig{
 		Painter:                raft.NewRaftStatePainter(colors...),  // pass the abstraction to env
 		Env:                    raft.NewPartitionEnvironment(config), // actual environment
@@ -82,7 +76,7 @@ func getRaftPartEnv(config raft.RaftEnvironmentConfig, colors []raft.RaftColorFu
 	})
 }
 
-func getRaftPartEnvCfg(config raft.RaftEnvironmentConfig, colors []raft.RaftColorFunc, rlConfig raft.RLConfig) types.EnvironmentUnion {
+func getRaftPartEnvCfg(config raft.RaftEnvironmentConfig, colors []raft.RaftColorFunc, rlConfig raft.RLConfig) types.Environment {
 
 	return types.NewPartitionEnv(types.PartitionEnvConfig{
 		Painter:                raft.NewRaftStatePainter(colors...),  // pass the abstraction to env
@@ -100,7 +94,7 @@ func RaftPartCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use: "raft-part",
 		Run: func(cmd *cobra.Command, args []string) {
-			RaftPart(episodes, horizon, saveFile)
+			RaftPart(episodes, horizon, saveFile, context.Background())
 		},
 	}
 	cmd.PersistentFlags().IntVarP(&requests, "requests", "r", 3, "Number of requests to run with")

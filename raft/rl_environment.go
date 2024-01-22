@@ -245,7 +245,7 @@ type RaftEnvironment struct {
 	rand     *rand.Rand
 }
 
-var _ types.EnvironmentUnion = &RaftEnvironment{}
+var _ types.Environment = &RaftEnvironment{}
 
 func NewRaftEnvironment(config RaftEnvironmentConfig) *RaftEnvironment {
 	r := &RaftEnvironment{
@@ -333,14 +333,14 @@ func (r *RaftEnvironment) Stop(node uint64) {
 	delete(r.nodes, node)
 }
 
-func (r *RaftEnvironment) Reset() types.State {
+func (r *RaftEnvironment) Reset(_ *types.EpisodeContext) (types.State, error) {
 	r.messages = make(map[string]pb.Message)
 	r.makeNodes()
-	return r.curState
+	return r.curState, nil
 }
 
 // this is probably not called by the partition environment...
-func (r *RaftEnvironment) Step(action types.Action) types.State {
+func (r *RaftEnvironment) Step(action types.Action, _ *types.EpisodeContext) (types.State, error) {
 	raftAction := action.(*RaftAction)
 	switch raftAction.Type {
 	case "DeliverMessage":
@@ -394,7 +394,7 @@ func (r *RaftEnvironment) Step(action types.Action) types.State {
 		}
 		newState.Messages = copyMessages(r.messages)
 		r.curState = newState
-		return newState
+		return newState, nil
 	case "TimeoutProcess":
 		newMessages := make(map[string]pb.Message)
 		for key, message := range r.messages {
@@ -408,9 +408,9 @@ func (r *RaftEnvironment) Step(action types.Action) types.State {
 			WithTimeouts: r.config.Timeouts,
 		}
 		r.curState = newState
-		return newState
+		return newState, nil
 	}
-	return nil
+	return nil, nil
 }
 
 func (r *RaftEnvironment) StepCtx(action types.Action, epCtx *types.EpisodeContext) (types.State, error) {
@@ -484,10 +484,6 @@ func (r *RaftEnvironment) StepCtx(action types.Action, epCtx *types.EpisodeConte
 		return newState, nil
 	}
 	return nil, fmt.Errorf("StepCtx : invalid action type")
-}
-
-func (r *RaftEnvironment) ResetCtx(epCtx *types.EpisodeContext) (types.State, error) {
-	return r.Reset(), nil
 }
 
 func copyNodeStates(nodeStates map[uint64]raft.Status) map[uint64]raft.Status {

@@ -3,24 +3,79 @@ package types
 import (
 	"context"
 	"fmt"
+	"math/rand"
+	"path"
 	"sync"
 	"time"
+
+	"github.com/zeu5/raft-rl-test/util"
 )
 
 type EpisodeContext struct {
-	TimeoutContext context.Context
-	ToCancel       context.CancelFunc // cancel function to stop the episode
+	// parameters used to run episode
+	Context        context.Context
+	Cancel         context.CancelFunc // cancel function to stop the episode
+	Episode        int
+	Step           int
+	ExperimentName string
 
-	Report EpisodeReport
+	// parameters to be used post running episode
+	Err         error          // error of the episode
+	TimedOut    bool           // true if the episode timed out
+	Trace       *Trace         // trace of the episode
+	Report      *EpisodeReport // report of the episode
+	RunDuration time.Duration  // duration of the episode
 }
 
-func NewEpisodeContext(episodeNumber int, experimentName string, timeOut int) *EpisodeContext {
-	toCtx, toCancel := context.WithTimeout(context.Background(), time.Duration(timeOut)*time.Second)
+func NewEpisodeContext(episodeNumber int, experimentName string, timeout time.Duration, parentCtx context.Context) *EpisodeContext {
+	e := &EpisodeContext{
+		Episode:        episodeNumber,
+		ExperimentName: experimentName,
+		Report:         NewEpisodeReport(episodeNumber, experimentName),
+		Trace:          NewTrace(),
+	}
+	if timeout > 0 {
+		toCtx, toCancel := context.WithTimeout(parentCtx, timeout)
+		e.Context = toCtx
+		e.Cancel = toCancel
+	} else {
+		e.Context, e.Cancel = context.WithCancel(parentCtx)
+	}
+	return e
+}
 
-	return &EpisodeContext{
-		TimeoutContext: toCtx,
-		ToCancel:       toCancel,
-		Report:         *NewEpisodeReport(episodeNumber, experimentName),
+func (e *EpisodeContext) SetStep(step int) {
+	e.Step = step
+	e.Report.setEpisodeStep(step)
+}
+
+func (e *EpisodeContext) SetError(err error) {
+	e.Err = err
+}
+
+func (e *EpisodeContext) SetTimedOut() {
+	e.TimedOut = true
+}
+
+func (e *EpisodeContext) RecordReport(path string, config *ReportsPrintConfig) {
+	// TODO: complete this function
+	reason := ""
+	if e.Err != nil {
+		reason = fmt.Sprintf("error: %s", e.Err.Error())
+	} else if e.TimedOut {
+		reason = "timeout"
+	} else if rand.Float32() < config.Sampling {
+		reason = "randomly sampled"
+	}
+
+	if config.PrintStd {
+		e.Report.Store(path, reason)
+	}
+	if config.PrintValues {
+		e.Report.StoreValues(path, reason)
+	}
+	if config.PrintTimeline {
+		e.Report.StoreTimeline(path, reason)
 	}
 }
 
@@ -235,6 +290,45 @@ func (e *EpisodeReport) StringSingleTypeValues(entryType string) string {
 		return fmt.Sprintf("%s :\n%s", entryType, StringEntriesValuesList(entries))
 	}
 	return "unknown entry type: " + entryType
+}
+
+// store the report in the specified path with the specified reason and type
+func (e *EpisodeReport) store(basePath string, reason string, t string) {
+
+	result := fmt.Sprintf("Exp: %s - Episode: %d\n\n%s\n", e.ExperimentName, e.EpisodeNumber, reason)
+	result = fmt.Sprintf("%s\n", result)
+
+	data := ""
+	fileName := "std"
+	switch t {
+	case "std":
+		data = e.StringPerType()
+	case "values":
+		data = e.StringPerTypeValues()
+		fileName = "values"
+	case "timeline":
+		data = e.StringTimeline()
+		fileName = "timeline"
+	}
+
+	filePath := path.Join(basePath, "epReports", fmt.Sprintf("%s_%d_report_"+fileName+".txt", e.ExperimentName, e.EpisodeNumber))
+	result = fmt.Sprintf("%s%s\n", result, data)
+	util.WriteToFile(filePath, result)
+}
+
+// store the report in the specified path
+func (e *EpisodeReport) Store(basePath string, reason string) {
+	e.store(basePath, reason, "std")
+}
+
+// store the report values in the specified path
+func (e *EpisodeReport) StoreValues(basePath string, reason string) {
+	e.store(basePath, reason, "values")
+}
+
+// store the report timeline in the specified path
+func (e *EpisodeReport) StoreTimeline(basePath string, reason string) {
+	e.store(basePath, reason, "timeline")
 }
 
 // ENTRY

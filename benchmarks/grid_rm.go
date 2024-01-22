@@ -1,6 +1,8 @@
 package benchmarks
 
 import (
+	"context"
+
 	"github.com/spf13/cobra"
 	"github.com/zeu5/raft-rl-test/grid"
 	"github.com/zeu5/raft-rl-test/policies"
@@ -64,28 +66,25 @@ func GridRewardMachine(episodes, horizon int, height, width, grids int, runs int
 	rm.AddState(grid.GridAndPos_23_40(), "Grid23_40")
 	rm.AddState(grid.GridAndPos_23_50(), "Grid23_50")
 
-	c := types.NewComparison(runs, saveFile, false)
-	c.AddAnalysis("GridPlot", grid.GridAnalyzer, grid.GridDepthComparator())
+	c := types.NewComparison(&types.ComparisonConfig{
+		Runs:         runs,
+		Episodes:     episodes,
+		Horizon:      horizon,
+		Record:       false,
+		RecordPath:   saveFile,
+		ReportConfig: types.RepConfigOff(),
+	})
+	c.AddAnalysis("GridPlot", grid.NewGridAnalyzer(), grid.GridDepthComparator())
 
 	c.AddExperiment(types.NewExperiment(
 		"Random",
-		&types.AgentConfig{
-			Episodes:    episodes,
-			Horizon:     horizon,
-			Policy:      types.NewRandomPolicy(),
-			Environment: grid.NewGridEnvironment(height, width, grids, doors...),
-		},
-		types.RepConfigOff(),
+		types.NewRandomPolicy(),
+		grid.NewGridEnvironment(height, width, grids, doors...),
 	))
 	c.AddExperiment(types.NewExperiment(
 		"Exploration",
-		&types.AgentConfig{
-			Episodes:    episodes,
-			Horizon:     horizon,
-			Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.05),
-			Environment: grid.NewGridEnvironment(height, width, grids, doors...),
-		},
-		types.RepConfigOff(),
+		policies.NewBonusPolicyGreedy(0.1, 0.99, 0.05),
+		grid.NewGridEnvironment(height, width, grids, doors...),
 	))
 	// c.AddExperiment(types.NewExperiment(
 	// 	"Exploration-Softmax",
@@ -98,16 +97,11 @@ func GridRewardMachine(episodes, horizon int, height, width, grids int, runs int
 	// ))
 	c.AddExperiment(types.NewExperiment(
 		"Reward-Machine",
-		&types.AgentConfig{
-			Episodes:    episodes,
-			Horizon:     horizon,
-			Policy:      policies.NewRewardMachinePolicy(rm, false),
-			Environment: grid.NewGridEnvironment(height, width, grids, doors...),
-		},
-		types.RepConfigOff(),
+		policies.NewRewardMachinePolicy(rm, false),
+		grid.NewGridEnvironment(height, width, grids, doors...),
 	))
 
-	c.Run()
+	c.Run(context.Background())
 }
 
 func GridRewardMachineCommand() *cobra.Command {

@@ -19,7 +19,6 @@ import (
 )
 
 type LPaxosDataSet struct {
-	savePath     string
 	states       map[string]bool
 	UniqueStates []int
 }
@@ -85,40 +84,73 @@ func NewLPaxosGraphState(s types.State) *LPaxosGraphState {
 	return &LPaxosGraphState{NodeStates: copyNodeStates(lPaxosState.NodeStates)}
 }
 
-func LPaxosAnalyzer(savePath string) types.Analyzer {
+type LPaxosAnalyzer struct {
+	UniqueStates  []int
+	CurExperiment string
+	CurRun        int
+	states        map[string]bool
+	baseSavePath  string
+}
+
+func NewLPaxosAnalyzer(savePath string) *LPaxosAnalyzer {
 	if _, err := os.Stat(savePath); err != nil {
 		os.Mkdir(savePath, os.ModePerm)
 	}
-	return func(run int, name string, traces []*types.Trace) types.DataSet {
-		dataset := &LPaxosDataSet{
-			savePath:     path.Join(savePath, name+".json"),
-			states:       make(map[string]bool),
-			UniqueStates: make([]int, 0),
-		}
-		uniqueStates := 0
-		for _, trace := range traces {
-			for i := 0; i < trace.Len(); i++ {
-				state, _, _, _ := trace.Get(i)
-				gState := NewLPaxosGraphState(state)
-				gStateHash := gState.Hash()
-				if _, ok := dataset.states[gStateHash]; !ok {
-					uniqueStates += 1
-					dataset.states[gStateHash] = true
-				}
-			}
-			dataset.UniqueStates = append(dataset.UniqueStates, uniqueStates)
-		}
-
-		dataset.Record(path.Join(savePath, "run_"+strconv.Itoa(run)+"_"+name+".json"))
-		return dataset
+	return &LPaxosAnalyzer{
+		states:        make(map[string]bool),
+		baseSavePath:  savePath,
+		CurExperiment: "",
+		CurRun:        -1,
+		UniqueStates:  make([]int, 0),
 	}
 }
+
+func (a *LPaxosAnalyzer) Analyze(run, episode int, name string, trace *types.Trace) {
+	if a.CurExperiment == "" {
+		a.CurExperiment = name
+		a.states = make(map[string]bool)
+	}
+	if a.CurRun == -1 {
+		a.CurRun = run
+	}
+	for i := 0; i < trace.Len(); i++ {
+		state, _, _, _ := trace.Get(i)
+		gState := NewLPaxosGraphState(state)
+		gStateHash := gState.Hash()
+		if _, ok := a.states[gStateHash]; !ok {
+			a.states[gStateHash] = true
+		}
+	}
+	a.UniqueStates = append(a.UniqueStates, len(a.states))
+}
+
+func (a *LPaxosAnalyzer) DataSet() types.DataSet {
+	ds := &LPaxosDataSet{
+		states:       make(map[string]bool),
+		UniqueStates: make([]int, len(a.UniqueStates)),
+	}
+	for k := range a.states {
+		ds.states[k] = true
+	}
+	copy(ds.UniqueStates, a.UniqueStates)
+	ds.Record(path.Join(a.baseSavePath, "run_"+strconv.Itoa(a.CurRun)+"_"+a.CurExperiment+".json"))
+	return ds
+}
+
+func (a *LPaxosAnalyzer) Reset() {
+	a.states = make(map[string]bool)
+	a.CurExperiment = ""
+	a.CurRun = -1
+	a.UniqueStates = make([]int, 0)
+}
+
+var _ types.Analyzer = (*LPaxosAnalyzer)(nil)
 
 func LPaxosComparator(figPath string) types.Comparator {
 	if _, err := os.Stat(figPath); err != nil {
 		os.Mkdir(figPath, os.ModePerm)
 	}
-	return func(run int, names []string, ds []types.DataSet) {
+	return func(run, _ int, names []string, ds []types.DataSet) {
 		p := plot.New()
 		p.Title.Text = "Comparison"
 		p.X.Label.Text = "Iteration"
@@ -150,37 +182,63 @@ type RewardStatesVisited struct {
 	visitGraph *types.VisitGraph
 }
 
-func RewardStatesVisitedAnalyzer(names []string, rewardFuncs []types.RewardFunc, savePath string) types.Analyzer {
+type RewardStatesVisitedAnalyzer struct {
+	names       []string
+	rewardFuncs []types.RewardFunc
+	savePath    string
+	ds          *RewardStatesVisited
+	experiment  string
+}
+
+func NewRewardStatesVisitedAnalyzer(names []string, rewardFuncs []types.RewardFunc, savePath string) *RewardStatesVisitedAnalyzer {
 	if _, err := os.Stat(savePath); err != nil {
 		os.Mkdir(savePath, os.ModePerm)
 	}
-	return func(run int, s string, traces []*types.Trace) types.DataSet {
-		d := RewardStatesVisited{
+	return &RewardStatesVisitedAnalyzer{
+		names:       names,
+		rewardFuncs: rewardFuncs,
+		savePath:    savePath,
+		ds: &RewardStatesVisited{
 			visits:     make(map[string]int),
 			visitGraph: types.NewVisitGraph(),
-		}
-		for _, n := range names {
-			d.visits[n] = 0
-		}
-		for _, t := range traces {
-			for i := 0; i < t.Len(); i++ {
-				s, a, ns, _ := t.Get(i)
-				d.visitGraph.Update(NewLPaxosGraphState(s), a.Hash(), NewLPaxosGraphState(ns))
-				for j := 0; j < len(names); j++ {
-					if rewardFuncs[j](s, ns) {
-						d.visits[names[j]]++
-					}
-				}
-			}
-		}
-		d.visitGraph.Record(path.Join(savePath, "visit_graph_"+s+".json"))
-		d.visitGraph.Clear()
-		return d
+		},
+		experiment: "",
 	}
 }
 
+func (ra *RewardStatesVisitedAnalyzer) Analyze(run, episode int, name string, trace *types.Trace) {
+	if ra.experiment == "" {
+		ra.experiment = name
+	}
+	for i := 0; i < trace.Len(); i++ {
+		s, a, ns, _ := trace.Get(i)
+		ra.ds.visitGraph.Update(NewLPaxosGraphState(s), a.Hash(), NewLPaxosGraphState(ns))
+		for j := 0; j < len(ra.names); j++ {
+			if ra.rewardFuncs[j](s, ns) {
+				ra.ds.visits[ra.names[j]]++
+			}
+		}
+	}
+}
+
+func (ra *RewardStatesVisitedAnalyzer) DataSet() types.DataSet {
+	ra.ds.visitGraph.Record(path.Join(ra.savePath, "visit_graph_"+ra.experiment+".json"))
+	ra.ds.visitGraph.Clear()
+	return ra.ds
+}
+
+func (ra *RewardStatesVisitedAnalyzer) Reset() {
+	ra.ds = &RewardStatesVisited{
+		visits:     make(map[string]int),
+		visitGraph: types.NewVisitGraph(),
+	}
+	ra.experiment = ""
+}
+
+var _ types.Analyzer = (*RewardStatesVisitedAnalyzer)(nil)
+
 func RewardStateComparator() types.Comparator {
-	return func(run int, s []string, ds []types.DataSet) {
+	return func(run, _ int, s []string, ds []types.DataSet) {
 		for i := 0; i < len(s); i++ {
 			fmt.Printf("For experiment: %s\n", s[i])
 			rewardvisits := ds[i].(RewardStatesVisited)

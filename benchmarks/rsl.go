@@ -1,6 +1,7 @@
 package benchmarks
 
 import (
+	"context"
 	"path"
 
 	"github.com/spf13/cobra"
@@ -10,7 +11,7 @@ import (
 )
 
 // Run exploration of the RSL algorithm
-func RSLExploration() {
+func RSLExploration(ctx context.Context) {
 	// Config for the RSL environment
 	config := rsl.RSLEnvConfig{
 		Nodes: 3,
@@ -31,25 +32,27 @@ func RSLExploration() {
 
 	colors := []rsl.RSLColorFunc{rsl.ColorState(), rsl.ColorDecree(), rsl.ColorDecided(), rsl.ColorBoundedBallot(5), rsl.ColorLogLength()}
 
-	c := types.NewComparison(runs, saveFile, false)
-	c.AddAnalysis("Plot", rsl.CoverageAnalyzer(colors...), rsl.CoverageComparator(saveFile))
-	c.AddAnalysis("Bugs", types.BugAnalyzer(
+	c := types.NewComparison(&types.ComparisonConfig{
+		Runs:         runs,
+		Episodes:     episodes,
+		Horizon:      horizon,
+		Record:       false,
+		RecordPath:   saveFile,
+		ReportConfig: types.RepConfigOff(),
+	})
+	c.AddAnalysis("Plot", rsl.NewCoverageAnalyzer(colors...), rsl.CoverageComparator(saveFile))
+	c.AddAnalysis("Bugs", types.NewBugAnalyzer(
 		path.Join(saveFile, "bugs"),
 		types.BugDesc{Name: "InconsistentLogs", Check: rsl.InconsistentLogs()},
 		types.BugDesc{Name: "MultiplePrimaries", Check: rsl.MultiplePrimaries()},
 	), types.BugComparator(saveFile))
-	c.AddAnalysis("Crashes", types.CrashAnalyzer(), types.CrashComparator(saveFile))
-	c.AddAnalysis("PureCoverage", types.PureCoverage(), types.PureCoveragePlotter(saveFile))
+	c.AddAnalysis("Crashes", types.NewCrashAnalyzer(), types.CrashComparator(saveFile))
+	c.AddAnalysis("PureCoverage", types.NewPureCoverageAnalyzer(), types.PureCoveragePlotter(saveFile))
 	// Random exploration
 	c.AddExperiment(types.NewExperiment(
 		"Random",
-		&types.AgentConfig{
-			Episodes:    episodes,
-			Horizon:     horizon,
-			Policy:      types.NewRandomPolicy(),
-			Environment: GetRSLEnvironment(config, colors),
-		},
-		types.RepConfigOff(),
+		types.NewRandomPolicy(),
+		GetRSLEnvironment(config, colors),
 	))
 	// strictPolicy := policies.NewStrictPolicy(types.NewRandomPolicy())
 	// strictPolicy.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
@@ -67,29 +70,19 @@ func RSLExploration() {
 	// RL based exploration
 	c.AddExperiment(types.NewExperiment(
 		"NegReward",
-		&types.AgentConfig{
-			Episodes:    episodes,
-			Horizon:     horizon,
-			Policy:      policies.NewSoftMaxNegFreqPolicy(0.1, 0.99, 1),
-			Environment: GetRSLEnvironment(config, colors),
-		},
-		types.RepConfigOff(),
+		policies.NewSoftMaxNegFreqPolicy(0.1, 0.99, 1),
+		GetRSLEnvironment(config, colors),
 	))
 	c.AddExperiment(types.NewExperiment(
 		"BonusMax",
-		&types.AgentConfig{
-			Episodes:    episodes,
-			Horizon:     horizon,
-			Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.05),
-			Environment: GetRSLEnvironment(config, colors),
-		},
-		types.RepConfigOff(),
+		policies.NewBonusPolicyGreedy(0.1, 0.99, 0.05),
+		GetRSLEnvironment(config, colors),
 	))
 
-	c.Run()
+	c.Run(ctx)
 }
 
-func GetRSLEnvironment(c rsl.RSLEnvConfig, colors []rsl.RSLColorFunc) types.EnvironmentUnion {
+func GetRSLEnvironment(c rsl.RSLEnvConfig, colors []rsl.RSLColorFunc) types.Environment {
 	return types.NewPartitionEnv(types.PartitionEnvConfig{
 		Painter:                rsl.NewRSLPainter(colors...),
 		Env:                    rsl.NewRLSPartitionEnv(c),
@@ -106,7 +99,7 @@ func RSLExplorationCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use: "rsl",
 		Run: func(cmd *cobra.Command, args []string) {
-			RSLExploration()
+			RSLExploration(context.Background())
 		},
 	}
 	cmd.PersistentFlags().IntVarP(&requests, "requests", "r", 3, "Number of requests to run with")

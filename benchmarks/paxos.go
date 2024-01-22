@@ -1,12 +1,14 @@
 package benchmarks
 
 import (
+	"context"
+
 	"github.com/zeu5/raft-rl-test/lpaxos"
 	"github.com/zeu5/raft-rl-test/policies"
 	"github.com/zeu5/raft-rl-test/types"
 )
 
-func Paxos(episodes, horizon, runs int, saveFile string) {
+func Paxos(episodes, horizon, runs int, saveFile string, ctx context.Context) {
 	// The configuration for the paxos environment
 	lPaxosConfig := lpaxos.LPaxosEnvConfig{
 		// Number of replicas to run
@@ -21,55 +23,42 @@ func Paxos(episodes, horizon, runs int, saveFile string) {
 
 	// property := lpaxos.InconsistentLogs()
 	// Comparison runs different agents as specified below. Then analyzes the traces for each agent configuration and compares them
-	c := types.NewComparison(runs, saveFile, false)
-	c.AddAnalysis("Plot", lpaxos.LPaxosAnalyzer(saveFile), lpaxos.LPaxosComparator(saveFile))
+	c := types.NewComparison(&types.ComparisonConfig{
+		Runs:         runs,
+		Episodes:     episodes,
+		Horizon:      horizon,
+		Record:       false,
+		RecordPath:   saveFile,
+		ReportConfig: types.RepConfigOff(),
+	})
+	c.AddAnalysis("Plot", lpaxos.NewLPaxosAnalyzer(saveFile), lpaxos.LPaxosComparator(saveFile))
 	// Adding the different policy and experiments
 	c.AddExperiment(types.NewExperiment(
 		"RL",
-		&types.AgentConfig{
-			Episodes:    episodes,
-			Horizon:     horizon,
-			Policy:      types.NewSoftMaxNegPolicy(0.3, 0.7, 1),
-			Environment: getLPaxosEnv(lPaxosConfig, abstracter),
-		},
-		types.RepConfigOff(),
+		types.NewSoftMaxNegPolicy(0.3, 0.7, 1),
+		getLPaxosEnv(lPaxosConfig, abstracter),
 	))
 	c.AddExperiment(types.NewExperiment(
 		"Random",
-		&types.AgentConfig{
-			Episodes:    episodes,
-			Horizon:     horizon,
-			Policy:      types.NewRandomPolicy(),
-			Environment: getLPaxosEnv(lPaxosConfig, abstracter),
-		},
-		types.RepConfigOff(),
+		types.NewRandomPolicy(),
+		getLPaxosEnv(lPaxosConfig, abstracter),
 	))
 	c.AddExperiment(types.NewExperiment(
 		"BonusMaxRL",
-		&types.AgentConfig{
-			Episodes:    episodes,
-			Horizon:     horizon,
-			Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
-			Environment: getLPaxosEnv(lPaxosConfig, abstracter),
-		},
-		types.RepConfigOff(),
+		policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
+		getLPaxosEnv(lPaxosConfig, abstracter),
 	))
 	c.AddExperiment(types.NewExperiment(
 		"BonusSoftMaxRL",
-		&types.AgentConfig{
-			Episodes:    episodes,
-			Horizon:     horizon,
-			Policy:      policies.NewBonusPolicySoftMax(0.1, 0.99, 0.01),
-			Environment: getLPaxosEnv(lPaxosConfig, abstracter),
-		},
-		types.RepConfigOff(),
+		policies.NewBonusPolicySoftMax(0.1, 0.99, 0.01),
+		getLPaxosEnv(lPaxosConfig, abstracter),
 	))
 
 	// Invoking the different experiments
-	c.Run()
+	c.Run(ctx)
 }
 
-func getLPaxosEnv(config lpaxos.LPaxosEnvConfig, abs string) types.EnvironmentUnion {
+func getLPaxosEnv(config lpaxos.LPaxosEnvConfig, abs string) types.Environment {
 	if abs == "none" {
 		return lpaxos.NewLPaxosEnv(config)
 	}

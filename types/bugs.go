@@ -14,33 +14,55 @@ type BugDesc struct {
 }
 
 // checks all the bugs on the traces
-func BugAnalyzer(savePath string, bugs ...BugDesc) Analyzer {
-	if _, ok := os.Stat(savePath); ok == nil {
-		os.RemoveAll(savePath)
+type BugAnalyzer struct {
+	Bugs        []BugDesc
+	occurrences map[string][]int
+	savePath    string
+}
+
+func NewBugAnalyzer(savePath string, bugs ...BugDesc) *BugAnalyzer {
+	if _, ok := os.Stat(savePath); ok != nil {
+		os.MkdirAll(savePath, 0777)
 	}
-	os.MkdirAll(savePath, 0777)
-	return func(run int, s string, traces []*Trace) DataSet {
-		occurrences := make(map[string][]int)
-		for i, t := range traces {
-			for _, b := range bugs {
-				_, ok := occurrences[b.Name]
-				bugFound, step := b.Check(t)
-				if bugFound { // swapped order just to debug
-					if !ok {
-						occurrences[b.Name] = make([]int, 0)
-					}
-					occurrences[b.Name] = append(occurrences[b.Name], i)
-					bugPath := path.Join(savePath, strconv.Itoa(run)+"_"+s+"_"+b.Name+"_"+strconv.Itoa(i)+"_step"+strconv.Itoa(step)+"_bug.json")
-					t.Record(bugPath)
-				}
-			}
-		}
-		return occurrences
+	return &BugAnalyzer{
+		Bugs:        bugs,
+		occurrences: make(map[string][]int),
+		savePath:    savePath,
 	}
 }
 
+func (ba *BugAnalyzer) Analyze(run int, episode int, s string, trace *Trace) {
+	for _, b := range ba.Bugs {
+		_, ok := ba.occurrences[b.Name]
+		bugFound, step := b.Check(trace)
+		if bugFound { // swapped order just to debug
+			if !ok {
+				ba.occurrences[b.Name] = make([]int, 0)
+			}
+			ba.occurrences[b.Name] = append(ba.occurrences[b.Name], episode)
+			bugPath := path.Join(ba.savePath, strconv.Itoa(run)+"_"+s+"_"+b.Name+"_"+strconv.Itoa(episode)+"_step"+strconv.Itoa(step)+"_bug.json")
+			trace.Record(bugPath)
+		}
+	}
+}
+
+func (ba *BugAnalyzer) DataSet() DataSet {
+	out := make(map[string][]int)
+	for b, i := range ba.occurrences {
+		out[b] = make([]int, len(i))
+		copy(out[b], i)
+	}
+	return out
+}
+
+func (ba *BugAnalyzer) Reset() {
+	ba.occurrences = make(map[string][]int)
+}
+
+var _ Analyzer = (*BugAnalyzer)(nil)
+
 func BugComparator(savePath string) Comparator {
-	return func(run int, s []string, ds []DataSet) {
+	return func(run, _ int, s []string, ds []DataSet) {
 		data := make(map[string]map[string][]int)
 		for i, exp := range s {
 			bugOccurrences := ds[i].(map[string][]int)

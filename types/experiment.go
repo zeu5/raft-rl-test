@@ -1,232 +1,202 @@
 package types
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"os"
 	"path"
 	"strconv"
 	"time"
+
+	"github.com/zeu5/raft-rl-test/util"
 )
+
+type experimentRunConfig struct {
+	CurrentRun         int
+	Episodes           int
+	Horizon            int
+	Analyzers          []Analyzer
+	Record             bool
+	ReportsPrintConfig *ReportsPrintConfig
+	ReportSavePath     string
+	Timeout            time.Duration
+	Context            context.Context
+}
 
 // Experiment encapsulates the different parameters to configure an agent and analyze the traces
 type Experiment struct {
-	*AgentConfig
-	Name string
-	// Result contains the traces of the experiment
-	Result []*Trace
-	// Properties to test on the trace
-	Properties []*Monitor
-	// Number of time each property was satisfied
-	PropertiesStats []int
-
-	ReportsPrintConfig *ReportsPrintConfig
+	Name        string
+	policy      Policy
+	environment Environment
 }
 
 // NewExperiment creates a new experiment instance
-func NewExperiment(name string, config *AgentConfig, repConfig *ReportsPrintConfig) *Experiment {
+func NewExperiment(name string, policy Policy, environment Environment) *Experiment {
 	return &Experiment{
-		AgentConfig:     config,
-		Name:            name,
-		Result:          make([]*Trace, 0),
-		Properties:      make([]*Monitor, 0),
-		PropertiesStats: make([]int, 0),
-
-		ReportsPrintConfig: repConfig,
+		Name:        name,
+		policy:      policy,
+		environment: environment,
 	}
 }
 
-// NewExperimentWithProperties creates a new experiment instance with the specified properties
-func NewExperimentWithProperties(name string, config *AgentConfig, repConfig *ReportsPrintConfig, properties []*Monitor, record bool) *Experiment {
-	e := NewExperiment(name, config, repConfig)
-	e.Properties = properties
-	e.PropertiesStats = make([]int, len(properties))
-	return e
-}
+func (e *Experiment) recordTrace(rConfig *experimentRunConfig, trace *Trace) {
+	tracesFile := path.Join(rConfig.ReportSavePath, "traces", e.Name+"_"+strconv.Itoa(rConfig.CurrentRun)+".jsonl")
+	bs, err := json.Marshal(trace)
+	if err != nil {
+		panic(err)
+	}
 
-func (e *Experiment) hasProperties() bool {
-	return len(e.Properties) != 0
+	util.AppendToFile(tracesFile, string(bs))
 }
 
 // Run the experiment for the specified number of episodes
 // Additionally, for each iteration, check if any of the properties have been satisfied
-func (e *Experiment) Run(ctx context.Context) {
-	agent := NewAgent(e.AgentConfig)
-	// episodeTimes := make([]time.Duration, 0)
-	for i := 0; i < e.Episodes; i++ {
+func (e *Experiment) Run(rConfig *experimentRunConfig) {
+	select {
+	case <-rConfig.Context.Done():
+		return
+	default:
+	}
+
+	if rConfig.Record {
+		tracesFolder := path.Join(rConfig.ReportSavePath, "traces")
+		if _, err := os.Stat(tracesFolder); err != nil {
+			os.MkdirAll(tracesFolder, os.ModePerm)
+		}
+	}
+
+	totalTimeout := 0
+	totalWithError := 0
+	consecutiveTimeouts := 0
+	consecutiveErrors := 0
+	episodeTimes := make([]time.Duration, 0)
+
+	agent := NewAgent(&AgentConfig{
+		Episodes:    rConfig.Episodes,
+		Horizon:     rConfig.Horizon,
+		Policy:      e.policy,
+		Environment: e.environment,
+	})
+
+	for i := 0; i < rConfig.Episodes; i++ {
 		select {
-		case <-ctx.Done():
+		case <-rConfig.Context.Done():
 			return
 		default:
 		}
-		fmt.Printf("\rExperiment: %s, Episode: %d/%d", e.Name, i+1, e.Episodes)
-		// start := time.Now()
-		trace := agent.runEpisode(i, ctx)
-		// dur := time.Since(start)
-		// episodeTimes = append(episodeTimes, dur)
-		agent.traces = append(agent.traces, trace)
-		if e.hasProperties() {
-			for i, prop := range e.Properties {
-				if _, ok := prop.Check(trace); ok {
-					e.PropertiesStats[i] += 1
-				}
-			}
+
+		fmt.Printf("\rExperiment: %s, Episode: %d/%d, Timed out: %d, With Error: %d", e.Name, i+1, rConfig.Episodes, totalTimeout, totalWithError)
+
+		eCtx := NewEpisodeContext(i, e.Name, rConfig.Timeout, rConfig.Context)
+		e.runEpisode(eCtx, agent)
+		episodeTimes = append(episodeTimes, eCtx.RunDuration)
+
+		if eCtx.TimedOut {
+			totalTimeout += 1
+			consecutiveTimeouts += 1
+		} else {
+			consecutiveTimeouts = 0
 		}
-	}
-	e.Result = agent.traces
-	// sumEpisodeTime := time.Duration(0)
-	// for _, d := range episodeTimes {
-	// 	sumEpisodeTime += d
-	// }
-	// avgEpisodeTime := time.Duration(int(sumEpisodeTime) / len(episodeTimes))
-	// fmt.Printf("\nAverage episode time: %s\n", avgEpisodeTime.String())
-	fmt.Println("")
-	if e.hasProperties() {
-		for i, count := range e.PropertiesStats {
-			fmt.Printf("Property %d satisfied in %d episodes\n", i+1, count)
+
+		if eCtx.Err != nil {
+			totalWithError += 1
+			consecutiveErrors += 1
+		} else {
+			consecutiveErrors = 0
 		}
-	}
-}
 
-// Run the experiment for the specified number of episodes
-// Additionally, for each iteration, check if any of the properties have been satisfied
-func (e *Experiment) RunWithTimeout(ctx context.Context, timeOut int, savePath string) {
-	agent := NewAgent(e.AgentConfig)
+		if rConfig.Record {
+			e.recordTrace(rConfig, eCtx.Trace)
+			eCtx.RecordReport(rConfig.ReportSavePath, rConfig.ReportsPrintConfig)
+		}
 
-	var timedOut = new(int)
-	var withError = new(int)
-	*timedOut = 0
-	*withError = 0
-
-	var consecTimeouts = new(int)
-	var consecErrors = new(int)
-	*consecTimeouts = 0
-	*consecErrors = 0
-
-	episodeTimes := make([]time.Duration, 0)
-
-	for i := 0; i < e.Episodes; i++ {
-		e.runEpisodeWithTimeout(ctx, timeOut, savePath, agent, i, timedOut, withError, &episodeTimes, consecTimeouts, consecErrors)
+		for _, a := range rConfig.Analyzers {
+			a.Analyze(rConfig.CurrentRun, i, e.Name, eCtx.Trace)
+		}
 
 		if len(episodeTimes) == 10 {
-			e.printEpTimesMs(episodeTimes, savePath)
-			e.printEpTimesS(episodeTimes, savePath)
+			if rConfig.Record {
+				e.printEpTimesMs(episodeTimes, rConfig.ReportSavePath)
+				e.printEpTimesS(episodeTimes, rConfig.ReportSavePath)
+			}
 			episodeTimes = make([]time.Duration, 0)
 		}
 
-		if *consecTimeouts == 10 {
+		if consecutiveTimeouts == 10 {
 			fmt.Printf("\n Aborting experiment %s : 10 consecutive timeouts\n", e.Name)
 			break
 		}
 
-		if *consecErrors == 10 {
+		if consecutiveErrors == 10 {
 			fmt.Printf("\n Aborting experiment %s : 10 consecutive errors\n", e.Name)
 			break
 		}
 	}
-	e.Result = agent.traces
+
+	select {
+	case <-rConfig.Context.Done():
+		return
+	default:
+	}
+
+	if rConfig.Record {
+		e.policy.Record(path.Join(rConfig.ReportSavePath, "policies", e.Name+"_"+strconv.Itoa(rConfig.CurrentRun)))
+	}
 
 	fmt.Println("")
-	if e.hasProperties() {
-		for i, count := range e.PropertiesStats {
-			fmt.Printf("Property %d satisfied in %d episodes\n", i+1, count)
-		}
-	}
 }
 
-func (e *Experiment) runEpisodeWithTimeout(ctx context.Context, timeOut int, savePath string, agent *Agent, i int, timedOut *int, withError *int, episodeTimes *[]time.Duration, consecTimeouts *int, consecErrors *int) {
+func (e *Experiment) runEpisode(eCtx *EpisodeContext, agent *Agent) {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Println("Recovered. Error: ", r)
-
+			eCtx.SetError(fmt.Errorf("%v", r))
 			return
 		}
 	}()
 
 	select {
-	case <-ctx.Done():
+	case <-eCtx.Context.Done():
 		return
 	default:
 	}
-	fmt.Printf("\rExperiment: %s, Episode: %d/%d, Timed out: %d, With Error: %d", e.Name, i+1, e.Episodes, *timedOut, *withError)
 
-	res := make(chan *Trace, 1)    // channel to put the episode trace
-	errChan := make(chan error, 1) // channel to put errors
+	done := make(chan error, 1)
 
-	EpCtx := NewEpisodeContext(i, e.Name, timeOut)
-
-	start := time.Now()
-
-	go func(ctx context.Context, EpCtx *EpisodeContext) {
+	go func(eCtx *EpisodeContext, agent *Agent) {
 		start := time.Now()
-		trace, err := agent.runEpisodeWithTimeout(i, ctx, EpCtx)
-		EpCtx.Report.AddTimeEntry(time.Since(start), "return_time", "experiment.runEpisodeWithTimeout")
+		agent.RunEpisode(eCtx)
+		duration := time.Since(start)
+
+		eCtx.Report.AddTimeEntry(duration, "return_time", "experiment.runEpisode")
+		eCtx.RunDuration = duration
 
 		select {
-		case <-EpCtx.TimeoutContext.Done():
-			if e.ReportsPrintConfig.PrintIfTimeout {
-				e.handleEpRep(EpCtx.Report, savePath, fmt.Sprintf("Timed out: %dms", timeOut*1000))
+		case <-eCtx.Context.Done():
+			if deadline, ok := eCtx.Context.Deadline(); ok && time.Now().After(deadline) {
+				eCtx.SetTimedOut()
 			}
-
 		default:
-			if err != nil { // send the error on the channel
-				errChan <- err
-
-				if e.ReportsPrintConfig.PrintIfError {
-					e.handleEpRep(EpCtx.Report, savePath, "Error", err.Error())
-				}
-			} else { // send the trace on the channel
-				res <- trace
-
-				if rand.Float32() < e.ReportsPrintConfig.Sampling {
-					e.handleEpRep(EpCtx.Report, savePath, "Sampling")
-				}
+			if eCtx.Err != nil {
+				done <- eCtx.Err
+			} else {
+				done <- nil
 			}
 		}
-		// print here
-		// fmt.Printf("episode goroutine end")
-	}(ctx, EpCtx)
+	}(eCtx, agent)
 
 	select {
-	case <-EpCtx.TimeoutContext.Done():
+	case <-eCtx.Context.Done():
 		// Timeout occurred
-		*timedOut += 1
-		*consecTimeouts += 1
-		*episodeTimes = append(*episodeTimes, time.Duration(0))
-
-	case <-errChan:
-		// Error occurred
-		*withError += 1
-		*consecErrors += 1
-		*episodeTimes = append(*episodeTimes, time.Duration(0))
-
-	case trace := <-res:
-		// episode completed
-		dur := time.Since(start)
-		*episodeTimes = append(*episodeTimes, dur)
-
-		*consecTimeouts = 0
-		*consecErrors = 0
-
-		// trace := <-res
-		agent.traces = append(agent.traces, trace)
-
-		if e.hasProperties() {
-			for i, prop := range e.Properties {
-				if _, ok := prop.Check(trace); ok {
-					e.PropertiesStats[i] += 1
-				}
-			}
+		deadline, ok := eCtx.Context.Deadline()
+		if ok && time.Now().After(deadline) {
+			eCtx.SetTimedOut()
 		}
-
+	case <-done:
 	}
 
-	EpCtx.ToCancel() // should it be called?
-	close(res)
-	close(errChan)
+	eCtx.Cancel()
+	close(done)
 }
 
 func (e *Experiment) printEpTimesMs(epTimes []time.Duration, basePath string) {
@@ -234,9 +204,8 @@ func (e *Experiment) printEpTimesMs(epTimes []time.Duration, basePath string) {
 	for _, tm := range epTimes {
 		tMilliseconds = fmt.Sprintf("%s%7d, ", tMilliseconds, tm.Milliseconds())
 	}
-	folderPath := path.Join(basePath, "epTimes")
-	filePath := path.Join(folderPath, e.Name+"_ms.txt")
-	AppendToFile(filePath, tMilliseconds)
+	filePath := path.Join(basePath, "epTimes", e.Name+"_ms.txt")
+	util.AppendToFile(filePath, tMilliseconds)
 }
 
 func (e *Experiment) printEpTimesS(epTimes []time.Duration, basePath string) {
@@ -244,116 +213,86 @@ func (e *Experiment) printEpTimesS(epTimes []time.Duration, basePath string) {
 	for _, tm := range epTimes {
 		tSeconds = fmt.Sprintf("%s%3.3f, ", tSeconds, tm.Seconds())
 	}
-	folderPath := path.Join(basePath, "epTimes")
-	filePath := path.Join(folderPath, e.Name+"_seconds.txt")
-	AppendToFile(filePath, tSeconds)
-}
-
-// print different versions of the episode report based on the experiment.ReportsPrintConfig
-func (e *Experiment) handleEpRep(epReport EpisodeReport, basePath string, additionalInfo ...string) {
-	if e.ReportsPrintConfig.PrintStd {
-		e.printEpReport(epReport, basePath, additionalInfo...)
-	}
-
-	if e.ReportsPrintConfig.PrintValues {
-		e.printEpReportValues(epReport, basePath, additionalInfo...)
-	}
-
-	if e.ReportsPrintConfig.PrintTimeline {
-		e.printEpReportTimeline(epReport, basePath, additionalInfo...)
-	}
-}
-
-// prints the episode report
-func (e *Experiment) printEpReport(epReport EpisodeReport, basePath string, additionalInfo ...string) {
-	folderPath := path.Join(basePath, "epReports")
-	filePath := path.Join(folderPath, fmt.Sprintf("%s_%d_report.txt", epReport.ExperimentName, epReport.EpisodeNumber))
-
-	result := fmt.Sprintf("Exp: %s - Episode: %d\n\n", epReport.ExperimentName, epReport.EpisodeNumber)
-
-	for _, info := range additionalInfo {
-		result = fmt.Sprintf("%s%s\n", result, info)
-	}
-
-	result = fmt.Sprintf("%s\n", result)
-	result = fmt.Sprintf("%s%s\n", result, epReport.StringPerType())
-
-	WriteToFile(filePath, result)
-}
-
-// prints the episode report (only values)
-func (e *Experiment) printEpReportValues(epReport EpisodeReport, basePath string, additionalInfo ...string) {
-	folderPath := path.Join(basePath, "epReports")
-	filePath := path.Join(folderPath, fmt.Sprintf("%s_%d_report_values.txt", epReport.ExperimentName, epReport.EpisodeNumber))
-
-	result := fmt.Sprintf("Exp: %s - Episode: %d\n\n", epReport.ExperimentName, epReport.EpisodeNumber)
-
-	for _, info := range additionalInfo {
-		result = fmt.Sprintf("%s%s\n", result, info)
-	}
-
-	result = fmt.Sprintf("%s\n", result)
-	result = fmt.Sprintf("%s%s\n", result, epReport.StringPerTypeValues())
-
-	WriteToFile(filePath, result)
-}
-
-// prints the episode report timeline (all the entries in chronological order)
-func (e *Experiment) printEpReportTimeline(epReport EpisodeReport, basePath string, additionalInfo ...string) {
-	// fmt.Printf("len %d\n", len(epReport.Timeline))
-
-	folderPath := path.Join(basePath, "epReports")
-	filePath := path.Join(folderPath, fmt.Sprintf("%s_%d_report_timeline.txt", epReport.ExperimentName, epReport.EpisodeNumber))
-
-	result := fmt.Sprintf("Exp: %s - Episode: %d\n\n", epReport.ExperimentName, epReport.EpisodeNumber)
-
-	for _, info := range additionalInfo {
-		result = fmt.Sprintf("%s%s\n", result, info)
-	}
-
-	result = fmt.Sprintf("%s\n", result)
-	result = fmt.Sprintf("%s%s\n", result, epReport.StringTimeline())
-
-	WriteToFile(filePath, result)
-}
-
-func (e *Experiment) Record(run int, basePath string) {
-	tracesRecordPath := path.Join(basePath, "traces_"+strconv.Itoa(run)+"_"+e.Name+".jsonl")
-	tracesData := new(bytes.Buffer)
-	for _, trace := range e.Result {
-		bs, err := json.Marshal(trace)
-		if err == nil {
-			tracesData.Write(bs)
-			tracesData.Write([]byte("\n"))
-		}
-	}
-	os.WriteFile(tracesRecordPath, tracesData.Bytes(), 0644)
-
-	policyRecordPath := path.Join(basePath, "policy_"+strconv.Itoa(run)+"_"+e.Name)
-	e.Policy.Record(policyRecordPath)
+	filePath := path.Join(basePath, "epTimes", e.Name+"_seconds.txt")
+	util.AppendToFile(filePath, tSeconds)
 }
 
 // Reset cleans the information about the traces (to save memory)
-func (e *Experiment) Reset(run int) {
-	e.Result = make([]*Trace, 0)
-	e.Environment.Reset()
-	e.Policy.Reset()
+func (e *Experiment) Reset() {
+	e.policy.Reset()
 }
 
 // Generic Dataset that contains information after processing the traces
 type DataSet interface{}
 
 // Analyzer compresses the information in the traces to a DataSet
-type Analyzer func(int, string, []*Trace) DataSet
-
-// Experiment analyzer takes the whole experiment object for analysis
-type EAnalyzer func(int, *Experiment)
+type Analyzer interface {
+	// Run, episode number, experiment, trace
+	Analyze(int, int, string, *Trace)
+	// Resulting dataset
+	DataSet() DataSet
+	// Reset the analyzer
+	Reset()
+}
 
 // Comparator differentiates between different datasets with associated names
-type Comparator func(int, []string, []DataSet)
+// run, total episodes, experiment names, datasets
+type Comparator func(int, int, []string, []DataSet)
 
 func NoopComparator() Comparator {
-	return func(i int, s []string, ds []DataSet) {}
+	return func(i, _ int, s []string, ds []DataSet) {}
+}
+
+// ComparisonConfig contains the configuration for the comparison
+type ComparisonConfig struct {
+	Runs         int                 // number of runs
+	Episodes     int                 // number of episodes
+	Horizon      int                 // number of steps
+	Record       bool                // record the traces and policy
+	RecordPath   string              // path to store the results
+	ReportConfig *ReportsPrintConfig // configuration for the reports
+	Timeout      time.Duration       // timeout for each episode
+}
+
+// record the configuration of the comparison
+func (c *Comparison) recordConfig() {
+	cfg := c.cConfig
+	if _, ok := os.Stat(cfg.RecordPath); ok != nil {
+		os.MkdirAll(cfg.RecordPath, 0777)
+	}
+
+	f, err := os.Create(path.Join(cfg.RecordPath, "comparison_config.json"))
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	out := make(map[string]interface{})
+	out["runs"] = cfg.Runs
+	out["episodes"] = cfg.Episodes
+	out["horizon"] = cfg.Horizon
+	out["record"] = cfg.Record
+	out["report_config"] = cfg.ReportConfig
+	if cfg.Timeout != 0 {
+		out["timeout"] = cfg.Timeout.String()
+	}
+
+	experiments := make([]string, 0)
+	for _, e := range c.Experiments {
+		experiments = append(experiments, e.Name)
+	}
+	out["experiments"] = experiments
+
+	out["analyzers"] = make([]string, 0)
+	for name := range c.analyzers {
+		out["analyzers"] = append(out["analyzers"].([]string), name)
+	}
+
+	bs, err := json.Marshal(out)
+	if err != nil {
+		panic(err)
+	}
+	f.Write(bs)
 }
 
 // Comparison contains the different experiments to compare
@@ -362,35 +301,35 @@ func NoopComparator() Comparator {
 type Comparison struct {
 	Experiments []*Experiment
 	analyzers   map[string]Analyzer
-	eAnalyzers  []EAnalyzer
 	comparators map[string]Comparator
-	runs        int
-	recordPath  string
-	record      bool
+	cConfig     *ComparisonConfig
 }
 
 // NewComparison creates a comparison instance
-func NewComparison(runs int, recordPath string, record bool) *Comparison {
-	foldersToCreate := []string{"epTimes", "epReports"}
-	for _, s := range foldersToCreate {
-		fldPath := path.Join(recordPath, s)
-		if _, ok := os.Stat(fldPath); ok == nil {
-			os.RemoveAll(fldPath)
+func NewComparison(config *ComparisonConfig) *Comparison {
+	if config.Record {
+		if _, ok := os.Stat(config.RecordPath); ok == nil {
+			os.RemoveAll(config.RecordPath)
 		}
-		os.MkdirAll(fldPath, 0777)
-	}
+		os.MkdirAll(config.RecordPath, 0777)
 
+		foldersToCreate := []string{"epTimes", "epReports", "traces", "policies"}
+		for _, s := range foldersToCreate {
+			fldPath := path.Join(config.RecordPath, s)
+			if _, ok := os.Stat(fldPath); ok != nil {
+				os.MkdirAll(fldPath, 0777)
+			}
+		}
+	}
 	return &Comparison{
 		Experiments: make([]*Experiment, 0),
 		analyzers:   make(map[string]Analyzer),
-		eAnalyzers:  make([]EAnalyzer, 0),
 		comparators: make(map[string]Comparator),
-		runs:        runs,
-		recordPath:  recordPath,
-		record:      record,
+		cConfig:     config,
 	}
 }
 
+// AddAnalysis adds an analyzer and comparator to the comparison
 func (c *Comparison) AddAnalysis(name string, analyzer Analyzer, comparator Comparator) {
 	c.analyzers[name] = analyzer
 	c.comparators[name] = comparator
@@ -401,44 +340,11 @@ func (c *Comparison) AddExperiment(e *Experiment) {
 	c.Experiments = append(c.Experiments, e)
 }
 
-func (c *Comparison) AddEAnalysis(ea EAnalyzer) {
-	c.eAnalyzers = append(c.eAnalyzers, ea)
-}
+// Run the comparison
+func (c *Comparison) Run(ctx context.Context) {
+	c.recordConfig()
 
-// Run each experiment sequentially
-// TODO: Could be parallelized
-func (c *Comparison) Run() {
-	for run := 0; run < c.runs; run++ { // number of runs
-		fmt.Printf("Run %d\n", run+1)
-		datasets := make(map[string][]DataSet) // array with initial capacity - arrayList
-
-		for name := range c.analyzers {
-			datasets[name] = make([]DataSet, len(c.Experiments))
-		}
-
-		names := make([]string, len(c.Experiments))
-		for i, e := range c.Experiments { // index - experiment  in the list of experiments
-			e.Run(context.TODO()) // running the algorithm, stores the results
-			for name, a := range c.analyzers {
-				datasets[name][i] = a(run, e.Name, e.Result) // call the analyzer on the experiment results
-			}
-			names[i] = e.Name // policy/experiment name
-			for _, ea := range c.eAnalyzers {
-				ea(run, e)
-			}
-			if c.record {
-				e.Record(run, c.recordPath)
-			}
-			e.Reset(run) //
-		}
-		for name, comp := range c.comparators {
-			comp(run, names, datasets[name]) // make the plots
-		}
-	}
-}
-
-func (c *Comparison) RunWithCtx(ctx context.Context) {
-	for run := 0; run < c.runs; run++ { // number of runs
+	for run := 0; run < c.cConfig.Runs; run++ { // number of runs
 		fmt.Printf("Run %d\n", run+1)
 		datasets := make(map[string][]DataSet) // array with initial capacity - arrayList
 
@@ -453,56 +359,35 @@ func (c *Comparison) RunWithCtx(ctx context.Context) {
 				return
 			default:
 			}
-			e.Run(ctx) // running the algorithm, stores the results
+			e.Run(c.prepareRunConfig(ctx)) // running the algorithm, stores the results
 			for name, a := range c.analyzers {
-				datasets[name][i] = a(run, e.Name, e.Result) // call the analyzer on the experiment results
+				datasets[name][i] = a.DataSet() // call the analyzer on the experiment results
+				a.Reset()                       // reset the analyzer
 			}
-			names[i] = e.Name // policy/experiment name
-			for _, ea := range c.eAnalyzers {
-				ea(run, e)
-			}
-			if c.record {
-				e.Record(run, c.recordPath)
-			}
-			e.Reset(run) //
+			names[i] = e.Name // name of the experiment
+			e.Reset()         // reset the experiment
 		}
 		for name, comp := range c.comparators {
-			comp(run, names, datasets[name]) // make the plots
+			comp(run, c.cConfig.Episodes, names, datasets[name]) // make the plots
 		}
 	}
 }
 
-func (c *Comparison) RunWithCtxTimeout(ctx context.Context, timeOut int) {
-	for run := 0; run < c.runs; run++ { // number of runs
-		fmt.Printf("Run %d\n", run+1)
-		datasets := make(map[string][]DataSet) // array with initial capacity - arrayList
-
-		for name := range c.analyzers {
-			datasets[name] = make([]DataSet, len(c.Experiments))
-		}
-
-		names := make([]string, len(c.Experiments))
-		for i, e := range c.Experiments { // index - experiment  in the list of experiments
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-			e.RunWithTimeout(ctx, timeOut, c.recordPath) // running the algorithm, stores the results
-			for name, a := range c.analyzers {
-				datasets[name][i] = a(run, e.Name, e.Result) // call the analyzer on the experiment results
-			}
-			names[i] = e.Name // policy/experiment name
-			for _, ea := range c.eAnalyzers {
-				ea(run, e)
-			}
-			if c.record {
-				e.Record(run, c.recordPath)
-			}
-			e.Reset(run) //
-		}
-		for name, comp := range c.comparators {
-			comp(run, names, datasets[name]) // make the plots
-		}
+// prepare the run configuration for the experiment
+func (c *Comparison) prepareRunConfig(ctx context.Context) *experimentRunConfig {
+	rCfg := &experimentRunConfig{
+		Episodes:           c.cConfig.Episodes,
+		Horizon:            c.cConfig.Horizon,
+		Analyzers:          make([]Analyzer, 0),
+		Record:             c.cConfig.Record,
+		ReportsPrintConfig: c.cConfig.ReportConfig,
+		ReportSavePath:     c.cConfig.RecordPath,
+		Timeout:            c.cConfig.Timeout,
+		Context:            ctx,
 	}
+
+	for _, a := range c.analyzers {
+		rCfg.Analyzers = append(rCfg.Analyzers, a)
+	}
+	return rCfg
 }

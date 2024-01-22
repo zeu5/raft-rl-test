@@ -11,6 +11,8 @@ type AbsRaftEnvironment struct {
 	abstracter StateAbstracter
 }
 
+var _ types.Environment = (*AbsRaftEnvironment)(nil)
+
 func NewAbsRaftEnvironment(config RaftEnvironmentConfig, abstracter StateAbstracter) *AbsRaftEnvironment {
 	r := &AbsRaftEnvironment{
 		RaftEnvironment: NewRaftEnvironment(config),
@@ -50,7 +52,7 @@ func IgnoreVote() StateAbstracter {
 	}
 }
 
-func (r *AbsRaftEnvironment) Step(action types.Action) types.State {
+func (r *AbsRaftEnvironment) Step(action types.Action, _ *types.EpisodeContext) (types.State, error) {
 	raftAction := action.(*RaftAction)
 	switch raftAction.Type {
 	case "DeliverMessage":
@@ -99,7 +101,7 @@ func (r *AbsRaftEnvironment) Step(action types.Action) types.State {
 		}
 		newState.Messages = copyMessages(r.messages)
 		r.curState = newState
-		return newState
+		return newState, nil
 	case "TimeoutProcess":
 		newMessages := make(map[string]pb.Message)
 		for key, message := range r.messages {
@@ -117,7 +119,7 @@ func (r *AbsRaftEnvironment) Step(action types.Action) types.State {
 			newState.NodeStates[id] = r.abstracter(node.Status())
 		}
 		r.curState = newState
-		return newState
+		return newState, nil
 	}
-	return nil
+	return nil, nil
 }

@@ -1,25 +1,11 @@
 package types
 
-// Environment that RL observes
+// Ctx methods to propagate the context for timeOut setting
 type Environment interface {
 	// Reset called at the end of each episode
-	Reset() State
-	// Take the corresponding action and return the next state
-	Step(Action) State
-}
-
-// Ctx methods to propagate the context for timeOut setting
-type EnvironmentCtx interface {
-	// Reset called at the end of each episode
-	ResetCtx(*EpisodeContext) (State, error)
+	Reset(*EpisodeContext) (State, error)
 	// Step function with context to cancel it
-	StepCtx(Action, *EpisodeContext) (State, error)
-}
-
-// Env implementing both standard and Ctx methods
-type EnvironmentUnion interface {
-	Environment
-	EnvironmentCtx
+	Step(Action, *EpisodeContext) (State, error)
 }
 
 // State of the system that RL policies observe

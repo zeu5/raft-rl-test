@@ -154,7 +154,7 @@ func (r *LinkRaftEnvironment) makeNodes() {
 	r.curState = initState
 }
 
-func (r *LinkRaftEnvironment) Reset() types.State {
+func (r *LinkRaftEnvironment) Reset(_ *types.EpisodeContext) (types.State, error) {
 	r.messages = make(map[uint64]map[uint64][]pb.Message)
 	proposal := pb.Message{
 		Type: pb.MsgProp,
@@ -165,14 +165,14 @@ func (r *LinkRaftEnvironment) Reset() types.State {
 	}
 	r.addMessage(proposal)
 	r.makeNodes()
-	return r.curState
+	return r.curState, nil
 }
 
-func (r *LinkRaftEnvironment) Step(action types.Action) types.State {
+func (r *LinkRaftEnvironment) Step(action types.Action, _ *types.EpisodeContext) (types.State, error) {
 	linkAction := action.(*LinkAction)
 	message, ok := r.popMessage(linkAction.From, linkAction.To)
 	if !ok {
-		return r.curState
+		return r.curState, nil
 	}
 	switch linkAction.Action {
 	case "Deliver":
@@ -223,16 +223,16 @@ func (r *LinkRaftEnvironment) Step(action types.Action) types.State {
 		}
 		newState.MessageLinks = r.messages
 		r.curState = newState
-		return newState
+		return newState, nil
 	case "Drop":
 		newState := &LinkRaftState{
 			NodeStates:   r.curState.NodeStates,
 			MessageLinks: r.messages,
 		}
 		r.curState = newState
-		return newState
+		return newState, nil
 	}
-	return nil
+	return nil, nil
 }
 
 func (r *LinkRaftEnvironment) StepCtx(action types.Action, timeoutCtx context.Context) types.State {

@@ -65,54 +65,90 @@ func (c *coloredState) Hash() string { // takes a pointer
 	return hex.EncodeToString(hash[:])
 }
 
+type RaftAnalyzer struct {
+	colors          []RaftColorFunc
+	uniqueStates    map[string]bool
+	numUniqueStates []int
+	curExperiment   string
+	curRun          int
+	baseSavePath    string
+}
+
 // Analyze the traces to count for unique states (main coverage analyzer)
 // Store the resulting visit graph in the specified path/visit_graph_<exp_name>.json
 // colors ...RaftColorFunc - any number of RaftColorFunc arguments, also zero
-func RaftAnalyzer(savePath string, colors ...RaftColorFunc) types.Analyzer {
+func NewRaftAnalyzer(savePath string, colors ...RaftColorFunc) *RaftAnalyzer {
 	if _, err := os.Stat(savePath); err != nil { // make folder if not exist
 		os.Mkdir(savePath, os.ModePerm)
 	}
-	// returns a function
-	return func(run int, name string, traces []*types.Trace) types.DataSet {
-		dataSet := &RaftDataSet{ // data about one run of one policy/experiment
-			savePath:     path.Join(savePath, strconv.Itoa(run)+"_"+name+".json"),
-			states:       make(map[string]bool), // set of states
-			UniqueStates: make([]int, 0),        // list with cumulative amount of unique states, [i] is after episode i
-		}
-		uniqueStates := 0              // this grows throughout the whole run
-		for _, trace := range traces { // for index, elem is equiv to foreach, can ignore index
-			for i := 0; i < trace.Len(); i++ {
-				state, _, _, _ := trace.Get(i)                                             // state, action, next_state, reward
-				rState, _ := state.(*types.Partition)                                      // .(*types.Partition) type cast into a concrete type - * pointer type - second arg is for safety OK (bool)
-				cState := &coloredState{NodeStates: make(map[uint64]*coloredReplicaState)} // & takes reference... constructor of coloredState struct
-				for node, s := range rState.ReplicaStates {                                // for each node, take abstracted state
-					rcState := &coloredReplicaState{Params: make(map[string]interface{})}
-					if _, ok := rState.ActiveNodes[node]; !ok {
-						rcState.Params["active"] = false
-					} else {
-						for _, c := range colors { // fill abstract state for a node
-							key, val := c(s.(RaftReplicaState))
-							rcState.Params[key] = val
-						}
-					}
-					cState.NodeStates[node] = rcState // put in overall state
-				}
-				cStateHash := cState.Hash()
-				if _, ok := dataSet.states[cStateHash]; !ok { // safe way to query hashmap - if key exists, value is stored in first variable of _,ok
-					// executed if key is not in hashmap : !ok
-					dataSet.states[cStateHash] = true
-					uniqueStates += 1
-				}
-			}
-			dataSet.UniqueStates = append(dataSet.UniqueStates, uniqueStates) // append number of unique states at this episode
-		}
-		dataSet.Record()
-		return dataSet
+	return &RaftAnalyzer{
+		colors:          colors,
+		uniqueStates:    make(map[string]bool),
+		numUniqueStates: make([]int, 0),
+		curExperiment:   "",
+		curRun:          -1,
+		baseSavePath:    savePath,
 	}
 }
 
+func (pc *RaftAnalyzer) Analyze(run, _ int, s string, trace *types.Trace) {
+	if pc.curExperiment == "" {
+		pc.curExperiment = s
+	}
+	if pc.curRun == -1 {
+		pc.curRun = run
+	}
+
+	for j := 0; j < trace.Len(); j++ {
+		state, _, _, _ := trace.Get(j)                                             // state, action, next_state, reward
+		rState, _ := state.(*types.Partition)                                      // .(*types.Partition) type cast into a concrete type - * pointer type - second arg is for safety OK (bool)
+		cState := &coloredState{NodeStates: make(map[uint64]*coloredReplicaState)} // & takes reference... constructor of coloredState struct
+		for node, s := range rState.ReplicaStates {                                // for each node, take abstracted state
+			rcState := &coloredReplicaState{Params: make(map[string]interface{})}
+			if _, ok := rState.ActiveNodes[node]; !ok {
+				rcState.Params["active"] = false
+			} else {
+				for _, c := range pc.colors { // fill abstract state for a node
+					key, val := c(s.(RaftReplicaState))
+					rcState.Params[key] = val
+				}
+			}
+			cState.NodeStates[node] = rcState // put in overall state
+		}
+		cStateHash := cState.Hash()
+		if _, ok := pc.uniqueStates[cStateHash]; !ok { // safe way to query hashmap - if key exists, value is stored in first variable of _,ok
+			// executed if key is not in hashmap : !ok
+			pc.uniqueStates[cStateHash] = true
+		}
+	}
+	pc.numUniqueStates = append(pc.numUniqueStates, len(pc.uniqueStates))
+}
+
+func (pc *RaftAnalyzer) DataSet() types.DataSet {
+	ds := &RaftDataSet{
+		savePath:     path.Join(pc.baseSavePath, strconv.Itoa(pc.curRun)+"_"+pc.curExperiment+".json"),
+		states:       make(map[string]bool),
+		UniqueStates: make([]int, len(pc.numUniqueStates)),
+	}
+	for k := range pc.uniqueStates {
+		ds.states[k] = true
+	}
+	copy(ds.UniqueStates, pc.numUniqueStates)
+	ds.Record()
+	return ds
+}
+
+func (pc *RaftAnalyzer) Reset() {
+	pc.uniqueStates = make(map[string]bool)
+	pc.numUniqueStates = make([]int, 0)
+	pc.curExperiment = ""
+	pc.curRun = -1
+}
+
+var _ types.Analyzer = (*RaftAnalyzer)(nil)
+
 // Print the coverage of the different experiments
-func RaftComparator(run int, names []string, datasets []types.DataSet) {
+func RaftComparator(run, _ int, names []string, datasets []types.DataSet) {
 	for i := 0; i < len(names); i++ {
 		raftDataSet := datasets[i].(*RaftDataSet)
 		fmt.Printf("Coverage for run: %d, experiment: %s, states: %d\n", run, names[i], len(raftDataSet.states))
@@ -166,7 +202,7 @@ func RaftPlotComparator(figPath string) types.Comparator {
 	if _, err := os.Stat(figPath); err != nil {
 		os.Mkdir(figPath, os.ModePerm)
 	}
-	return func(run int, names []string, datasets []types.DataSet) {
+	return func(run, _ int, names []string, datasets []types.DataSet) {
 		p := plot.New()
 		p.Title.Text = "Comparison"
 		p.X.Label.Text = "Iteration"
@@ -196,7 +232,7 @@ func RaftPlotComparator(figPath string) types.Comparator {
 // Plot coverage of different experiments
 func RaftEmptyComparator() types.Comparator {
 
-	return func(run int, names []string, datasets []types.DataSet) {
+	return func(run, _ int, names []string, datasets []types.DataSet) {
 
 	}
 }
@@ -260,43 +296,55 @@ func (r *RaftGraphState) Hash() string {
 	return hex.EncodeToString(hash[:])
 }
 
-func RaftReadableAnalyzer(savePath string) types.Analyzer {
+type RaftReadableAnalyzer struct {
+	savePath string
+}
+
+func NewRaftReadableAnalyzer(savePath string) *RaftReadableAnalyzer {
 	if _, err := os.Stat(savePath); err != nil { // make folder if not exist
 		os.Mkdir(savePath, os.ModePerm)
 	}
-	saveFolder := path.Join(savePath, "readable")
-	os.Mkdir(saveFolder, os.ModePerm)
-	// returns a function
-	return func(run int, name string, traces []*types.Trace) types.DataSet {
-		for j, trace := range traces { // for index, elem is equiv to foreach, can ignore index
-			readTrace := make([]string, 0)
-			for i := 0; i < trace.Len(); i++ {
-				readStep := make([]string, 0)
-
-				readStep = append(readStep, fmt.Sprintf("--- STEP: %d --- \n", i))
-				state, action, _, _ := trace.Get(i)   // state, action, next_state, reward
-				rState, _ := state.(*types.Partition) // .(*types.Partition) type cast into a concrete type - * pointer type - second arg is for safety OK (bool)
-
-				readState := ReadableState(*rState)
-				readStep = append(readStep, readState...)
-				readStep = append(readStep, "---------------- \n\n")
-
-				readAction := fmt.Sprintf("ACTION: %s\n\n", action.Hash())
-				readStep = append(readStep, readAction)
-
-				readTrace = append(readTrace, readStep...)
-			}
-			fileName := fmt.Sprintf("%06d.txt", j)
-			path := path.Join(saveFolder, fileName)
-			uniqueSt := ""
-			for _, st := range readTrace {
-				uniqueSt = fmt.Sprintf("%s%s", uniqueSt, st)
-			}
-			os.WriteFile(path, []byte(uniqueSt), 0644)
-		}
-		return nil
+	os.Mkdir(path.Join(savePath, "readable"), os.ModePerm)
+	return &RaftReadableAnalyzer{
+		savePath: savePath,
 	}
 }
+
+func (r *RaftReadableAnalyzer) Analyze(run, episode int, name string, trace *types.Trace) {
+	readTrace := make([]string, 0)
+	for i := 0; i < trace.Len(); i++ {
+		readStep := make([]string, 0)
+
+		readStep = append(readStep, fmt.Sprintf("--- STEP: %d --- \n", i))
+		state, action, _, _ := trace.Get(i)   // state, action, next_state, reward
+		rState, _ := state.(*types.Partition) // .(*types.Partition) type cast into a concrete type - * pointer type - second arg is for safety OK (bool)
+
+		readState := ReadableState(*rState)
+		readStep = append(readStep, readState...)
+		readStep = append(readStep, "---------------- \n\n")
+
+		readAction := fmt.Sprintf("ACTION: %s\n\n", action.Hash())
+		readStep = append(readStep, readAction)
+
+		readTrace = append(readTrace, readStep...)
+	}
+	fileName := fmt.Sprintf("%06d.txt", episode)
+	path := path.Join(r.savePath, "readable", fileName)
+	uniqueSt := ""
+	for _, st := range readTrace {
+		uniqueSt = fmt.Sprintf("%s%s", uniqueSt, st)
+	}
+	os.WriteFile(path, []byte(uniqueSt), 0644)
+}
+
+func (r *RaftReadableAnalyzer) DataSet() types.DataSet {
+	return nil
+}
+
+func (r *RaftReadableAnalyzer) Reset() {
+}
+
+var _ types.Analyzer = (*RaftReadableAnalyzer)(nil)
 
 // takes a state of the system and returns a list of readable states, one for each replica
 func ReadableState(p types.Partition) []string {

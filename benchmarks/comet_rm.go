@@ -77,18 +77,24 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 		RecordStats: false,
 	}
 
-	c := types.NewComparison(runs, saveFile, false)
+	c := types.NewComparison(&types.ComparisonConfig{
+		Runs:         runs,
+		Episodes:     episodes,
+		Horizon:      horizon,
+		Record:       false,
+		RecordPath:   saveFile,
+		ReportConfig: types.RepConfigOff(),
+	})
 
 	// Record the stats (time values) to the file
-	c.AddEAnalysis(types.RecordPartitionStats(saveFile))
-	c.AddAnalysis("crashes", cbft.CrashesAnalyzer(saveFile), types.NoopComparator())
+	c.AddAnalysis("crashes", cbft.NewCrashesAnalyzer(saveFile), types.NoopComparator())
 
 	bugs := []types.BugDesc{
 		{Name: "Round1", Check: cbft.ReachedRound1()},
 		{Name: "DifferentProposers", Check: cbft.DifferentProposers()},
 	}
-	c.AddAnalysis("bugs", types.BugAnalyzer(saveFile, bugs...), types.BugComparator(saveFile))
-	c.AddAnalysis("bugs_logs", cbft.BugLogRecorder(saveFile, bugs...), types.NoopComparator())
+	c.AddAnalysis("bugs", types.NewBugAnalyzer(saveFile, bugs...), types.BugComparator(saveFile))
+	c.AddAnalysis("bugs_logs", cbft.NewBugLogRecorder(saveFile, bugs...), types.NoopComparator())
 	// c.AddAnalysis("logs", cbft.RecordLogsAnalyzer(saveFile), types.NoopComparator())
 	// c.AddAnalysis("states", cbft.RecordStateTraceAnalyzer(saveFile), types.NoopComparator())
 
@@ -99,31 +105,28 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 	}
 	RMPolicy := policies.NewRewardMachinePolicy(rm, false)
 
-	c.AddAnalysis("rm", policies.RewardMachineAnalyzer(RMPolicy), policies.RewardMachineCoverageComparator(saveFile, machine))
+	c.AddAnalysis("rm", policies.NewRewardMachineAnalyzer(RMPolicy), policies.RewardMachineCoverageComparator(saveFile, machine))
 
-	c.AddExperiment(types.NewExperiment("RM", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      RMPolicy,
-		Environment: types.NewPartitionEnv(partitionEnvConfig),
-	}, types.RepConfigOff()))
-	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      types.NewRandomPolicy(),
-		Environment: types.NewPartitionEnv(partitionEnvConfig),
-	}, types.RepConfigOff()))
+	c.AddExperiment(types.NewExperiment(
+		"RM",
+		RMPolicy,
+		types.NewPartitionEnv(partitionEnvConfig),
+	))
+	c.AddExperiment(types.NewExperiment(
+		"Random",
+		types.NewRandomPolicy(),
+		types.NewPartitionEnv(partitionEnvConfig),
+	))
 	strict := policies.NewStrictPolicy(types.NewRandomPolicy())
 	strict.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
 
-	c.AddExperiment(types.NewExperiment("Strict", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      strict,
-		Environment: types.NewPartitionEnv(partitionEnvConfig),
-	}, types.RepConfigOff()))
+	c.AddExperiment(types.NewExperiment(
+		"Strict",
+		strict,
+		types.NewPartitionEnv(partitionEnvConfig),
+	))
 
-	c.RunWithCtx(ctx)
+	c.Run(ctx)
 	env.Cleanup()
 }
 

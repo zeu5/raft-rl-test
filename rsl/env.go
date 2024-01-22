@@ -92,7 +92,7 @@ type RSLPartitionEnv struct {
 	curState *RSLPartitionState
 }
 
-var _ types.PartitionedSystemEnvironmentUnion = &RSLPartitionEnv{}
+var _ types.PartitionedSystemEnvironment = &RSLPartitionEnv{}
 
 func NewRLSPartitionEnv(c RSLEnvConfig) *RSLPartitionEnv {
 	e := &RSLPartitionEnv{
@@ -100,12 +100,11 @@ func NewRLSPartitionEnv(c RSLEnvConfig) *RSLPartitionEnv {
 		nodes:    make(map[uint64]*Node),
 		messages: make(map[string]Message),
 	}
-	e.Reset()
 	return e
 }
 
 // Reset creates new nodes and clears all messages
-func (r *RSLPartitionEnv) Reset() types.PartitionedSystemState {
+func (r *RSLPartitionEnv) Reset(_ *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	peers := make([]uint64, r.config.Nodes)
 	for i := 0; i < r.config.Nodes; i++ {
 		peers[i] = uint64(i + 1)
@@ -136,14 +135,14 @@ func (r *RSLPartitionEnv) Reset() types.PartitionedSystemState {
 		newState.Requests = append(newState.Requests, cmd)
 	}
 	r.curState = newState
-	return newState
+	return newState, nil
 }
 
-func (r *RSLPartitionEnv) Start(nodeID uint64) {
+func (r *RSLPartitionEnv) Start(nodeID uint64, _ *types.EpisodeContext) error {
 	_, ok := r.nodes[nodeID]
 	if ok {
 		// Node already started
-		return
+		return nil
 	}
 	cfg := r.config.NodeConfig.Copy()
 	cfg.ID = nodeID
@@ -151,13 +150,15 @@ func (r *RSLPartitionEnv) Start(nodeID uint64) {
 	r.nodes[nodeID] = node
 
 	node.Start()
+	return nil
 }
 
-func (r *RSLPartitionEnv) Stop(node uint64) {
+func (r *RSLPartitionEnv) Stop(node uint64, _ *types.EpisodeContext) error {
 	delete(r.nodes, node)
+	return nil
 }
 
-func (r *RSLPartitionEnv) ReceiveRequest(req types.Request) types.PartitionedSystemState {
+func (r *RSLPartitionEnv) ReceiveRequest(req types.Request, _ *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	newState := &RSLPartitionState{
 		ReplicaStates: copyReplicaStates(r.curState.ReplicaStates),
 		Messages:      copyMessages(r.messages),
@@ -176,12 +177,12 @@ func (r *RSLPartitionEnv) ReceiveRequest(req types.Request) types.PartitionedSys
 		newState.Requests = append(newState.Requests, re.Copy())
 	}
 	r.curState = newState
-	return newState
+	return newState, nil
 }
 
 // Moves clock of each process by one
 // Checks for messages after clock has advanced
-func (r *RSLPartitionEnv) Tick() types.PartitionedSystemState {
+func (r *RSLPartitionEnv) Tick(_ *types.EpisodeContext, _ int) (types.PartitionedSystemState, error) {
 	newState := &RSLPartitionState{
 		ReplicaStates: make(map[uint64]LocalState),
 		Messages:      make(map[string]Message),
@@ -199,15 +200,15 @@ func (r *RSLPartitionEnv) Tick() types.PartitionedSystemState {
 	newState.Messages = copyMessages(r.messages)
 	newState.Requests = copyMessagesList(r.curState.Requests)
 	r.curState = newState
-	return newState
+	return newState, nil
 }
 
-func (l *RSLPartitionEnv) DeliverMessages(messages []types.Message) types.PartitionedSystemState {
+func (l *RSLPartitionEnv) DeliverMessages(messages []types.Message, _ *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	var s types.PartitionedSystemState = nil
 	for _, m := range messages {
 		s = l.deliverMessage(m)
 	}
-	return s
+	return s, nil
 }
 
 // Deliver the message
@@ -250,12 +251,12 @@ func (r *RSLPartitionEnv) deliverMessage(m types.Message) types.PartitionedSyste
 	return newState
 }
 
-func (l *RSLPartitionEnv) DropMessages(messages []types.Message) types.PartitionedSystemState {
+func (l *RSLPartitionEnv) DropMessages(messages []types.Message, _ *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	var s types.PartitionedSystemState
 	for _, m := range messages {
 		s = l.dropMessage(m)
 	}
-	return s
+	return s, nil
 }
 
 // Remove the message from the pool
@@ -360,36 +361,4 @@ func ColorLogLength() RSLColorFunc {
 	return func(ls LocalState) (string, interface{}) {
 		return "logLength", ls.Log.NumDecided()
 	}
-}
-
-// CTX
-
-func (r *RSLPartitionEnv) ResetCtx(epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
-	return r.Reset(), nil
-}
-
-func (r *RSLPartitionEnv) TickCtx(epCtx *types.EpisodeContext, passedTime int) (types.PartitionedSystemState, error) {
-	return r.Tick(), nil
-}
-
-func (r *RSLPartitionEnv) DeliverMessagesCtx(messages []types.Message, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
-	return r.DeliverMessages(messages), nil
-}
-
-func (r *RSLPartitionEnv) DropMessagesCtx(messages []types.Message, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
-	return r.DropMessages(messages), nil
-}
-
-func (r *RSLPartitionEnv) ReceiveRequestCtx(req types.Request, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
-	return r.ReceiveRequest(req), nil
-}
-
-func (r *RSLPartitionEnv) StopCtx(nodeID uint64, epCtx *types.EpisodeContext) error {
-	r.Stop(nodeID)
-	return nil
-}
-
-func (r *RSLPartitionEnv) StartCtx(nodeID uint64, epCtx *types.EpisodeContext) error {
-	r.Start(nodeID)
-	return nil
 }

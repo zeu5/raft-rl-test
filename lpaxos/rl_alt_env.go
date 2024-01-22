@@ -7,6 +7,8 @@ type LPaxosAbsEnv struct {
 	abstracter Abstracter
 }
 
+var _ types.Environment = (*LPaxosAbsEnv)(nil)
+
 type Abstracter func(LNodeState) LNodeState
 
 func NewLPaxosAbsEnv(config LPaxosEnvConfig, abs Abstracter) *LPaxosAbsEnv {
@@ -16,7 +18,7 @@ func NewLPaxosAbsEnv(config LPaxosEnvConfig, abs Abstracter) *LPaxosAbsEnv {
 	}
 }
 
-func (e *LPaxosAbsEnv) Step(a types.Action) types.State {
+func (e *LPaxosAbsEnv) Step(a types.Action, _ *types.EpisodeContext) (types.State, error) {
 	lAction := a.(*LPaxosAction)
 	switch lAction.Type {
 	case "Deliver":
@@ -60,7 +62,7 @@ func (e *LPaxosAbsEnv) Step(a types.Action) types.State {
 		}
 		newState.Messages = copyMessages(e.messages)
 		e.curState = newState
-		return newState
+		return newState, nil
 	case "Drop":
 		newMessages := make(map[string]Message)
 		for key, message := range e.messages {
@@ -74,9 +76,9 @@ func (e *LPaxosAbsEnv) Step(a types.Action) types.State {
 			WithTimeouts: e.config.Timeouts,
 		}
 		e.curState = newState
-		return newState
+		return newState, nil
 	}
-	return nil
+	return nil, nil
 }
 
 func DefaultAbstractor() Abstracter {

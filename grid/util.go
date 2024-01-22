@@ -56,28 +56,40 @@ func (g *KGrid) Max() float64 {
 	return float64(max)
 }
 
-func GridCoverageAnalyzer() types.Analyzer {
-	return func(run int, s string, t []*types.Trace) types.DataSet {
-		positions := make(map[int]map[int]map[int]bool)
-		for _, trace := range t {
-			for i := 0; i < trace.Len(); i++ {
-				state, _, _, _ := trace.Get(i)
-				gridPostition := state.(*Position)
-				if _, ok := positions[gridPostition.K]; !ok {
-					positions[gridPostition.K] = make(map[int]map[int]bool)
-				}
-				if _, ok := positions[gridPostition.K][gridPostition.I]; !ok {
-					positions[gridPostition.K][gridPostition.I] = make(map[int]bool)
-				}
-				positions[gridPostition.K][gridPostition.I][gridPostition.J] = true
-			}
-		}
-		return positions
+type GridCoverageAnalyzer struct {
+	positions map[int]map[int]map[int]bool
+}
+
+func NewGridCoverageAnalyzer() *GridCoverageAnalyzer {
+	return &GridCoverageAnalyzer{
+		positions: make(map[int]map[int]map[int]bool),
 	}
 }
 
+func (gca *GridCoverageAnalyzer) Analyze(_, run int, s string, trace *types.Trace) {
+	for j := 0; j < trace.Len(); j++ {
+		s, _, _, _ := trace.Get(j)
+		gridPosition := s.(*Position)
+		if _, ok := gca.positions[gridPosition.K]; !ok {
+			gca.positions[gridPosition.K] = make(map[int]map[int]bool)
+		}
+		if _, ok := gca.positions[gridPosition.K][gridPosition.I]; !ok {
+			gca.positions[gridPosition.K][gridPosition.I] = make(map[int]bool)
+		}
+		gca.positions[gridPosition.K][gridPosition.I][gridPosition.J] = true
+	}
+}
+
+func (gca *GridCoverageAnalyzer) DataSet() types.DataSet {
+	return gca.positions
+}
+
+func (gca *GridCoverageAnalyzer) Reset() {
+	gca.positions = make(map[int]map[int]map[int]bool)
+}
+
 func GridCoverageComparator() types.Comparator {
-	return func(i int, s []string, ds []types.DataSet) {
+	return func(i, _ int, s []string, ds []types.DataSet) {
 		for i := 0; i < len(s); i++ {
 			name := s[i]
 			dataSet := ds[i].(map[int]map[int]map[int]bool)
@@ -93,49 +105,70 @@ func GridCoverageComparator() types.Comparator {
 	}
 }
 
-func GridAnalyzer(_ int, _ string, traces []*types.Trace) types.DataSet {
-	dataSet := &GridDataSet{
+type GridAnalyzer struct {
+	ds *GridDataSet
+}
+
+func NewGridAnalyzer() *GridAnalyzer {
+	return &GridAnalyzer{
+		ds: &GridDataSet{
+			Visits:    make(map[int]map[int]map[int]int),
+			RLActions: make(map[string]map[string]int),
+			Height:    0,
+			Width:     0,
+		},
+	}
+}
+
+func (ga *GridAnalyzer) Analyze(_, run int, s string, trace *types.Trace) {
+	for i := 0; i < trace.Len(); i++ {
+		state, action, _, _ := trace.Get(i)
+		stateHash := state.Hash()
+		actionHash := action.Hash()
+		if _, ok := ga.ds.RLActions[stateHash]; !ok {
+			ga.ds.RLActions[stateHash] = make(map[string]int)
+		}
+		if _, ok := ga.ds.RLActions[stateHash][actionHash]; !ok {
+			ga.ds.RLActions[stateHash][actionHash] = 0
+		}
+		ga.ds.RLActions[stateHash][actionHash] += 1
+		gridPostition := state.(*Position)
+		if _, ok := ga.ds.Visits[gridPostition.K]; !ok {
+			ga.ds.Visits[gridPostition.K] = make(map[int]map[int]int)
+		}
+		if _, ok := ga.ds.Visits[gridPostition.K][gridPostition.I]; !ok {
+			ga.ds.Visits[gridPostition.K][gridPostition.I] = make(map[int]int)
+		}
+		if _, ok := ga.ds.Visits[gridPostition.K][gridPostition.I][gridPostition.J]; !ok {
+			ga.ds.Visits[gridPostition.K][gridPostition.I][gridPostition.J] = 0
+		}
+		if gridPostition.I+1 > ga.ds.Height {
+			ga.ds.Height = gridPostition.I + 1
+		}
+		if gridPostition.J+1 > ga.ds.Width {
+			ga.ds.Width = gridPostition.J + 1
+		}
+		ga.ds.Visits[gridPostition.K][gridPostition.I][gridPostition.J] += 1
+	}
+}
+
+func (ga *GridAnalyzer) DataSet() types.DataSet {
+	return ga.ds
+}
+
+func (ga *GridAnalyzer) Reset() {
+	ga.ds = &GridDataSet{
 		Visits:    make(map[int]map[int]map[int]int),
 		RLActions: make(map[string]map[string]int),
 		Height:    0,
 		Width:     0,
 	}
-	for _, trace := range traces {
-		for i := 0; i < trace.Len(); i++ {
-			state, action, _, _ := trace.Get(i)
-			stateHash := state.Hash()
-			actionHash := action.Hash()
-			if _, ok := dataSet.RLActions[stateHash]; !ok {
-				dataSet.RLActions[stateHash] = make(map[string]int)
-			}
-			if _, ok := dataSet.RLActions[stateHash][actionHash]; !ok {
-				dataSet.RLActions[stateHash][actionHash] = 0
-			}
-			dataSet.RLActions[stateHash][actionHash] += 1
-			gridPostition := state.(*Position)
-			if _, ok := dataSet.Visits[gridPostition.K]; !ok {
-				dataSet.Visits[gridPostition.K] = make(map[int]map[int]int)
-			}
-			if _, ok := dataSet.Visits[gridPostition.K][gridPostition.I]; !ok {
-				dataSet.Visits[gridPostition.K][gridPostition.I] = make(map[int]int)
-			}
-			if _, ok := dataSet.Visits[gridPostition.K][gridPostition.I][gridPostition.J]; !ok {
-				dataSet.Visits[gridPostition.K][gridPostition.I][gridPostition.J] = 0
-			}
-			if gridPostition.I+1 > dataSet.Height {
-				dataSet.Height = gridPostition.I + 1
-			}
-			if gridPostition.J+1 > dataSet.Width {
-				dataSet.Width = gridPostition.J + 1
-			}
-			dataSet.Visits[gridPostition.K][gridPostition.I][gridPostition.J] += 1
-		}
-	}
-	return dataSet
 }
 
+var _ types.Analyzer = (*GridAnalyzer)(nil)
+
 func GridPlotComparator(figPath string) types.Comparator {
-	return func(run int, s []string, ds []types.DataSet) {
+	return func(run, _ int, s []string, ds []types.DataSet) {
 		for i := 0; i < len(s); i++ {
 			name := s[i]
 			dataSet := ds[i].(*GridDataSet)
@@ -152,7 +185,7 @@ func GridPlotComparator(figPath string) types.Comparator {
 }
 
 func GridPositionComparator(iPos, jPos, kPos int) types.Comparator {
-	return func(run int, s []string, ds []types.DataSet) {
+	return func(run, _ int, s []string, ds []types.DataSet) {
 		for i := 0; i < len(s); i++ {
 			name := s[i]
 			dataSet := ds[i].(*GridDataSet)
@@ -172,7 +205,7 @@ func GridPositionComparator(iPos, jPos, kPos int) types.Comparator {
 }
 
 func GridDepthComparator() types.Comparator {
-	return func(run int, s []string, ds []types.DataSet) {
+	return func(run, _ int, s []string, ds []types.DataSet) {
 		for i := 0; i < len(s); i++ {
 			name := s[i]
 			dataSet := ds[i].(*GridDataSet)

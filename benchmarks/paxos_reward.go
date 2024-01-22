@@ -1,13 +1,15 @@
 package benchmarks
 
 import (
+	"context"
+
 	"github.com/spf13/cobra"
 	"github.com/zeu5/raft-rl-test/lpaxos"
 	"github.com/zeu5/raft-rl-test/policies"
 	"github.com/zeu5/raft-rl-test/types"
 )
 
-func PaxosReward(episodes, horizon int, saveFile string) {
+func PaxosReward(episodes, horizon int, saveFile string, ctx context.Context) {
 	lPaxosConfig := lpaxos.LPaxosEnvConfig{
 		Replicas: 3,
 		Requests: requests,
@@ -17,27 +19,24 @@ func PaxosReward(episodes, horizon int, saveFile string) {
 
 	commit := lpaxos.Commit()
 
-	c := types.NewComparison(runs, saveFile, false)
-	c.AddAnalysis("Reward", lpaxos.RewardStatesVisitedAnalyzer([]string{"commit"}, []types.RewardFunc{commit}, saveFile), lpaxos.RewardStateComparator())
+	c := types.NewComparison(&types.ComparisonConfig{
+		Runs:         runs,
+		Episodes:     episodes,
+		Horizon:      horizon,
+		Record:       false,
+		RecordPath:   saveFile,
+		ReportConfig: types.RepConfigOff(),
+	})
+	c.AddAnalysis("Reward", lpaxos.NewRewardStatesVisitedAnalyzer([]string{"commit"}, []types.RewardFunc{commit}, saveFile), lpaxos.RewardStateComparator())
 	c.AddExperiment(types.NewExperiment(
 		"Random-Part",
-		&types.AgentConfig{
-			Episodes:    episodes,
-			Horizon:     horizon,
-			Policy:      types.NewRandomPolicy(),
-			Environment: getLPaxosPartEnv(lPaxosConfig, true),
-		},
-		types.RepConfigOff(),
+		types.NewRandomPolicy(),
+		getLPaxosPartEnv(lPaxosConfig, true),
 	))
 	c.AddExperiment(types.NewExperiment(
 		"Biased-Policy",
-		&types.AgentConfig{
-			Episodes:    episodes,
-			Horizon:     horizon,
-			Policy:      policies.NewGuidedPolicy(nil, 0.2, 0.95, 0.02),
-			Environment: getLPaxosPartEnv(lPaxosConfig, true),
-		},
-		types.RepConfigOff(),
+		policies.NewGuidedPolicy(nil, 0.2, 0.95, 0.02),
+		getLPaxosPartEnv(lPaxosConfig, true),
 	))
 
 	strictPolicy := policies.NewStrictPolicy(types.NewRandomPolicy())
@@ -45,23 +44,18 @@ func PaxosReward(episodes, horizon int, saveFile string) {
 
 	c.AddExperiment(types.NewExperiment(
 		"Strict-Policy",
-		&types.AgentConfig{
-			Episodes:    episodes,
-			Horizon:     horizon,
-			Policy:      strictPolicy,
-			Environment: getLPaxosPartEnv(lPaxosConfig, true),
-		},
-		types.RepConfigOff(),
+		strictPolicy,
+		getLPaxosPartEnv(lPaxosConfig, true),
 	))
 
-	c.Run()
+	c.Run(ctx)
 }
 
 func PaxosRewardCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use: "paxos-reward",
 		Run: func(cmd *cobra.Command, args []string) {
-			PaxosReward(episodes, horizon, saveFile)
+			PaxosReward(episodes, horizon, saveFile, context.Background())
 		},
 	}
 	cmd.PersistentFlags().IntVarP(&requests, "requests", "r", 1, "Number of requests to run with")

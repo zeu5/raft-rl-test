@@ -95,68 +95,12 @@ type LPaxosPartitionEnv struct {
 	*LPaxosEnv
 }
 
-var _ types.PartitionedSystemEnvironmentUnion = &LPaxosPartitionEnv{}
+var _ types.PartitionedSystemEnvironment = &LPaxosPartitionEnv{}
 
 func NewLPaxosPartitionEnv(c LPaxosEnvConfig) *LPaxosPartitionEnv {
 	return &LPaxosPartitionEnv{
 		LPaxosEnv: NewLPaxosEnv(c),
 	}
-}
-
-func (l *LPaxosPartitionEnv) ReceiveRequest(r types.Request) types.PartitionedSystemState {
-	newState := &LPaxosState{
-		NodeStates:   copyNodeStates(l.curState.NodeStates),
-		Messages:     copyMessages(l.messages),
-		Requests:     make([]Message, 0),
-		WithTimeouts: l.config.Timeouts,
-	}
-	haveLeader := false
-	var leader uint64 = 0
-	for id, n := range l.curState.NodeStates {
-		if n.Leader == id {
-			leader = id
-			haveLeader = true
-			break
-		}
-	}
-	remainingRequests := l.curState.Requests
-	if haveLeader {
-		message := r.(Message)
-		message.T = leader
-		l.nodes[leader].Step(message)
-		remainingRequests = l.curState.Requests[1:]
-	}
-	for _, r := range remainingRequests {
-		newState.Requests = append(newState.Requests, r.Copy())
-	}
-	l.curState = newState
-	return newState
-}
-
-func (l *LPaxosPartitionEnv) Reset() types.PartitionedSystemState {
-	s := l.LPaxosEnv.Reset()
-	return s.(*LPaxosState)
-}
-
-func (l *LPaxosPartitionEnv) Tick() types.PartitionedSystemState {
-	for _, node := range l.nodes {
-		node.Tick()
-	}
-	newState := &LPaxosState{
-		NodeStates:   make(map[uint64]LNodeState),
-		WithTimeouts: l.config.Timeouts,
-	}
-	for id, node := range l.nodes {
-		rd := node.Ready()
-		for _, m := range rd.Messages {
-			l.messages[m.Hash()] = m
-		}
-		newState.NodeStates[id] = node.Status()
-	}
-	newState.Messages = copyMessages(l.messages)
-	newState.Requests = copyMessagesList(l.curState.Requests)
-	l.curState = newState
-	return newState
 }
 
 func (l *LPaxosPartitionEnv) deliverMessage(m types.Message) types.PartitionedSystemState {
@@ -199,14 +143,6 @@ func (l *LPaxosPartitionEnv) deliverMessage(m types.Message) types.PartitionedSy
 	return newState
 }
 
-func (l *LPaxosPartitionEnv) DeliverMessages(messages []types.Message) types.PartitionedSystemState {
-	var s types.PartitionedSystemState = nil
-	for _, m := range messages {
-		s = l.deliverMessage(m)
-	}
-	return s
-}
-
 func (l *LPaxosPartitionEnv) dropMessage(m types.Message) types.PartitionedSystemState {
 	delete(l.messages, m.Hash())
 	newState := &LPaxosState{
@@ -219,42 +155,84 @@ func (l *LPaxosPartitionEnv) dropMessage(m types.Message) types.PartitionedSyste
 	return newState
 }
 
-func (l *LPaxosPartitionEnv) DropMessages(messages []types.Message) types.PartitionedSystemState {
+func (r *LPaxosPartitionEnv) Reset(epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
+	s, err := r.LPaxosEnv.Reset(epCtx)
+	return s.(*LPaxosState), err
+}
+
+func (l *LPaxosPartitionEnv) Tick(epCtx *types.EpisodeContext, passedTime int) (types.PartitionedSystemState, error) {
+	for _, node := range l.nodes {
+		node.Tick()
+	}
+	newState := &LPaxosState{
+		NodeStates:   make(map[uint64]LNodeState),
+		WithTimeouts: l.config.Timeouts,
+	}
+	for id, node := range l.nodes {
+		rd := node.Ready()
+		for _, m := range rd.Messages {
+			l.messages[m.Hash()] = m
+		}
+		newState.NodeStates[id] = node.Status()
+	}
+	newState.Messages = copyMessages(l.messages)
+	newState.Requests = copyMessagesList(l.curState.Requests)
+	l.curState = newState
+	return newState, nil
+}
+
+func (l *LPaxosPartitionEnv) DeliverMessages(messages []types.Message, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
+	var s types.PartitionedSystemState = nil
+	for _, m := range messages {
+		s = l.deliverMessage(m)
+	}
+	return s, nil
+}
+
+func (l *LPaxosPartitionEnv) DropMessages(messages []types.Message, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	var s types.PartitionedSystemState
 	for _, m := range messages {
 		s = l.dropMessage(m)
 	}
-	return s
+	return s, nil
 }
 
-// CTX
-
-func (r *LPaxosPartitionEnv) ResetCtx(epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
-	return r.Reset(), nil
+func (l *LPaxosPartitionEnv) ReceiveRequest(req types.Request, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
+	newState := &LPaxosState{
+		NodeStates:   copyNodeStates(l.curState.NodeStates),
+		Messages:     copyMessages(l.messages),
+		Requests:     make([]Message, 0),
+		WithTimeouts: l.config.Timeouts,
+	}
+	haveLeader := false
+	var leader uint64 = 0
+	for id, n := range l.curState.NodeStates {
+		if n.Leader == id {
+			leader = id
+			haveLeader = true
+			break
+		}
+	}
+	remainingRequests := l.curState.Requests
+	if haveLeader {
+		message := req.(Message)
+		message.T = leader
+		l.nodes[leader].Step(message)
+		remainingRequests = l.curState.Requests[1:]
+	}
+	for _, r := range remainingRequests {
+		newState.Requests = append(newState.Requests, r.Copy())
+	}
+	l.curState = newState
+	return newState, nil
 }
 
-func (r *LPaxosPartitionEnv) TickCtx(epCtx *types.EpisodeContext, passedTime int) (types.PartitionedSystemState, error) {
-	return r.Tick(), nil
-}
-
-func (r *LPaxosPartitionEnv) DeliverMessagesCtx(messages []types.Message, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
-	return r.DeliverMessages(messages), nil
-}
-
-func (r *LPaxosPartitionEnv) DropMessagesCtx(messages []types.Message, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
-	return r.DropMessages(messages), nil
-}
-
-func (r *LPaxosPartitionEnv) ReceiveRequestCtx(req types.Request, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
-	return r.ReceiveRequest(req), nil
-}
-
-func (r *LPaxosPartitionEnv) StopCtx(nodeID uint64, epCtx *types.EpisodeContext) error {
-	r.Stop(nodeID)
+func (r *LPaxosPartitionEnv) Stop(nodeID uint64, epCtx *types.EpisodeContext) error {
+	r.LPaxosEnv.Stop(nodeID)
 	return nil
 }
 
-func (r *LPaxosPartitionEnv) StartCtx(nodeID uint64, epCtx *types.EpisodeContext) error {
-	r.Start(nodeID)
+func (r *LPaxosPartitionEnv) Start(nodeID uint64, epCtx *types.EpisodeContext) error {
+	r.LPaxosEnv.Start(nodeID)
 	return nil
 }

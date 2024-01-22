@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/zeu5/raft-rl-test/policies"
@@ -36,33 +37,38 @@ func RedisRaftExploration(episodes, horizon int, saveFile string, ctx context.Co
 		WithCrashes:            true,
 	})
 
-	c := types.NewComparison(runs, saveFile, false)
+	c := types.NewComparison(&types.ComparisonConfig{
+		Runs:         runs,
+		Episodes:     episodes,
+		Horizon:      horizon,
+		Record:       false,
+		RecordPath:   saveFile,
+		ReportConfig: types.RepConfigStandard(),
+		Timeout:      5 * time.Second,
+	})
 
-	c.AddAnalysis("plot", redisraft.CoverageAnalyzer(colors...), redisraft.CoverageComparator(saveFile))
-	c.AddAnalysis("bugs", redisraft.BugAnalyzer(saveFile), redisraft.BugComparator())
+	c.AddAnalysis("plot", redisraft.NewCoverageAnalyzer(colors...), redisraft.CoverageComparator(saveFile))
+	c.AddAnalysis("bugs", redisraft.NewBugAnalyzer(saveFile), redisraft.BugComparator())
 
-	c.AddExperiment(types.NewExperiment("NegReward", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      policies.NewSoftMaxNegFreqPolicy(0.1, 0.99, 1),
-		Environment: partitionEnv,
-	}, types.RepConfigOff()))
+	c.AddExperiment(types.NewExperiment(
+		"NegReward",
+		policies.NewSoftMaxNegFreqPolicy(0.1, 0.99, 1),
+		partitionEnv,
+	))
 
-	c.AddExperiment(types.NewExperiment("Random", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      types.NewRandomPolicy(),
-		Environment: partitionEnv,
-	}, types.RepConfigOff()))
+	c.AddExperiment(types.NewExperiment(
+		"Random",
+		types.NewRandomPolicy(),
+		partitionEnv,
+	))
 
-	c.AddExperiment(types.NewExperiment("BonusMax", &types.AgentConfig{
-		Episodes:    episodes,
-		Horizon:     horizon,
-		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
-		Environment: partitionEnv,
-	}, types.RepConfigOff()))
+	c.AddExperiment(types.NewExperiment(
+		"BonusMax",
+		policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
+		partitionEnv,
+	))
 
-	c.RunWithCtx(ctx)
+	c.Run(ctx)
 	env.Cleanup()
 }
 

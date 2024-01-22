@@ -49,30 +49,50 @@ func newRatisPartState(s types.State, colors ...RatisColorFunc) *ratisRaftState 
 	return &ratisRaftState{nodeStates: make(map[uint64]*ratisRaftColoredState)}
 }
 
-func CoverageAnalyzer(colors ...RatisColorFunc) types.Analyzer {
-	return func(run int, s string, t []*types.Trace) types.DataSet {
-		c := make([]int, 0)
-		states := make(map[string]bool)
-		for _, trace := range t {
-			for i := 0; i < trace.Len(); i++ {
-				state, _, _, _ := trace.Get(i)
-				ratisState := newRatisPartState(state, colors...)
-				ratisStateHash := ratisState.Hash()
-				if _, ok := states[ratisStateHash]; !ok {
-					states[ratisStateHash] = true
-				}
-			}
-			c = append(c, len(states))
-		}
-		return c
+type CoverageAnalyzer struct {
+	colors          []RatisColorFunc
+	uniqueStates    map[string]bool
+	numUniqueStates []int
+}
+
+func NewCoverageAnalyzer(colors ...RatisColorFunc) *CoverageAnalyzer {
+	return &CoverageAnalyzer{
+		colors:          colors,
+		uniqueStates:    make(map[string]bool),
+		numUniqueStates: make([]int, 0),
 	}
 }
+
+func (ca *CoverageAnalyzer) Analyze(_, run int, s string, trace *types.Trace) {
+	for j := 0; j < trace.Len(); j++ {
+		s, _, _, _ := trace.Get(j)
+		ratisState := newRatisPartState(s, ca.colors...)
+		ratisStateHash := ratisState.Hash()
+		if _, ok := ca.uniqueStates[ratisStateHash]; !ok {
+			ca.uniqueStates[ratisStateHash] = true
+		}
+	}
+	ca.numUniqueStates = append(ca.numUniqueStates, len(ca.uniqueStates))
+}
+
+func (ca *CoverageAnalyzer) DataSet() types.DataSet {
+	out := make([]int, len(ca.numUniqueStates))
+	copy(out, ca.numUniqueStates)
+	return out
+}
+
+func (ca *CoverageAnalyzer) Reset() {
+	ca.uniqueStates = make(map[string]bool)
+	ca.numUniqueStates = make([]int, 0)
+}
+
+var _ types.Analyzer = (*CoverageAnalyzer)(nil)
 
 func CoverageComparator(plotPath string) types.Comparator {
 	if _, err := os.Stat(plotPath); err != nil {
 		os.Mkdir(plotPath, os.ModePerm)
 	}
-	return func(run int, s []string, ds []types.DataSet) {
+	return func(run, _ int, s []string, ds []types.DataSet) {
 		p := plot.New()
 
 		p.Title.Text = "Comparison"
@@ -110,30 +130,30 @@ func CoverageComparator(plotPath string) types.Comparator {
 	}
 }
 
-func BugAnalyzer(savePath string) types.Analyzer {
-	if _, err := os.Stat(savePath); err != nil {
-		os.MkdirAll(savePath, os.ModePerm)
-	}
-	return func(i int, s string, t []*types.Trace) types.DataSet {
-		occurrences := make([]int, 0)
-		// Todo: analyze to figure out where the bug is
+// func BugAnalyzer(savePath string) types.Analyzer {
+// 	if _, err := os.Stat(savePath); err != nil {
+// 		os.MkdirAll(savePath, os.ModePerm)
+// 	}
+// 	return func(i int, s string, t []*types.Trace) types.DataSet {
+// 		occurrences := make([]int, 0)
+// 		// Todo: analyze to figure out where the bug is
 
-		// for iter, trace := range t {
-		// 	for i := 0; i < trace.Len(); i++ {
-		// 		state, _, _, _ := trace.Get(i)
-		// 		pState := state.(*types.Partition)
-		// 		hasBug := false
-		// 		if hasBug {
-		// 			// Record bug
-		// 		}
-		// 	}
-		// }
-		return occurrences
-	}
-}
+// 		// for iter, trace := range t {
+// 		// 	for i := 0; i < trace.Len(); i++ {
+// 		// 		state, _, _, _ := trace.Get(i)
+// 		// 		pState := state.(*types.Partition)
+// 		// 		hasBug := false
+// 		// 		if hasBug {
+// 		// 			// Record bug
+// 		// 		}
+// 		// 	}
+// 		// }
+// 		return occurrences
+// 	}
+// }
 
 func BugComparator() types.Comparator {
-	return func(i int, s []string, ds []types.DataSet) {
+	return func(i, _ int, s []string, ds []types.DataSet) {
 		for j := 0; j < len(s); j++ {
 			data := ds[j].([]int)
 			if len(data) == 0 {
@@ -150,36 +170,45 @@ func BugComparator() types.Comparator {
 	}
 }
 
-func LogAnalyzer(savePath string) types.Analyzer {
-	return func(i int, s string, t []*types.Trace) types.DataSet {
-		for iter, trace := range t {
+type LogAnalyzer struct {
+	savePath string
+}
 
-			haveBugInTrace := false
-			logs := ""
+func NewLogAnalyzer(savePath string) *LogAnalyzer {
+	return &LogAnalyzer{savePath: savePath}
+}
 
-			for i := 0; i < trace.Len(); i++ {
-				s, _, _, _ := trace.Get(i)
-				pState := s.(*types.Partition)
+func (la *LogAnalyzer) Analyze(run int, episode int, s string, trace *types.Trace) {
+	haveBugInTrace := false
+	logs := ""
 
-				logLines := make([]string, 0)
-				for nodeID, rs := range pState.ReplicaStates {
-					rState := rs.(*RatisNodeState)
-					if len(rState.LogStdout) != 0 || len(rState.LogStderr) != 0 {
-						logLines = append(logLines, fmt.Sprintf("logs for node: %d\n", nodeID))
-						logLines = append(logLines, "----- Stdout -----", rState.LogStdout, "----- Stderr -----", rState.LogStderr, "\n")
-					}
-				}
-				if len(logLines) > 0 {
-					logs = strings.Join(logLines, "\n")
-					haveBugInTrace = true
-				}
-			}
+	for i := 0; i < trace.Len(); i++ {
+		s, _, _, _ := trace.Get(i)
+		pState := s.(*types.Partition)
 
-			if haveBugInTrace {
-				logFilePath := path.Join(savePath, s+"_"+strconv.Itoa(i)+"_"+strconv.Itoa(iter)+".log")
-				os.WriteFile(logFilePath, []byte(logs), 0644)
+		logLines := make([]string, 0)
+		for nodeID, rs := range pState.ReplicaStates {
+			rState := rs.(*RatisNodeState)
+			if len(rState.LogStdout) != 0 || len(rState.LogStderr) != 0 {
+				logLines = append(logLines, fmt.Sprintf("logs for node: %d\n", nodeID))
+				logLines = append(logLines, "----- Stdout -----", rState.LogStdout, "----- Stderr -----", rState.LogStderr, "\n")
 			}
 		}
-		return nil
+		if len(logLines) > 0 {
+			logs = strings.Join(logLines, "\n")
+			haveBugInTrace = true
+		}
 	}
+
+	if haveBugInTrace {
+		logFilePath := path.Join(la.savePath, strconv.Itoa(run)+"_"+s+"_"+strconv.Itoa(episode)+"_bug.log")
+		os.WriteFile(logFilePath, []byte(logs), 0644)
+	}
+}
+
+func (la *LogAnalyzer) DataSet() types.DataSet {
+	return nil
+}
+
+func (la *LogAnalyzer) Reset() {
 }

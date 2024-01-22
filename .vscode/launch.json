@@ -154,7 +154,7 @@
             "program": "${workspaceFolder}",
             "args": [
                 "-e",
-                "10",
+                "100",
                 "--horizon",
                 "100",
                 "-r",
