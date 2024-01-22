@@ -209,7 +209,9 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		BaseInterceptPort:   2023,
 		ID:                  1,
 		InterceptListenAddr: "localhost:7074",
-		WorkingDir:          path.Join(saveFile, "tmp"),
+		WorkingDir:          path.Join(saveFile, "tmp_0"),
+		BaseDir:             saveFile,
+		WorkingIndex:        0,
 		NumRequests:         5,
 
 		RequestTimeout:  40,  // heartbeat in milliseconds (fixed or variable?)
@@ -309,13 +311,13 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		Horizon:     horizon,
 		Policy:      policies.NewBonusPolicyGreedy(0.1, 0.99, 0.05),
 		Environment: types.NewPartitionEnv(partitionEnvConfig),
-	}, types.RepConfigStandard()))
+	}, types.RepConfigComplete()))
 	c.AddExperiment(types.NewExperiment("random", &types.AgentConfig{
 		Episodes:    episodes,
 		Horizon:     horizon,
 		Policy:      types.NewRandomPolicy(),
 		Environment: types.NewPartitionEnv(partitionEnvConfig),
-	}, types.RepConfigStandard()))
+	}, types.RepConfigComplete()))
 
 	// strict := policies.NewStrictPolicy(types.NewRandomPolicy())
 	// strict.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))

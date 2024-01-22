@@ -362,6 +362,9 @@ type ClusterConfig struct {
 	ElectionTimeout       int // new election timeout in milliseconds
 	NumRequests           int // number of client requests available
 	TickLength            int // length of a tick in milliseconds
+
+	BaseDir      string
+	WorkingIndex int
 }
 
 func (r *ClusterConfig) Printable() string {
@@ -389,6 +392,9 @@ func (c *ClusterConfig) Copy() *ClusterConfig {
 		ElectionTimeout:       c.ElectionTimeout,
 		NumRequests:           c.NumRequests,
 		TickLength:            c.TickLength,
+
+		BaseDir:      c.BaseDir,
+		WorkingIndex: c.WorkingIndex,
 	}
 }
 
@@ -447,6 +453,12 @@ func (c *ClusterConfig) GetNodeConfig(id int) *RedisNodeConfig {
 		ModulePath:          c.RaftModulePath,
 		BinaryPath:          c.RedisServerBinaryPath,
 	}
+}
+
+// Increases the working index and updates the working directory, use it when the current working directory is no longer working (ex: nfs file)
+func (c *ClusterConfig) IncrAndUpdateWorkingDir() {
+	c.WorkingIndex++
+	c.WorkingDir = path.Join(c.BaseDir, fmt.Sprintf("tmp_%d", c.WorkingIndex))
 }
 
 type Cluster struct {
@@ -551,7 +563,12 @@ func (c *Cluster) DestroyCtx(epCtx *types.EpisodeContext) error {
 	for i, node := range c.Nodes {
 		err = node.TerminateCtx(epCtx)
 		if err != nil {
-			return fmt.Errorf("failed to terminate node %d (redisraft:cluster.go:Cluster:Destroy:1):\n%s", i, err)
+			// solve problem with nfs files
+			if strings.Contains(err.Error(), ".nfs") {
+				c.config.IncrAndUpdateWorkingDir()
+			}
+
+			return fmt.Errorf("failed to terminate node %d (redisraft:cluster.go:Cluster:DestroyCtx:1):\n%s", i, err)
 		}
 	}
 
