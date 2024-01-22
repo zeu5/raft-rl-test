@@ -450,7 +450,7 @@ func (r *RaftPartitionEnv) ResetCtx(epCtx *types.EpisodeContext) (types.Partitio
 	return r.Reset(), nil
 }
 
-func (r *RaftPartitionEnv) TickCtx(epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
+func (r *RaftPartitionEnv) TickCtx(epCtx *types.EpisodeContext, passedTime int) (types.PartitionedSystemState, error) {
 	return r.Tick(), nil
 }
 

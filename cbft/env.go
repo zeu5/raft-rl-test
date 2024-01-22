@@ -247,7 +247,7 @@ func (r *CometEnv) ResetCtx(epCtx *types.EpisodeContext) (types.PartitionedSyste
 	return r.Reset(), nil
 }
 
-func (r *CometEnv) TickCtx(epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
+func (r *CometEnv) TickCtx(epCtx *types.EpisodeContext, passedTime int) (types.PartitionedSystemState, error) {
 	return r.Tick(), nil
 }
 

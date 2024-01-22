@@ -103,7 +103,7 @@ type PartitionedSystemEnvironmentCtx interface {
 	// Called at the end of each episode
 	ResetCtx(*EpisodeContext) (PartitionedSystemState, error)
 	// Progress the clocks of all replicas by 1
-	TickCtx(*EpisodeContext) (PartitionedSystemState, error)
+	TickCtx(*EpisodeContext, int) (PartitionedSystemState, error)
 	// Deliver the message and return the resulting state
 	DeliverMessagesCtx([]Message, *EpisodeContext) (PartitionedSystemState, error)
 	// Drop a message
@@ -457,7 +457,7 @@ func NewPartitionEnv(c PartitionEnvConfig) *PartitionEnv {
 		stats:         make(map[string]interface{}),
 	}
 	p.ResetStats()
-	p.reset()
+	// p.reset()
 	return p
 }
 
@@ -958,6 +958,9 @@ func (p *PartitionEnv) StepCtx(a Action, epCtx *EpisodeContext) (State, error) {
 	start := time.Now()
 	var nextState *Partition = nil
 	var err error
+
+	epCtx.Report.AddIntEntry(len(p.CurPartition.ActiveNodes), "active_nodes_number", "partitionEnv.StepCtx")
+
 	switch a.(type) {
 	case *ByzantineAction:
 		nextState, err = p.handleByzantineCtx(a, epCtx)
@@ -1088,6 +1091,7 @@ func (p *PartitionEnv) handlePartitionCtx(a Action, epCtx *EpisodeContext) (*Par
 	var err error
 
 	for i := 0; i < p.config.TicketBetweenPartition; i++ { // for the specified number of ticks between two partitions (action of the agent)
+		tickStartTime := time.Now()
 		select {
 		case <-epCtx.TimeoutContext.Done():
 			return nil, fmt.Errorf("handlePartitionCtx : episode timed out")
@@ -1133,8 +1137,8 @@ func (p *PartitionEnv) handlePartitionCtx(a Action, epCtx *EpisodeContext) (*Par
 				}
 			}
 
-			epCtx.Report.AddIntEntry(len(messages), "messages_to_deliver_number", "partitionEnv.handlePartitionCtx")
-			epCtx.Report.AddIntEntry(len(messages), "messages_to_drop_number", "partitionEnv.handlePartitionCtx")
+			epCtx.Report.AddIntEntry(len(messagesToDeliver), "messages_to_deliver_number", "partitionEnv.handlePartitionCtx")
+			epCtx.Report.AddIntEntry(len(messagesToDrop), "messages_to_drop_number", "partitionEnv.handlePartitionCtx")
 
 			if len(messagesToDeliver) > 0 {
 				start = time.Now()
@@ -1154,9 +1158,10 @@ func (p *PartitionEnv) handlePartitionCtx(a Action, epCtx *EpisodeContext) (*Par
 			}
 		}
 
+		tickPassedTime := time.Since(tickStartTime).Milliseconds()
 		start = time.Now()
-		s, err = p.UnderlyingEnv.TickCtx(epCtx) // make the tick pass on the environment
-		epCtx.Report.AddTimeEntry(time.Since(start), "tick_times", "partitionEnv.handlePartitionCtx")
+		s, err = p.UnderlyingEnv.TickCtx(epCtx, int(tickPassedTime)) // make the tick pass on the environment
+		epCtx.Report.AddTimeEntry(time.Since(start), "tick_time", "partitionEnv.handlePartitionCtx")
 		if err != nil {
 			return nil, err
 		}
@@ -1211,6 +1216,8 @@ func (p *PartitionEnv) handlePartitionCtx(a Action, epCtx *EpisodeContext) (*Par
 }
 
 func (p *PartitionEnv) handleStartStopCtx(a Action, epCtx *EpisodeContext) (*Partition, error) {
+	var start time.Time
+
 	ss, ok := a.(*StopStartAction)
 	if !ok {
 		return copyPartition(p.CurPartition), fmt.Errorf("handleStartStopCtx : episode timed out")
@@ -1219,6 +1226,7 @@ func (p *PartitionEnv) handleStartStopCtx(a Action, epCtx *EpisodeContext) (*Par
 	// Copy the cur state
 	nextState := copyPartition(p.CurPartition)
 
+	// create a new map of active nodes
 	newActive := make(map[uint64]bool)
 	for i := range p.CurPartition.ActiveNodes {
 		newActive[i] = true
@@ -1234,15 +1242,16 @@ func (p *PartitionEnv) handleStartStopCtx(a Action, epCtx *EpisodeContext) (*Par
 		}
 		if len(activeNodes) > 0 {
 			nodeI := p.rand.Intn(len(activeNodes))
+			epCtx.Report.AddIntEntry(nodeI, "stop_node_index", "partitionEnv.handleStartStopCtx")
 			node := activeNodes[nodeI]
-			start := time.Now()
 
+			start = time.Now()
 			err := p.UnderlyingEnv.StopCtx(node, epCtx)
+			epCtx.Report.AddTimeEntry(time.Since(start), "node_stop_time", "partitionEnv.handleStartStopCtx")
 			if err != nil {
 				return nil, err
 			}
 
-			p.recordStat("stop_times", time.Since(start))
 			delete(newActive, node)
 		}
 	} else if ss.Action == "Start" {
@@ -1255,15 +1264,16 @@ func (p *PartitionEnv) handleStartStopCtx(a Action, epCtx *EpisodeContext) (*Par
 		}
 		if len(inactiveNodes) > 0 {
 			nodeI := p.rand.Intn(len(inactiveNodes))
+			epCtx.Report.AddIntEntry(nodeI, "start_node_index", "partitionEnv.handleStartStopCtx")
 			node := inactiveNodes[nodeI]
-			start := time.Now()
 
+			start = time.Now()
 			err := p.UnderlyingEnv.StartCtx(node, epCtx)
+			epCtx.Report.AddTimeEntry(time.Since(start), "node_start_time", "partitionEnv.handleStartStopCtx")
 			if err != nil {
 				return nil, err
 			}
 
-			p.recordStat("start_times", time.Since(start))
 			newActive[node] = true
 		}
 	}
@@ -1273,7 +1283,9 @@ func (p *PartitionEnv) handleStartStopCtx(a Action, epCtx *EpisodeContext) (*Par
 		nextState.ActiveNodes[n] = true
 	}
 
-	s, err := p.UnderlyingEnv.TickCtx(epCtx)
+	start = time.Now()
+	s, err := p.UnderlyingEnv.TickCtx(epCtx, 0)
+	epCtx.Report.AddTimeEntry(time.Since(start), "tick_time", "partitionEnv.handleStartStopCtx")
 	if err != nil {
 		return nil, err
 	}
@@ -1283,6 +1295,7 @@ func (p *PartitionEnv) handleStartStopCtx(a Action, epCtx *EpisodeContext) (*Par
 		p.messages[k] = m
 	}
 
+	start = time.Now()
 	for i := 0; i < p.NumReplicas; i++ {
 		id := uint64(i + 1)
 		rs := s.GetReplicaState(id)
@@ -1294,6 +1307,7 @@ func (p *PartitionEnv) handleStartStopCtx(a Action, epCtx *EpisodeContext) (*Par
 		nextState.ReplicaColors[id] = color // abstraction
 		nextState.ReplicaStates[id] = rs    // actual replica state
 	}
+	epCtx.Report.AddTimeEntry(time.Since(start), "get_states_time", "partitionEnv.handleStartStopCtx")
 
 	// Recolor based on active nodes and recompute the partition
 	newPartition := make([][]uint64, len(p.CurPartition.Partition))

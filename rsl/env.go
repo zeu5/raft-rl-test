@@ -368,7 +368,7 @@ func (r *RSLPartitionEnv) ResetCtx(epCtx *types.EpisodeContext) (types.Partition
 	return r.Reset(), nil
 }
 
-func (r *RSLPartitionEnv) TickCtx(epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
+func (r *RSLPartitionEnv) TickCtx(epCtx *types.EpisodeContext, passedTime int) (types.PartitionedSystemState, error) {
 	return r.Tick(), nil
 }
 

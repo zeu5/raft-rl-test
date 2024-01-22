@@ -233,7 +233,7 @@ func (r *LPaxosPartitionEnv) ResetCtx(epCtx *types.EpisodeContext) (types.Partit
 	return r.Reset(), nil
 }
 
-func (r *LPaxosPartitionEnv) TickCtx(epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
+func (r *LPaxosPartitionEnv) TickCtx(epCtx *types.EpisodeContext, passedTime int) (types.PartitionedSystemState, error) {
 	return r.Tick(), nil
 }
 

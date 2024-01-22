@@ -101,15 +101,30 @@ func (e *Experiment) RunWithTimeout(ctx context.Context, timeOut int, savePath s
 	*timedOut = 0
 	*withError = 0
 
+	var consecTimeouts = new(int)
+	var consecErrors = new(int)
+	*consecTimeouts = 0
+	*consecErrors = 0
+
 	episodeTimes := make([]time.Duration, 0)
 
 	for i := 0; i < e.Episodes; i++ {
-		e.runEpisodeWithTimeout(ctx, timeOut, savePath, agent, i, timedOut, withError, &episodeTimes)
+		e.runEpisodeWithTimeout(ctx, timeOut, savePath, agent, i, timedOut, withError, &episodeTimes, consecTimeouts, consecErrors)
 
 		if len(episodeTimes) == 10 {
 			e.printEpTimesMs(episodeTimes, savePath)
 			e.printEpTimesS(episodeTimes, savePath)
 			episodeTimes = make([]time.Duration, 0)
+		}
+
+		if *consecTimeouts == 10 {
+			fmt.Printf("\n Aborting experiment %s : 10 consecutive timeouts\n", e.Name)
+			break
+		}
+
+		if *consecErrors == 10 {
+			fmt.Printf("\n Aborting experiment %s : 10 consecutive errors\n", e.Name)
+			break
 		}
 	}
 	e.Result = agent.traces
@@ -122,7 +137,7 @@ func (e *Experiment) RunWithTimeout(ctx context.Context, timeOut int, savePath s
 	}
 }
 
-func (e *Experiment) runEpisodeWithTimeout(ctx context.Context, timeOut int, savePath string, agent *Agent, i int, timedOut *int, withError *int, episodeTimes *[]time.Duration) {
+func (e *Experiment) runEpisodeWithTimeout(ctx context.Context, timeOut int, savePath string, agent *Agent, i int, timedOut *int, withError *int, episodeTimes *[]time.Duration, consecTimeouts *int, consecErrors *int) {
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Println("Recovered. Error: ", r)
@@ -179,17 +194,22 @@ func (e *Experiment) runEpisodeWithTimeout(ctx context.Context, timeOut int, sav
 	case <-EpCtx.TimeoutContext.Done():
 		// Timeout occurred
 		*timedOut += 1
+		*consecTimeouts += 1
 		*episodeTimes = append(*episodeTimes, time.Duration(0))
 
 	case <-errChan:
 		// Error occurred
 		*withError += 1
+		*consecErrors += 1
 		*episodeTimes = append(*episodeTimes, time.Duration(0))
 
 	case trace := <-res:
 		// episode completed
 		dur := time.Since(start)
 		*episodeTimes = append(*episodeTimes, dur)
+
+		*consecTimeouts = 0
+		*consecErrors = 0
 
 		// trace := <-res
 		agent.traces = append(agent.traces, trace)

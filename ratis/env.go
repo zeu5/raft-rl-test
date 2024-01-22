@@ -163,7 +163,7 @@ func (r *RatisRaftEnv) ResetCtx(epCtx *types.EpisodeContext) (types.PartitionedS
 	return r.Reset(), nil
 }
 
-func (r *RatisRaftEnv) TickCtx(epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
+func (r *RatisRaftEnv) TickCtx(epCtx *types.EpisodeContext, passedTime int) (types.PartitionedSystemState, error) {
 	return r.Tick(), nil
 }
 

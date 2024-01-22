@@ -477,7 +477,7 @@ func (r *RedisRaftEnv) Tick() types.PartitionedSystemState {
 func (r *RedisRaftEnv) ResetCtx(epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	// fmt.Print("Reset function") // DEBUG
 	if r.cluster != nil {
-		e := r.cluster.Destroy()
+		e := r.cluster.DestroyCtx(epCtx)
 		if e != nil {
 			return nil, e
 		}
@@ -500,7 +500,7 @@ func (r *RedisRaftEnv) ResetCtx(epCtx *types.EpisodeContext) (types.PartitionedS
 			break
 		} else {
 			if r.cluster != nil {
-				r.cluster.Destroy()
+				r.cluster.DestroyCtx(epCtx)
 			}
 			r.network.Reset()
 			r.cluster = NewCluster(r.clusterConfig)
@@ -632,6 +632,9 @@ func (r *RedisRaftEnv) DeliverMessagesCtx(messages []types.Message, epCtx *types
 		return nil, errors.New("DeliverMessagesCtx : episode timed out")
 	default:
 	}
+
+	epCtx.Report.AddIntEntry(len(messages), "env_deliver_messages_to_deliver_number", "RedisRaftEnv.DeliverMessagesCtx")
+
 	start := time.Now() // time stats
 
 	errChan := make(chan error, 1) // channel to put errors
@@ -645,14 +648,14 @@ func (r *RedisRaftEnv) DeliverMessagesCtx(messages []types.Message, epCtx *types
 		wg.Add(1) // increase waitgroup counter
 
 		// routine calling the send message and decreasing the counter upon completion
-		go func(rm Message, wg *sync.WaitGroup) {
-			err := r.network.SendMessage(rm.ID)
+		go func(rm Message, wg *sync.WaitGroup, epCtx *types.EpisodeContext) {
+			err := r.network.SendMessageCtx(rm.ID, epCtx)
 			if err != nil {
 				errChan <- fmt.Errorf("DeliverMessagesCtx : error sending message - %s", err)
 				// fmt.Println("DeliverMessagesCtx : error sending message ", err) // TODO: propagate the error???
 			}
 			wg.Done()
-		}(rm, wg)
+		}(rm, wg, epCtx)
 	}
 	wg.Wait() // wait for all routines to return
 
@@ -664,8 +667,12 @@ func (r *RedisRaftEnv) DeliverMessagesCtx(messages []types.Message, epCtx *types
 
 	close(errChan)
 
-	dur := time.Since(start)                            // time stats
-	r.UpdateTimeStatsCtx("DeliverMessages", dur, epCtx) // time stats
+	envDeliverMsgsTime := time.Since(start)
+
+	epCtx.Report.AddTimeEntry(envDeliverMsgsTime, "env_deliver_messages_wg_time", "RedisRaftEnv.DeliverMessagesCtx")
+	if envDeliverMsgsTime.Milliseconds() > int64(r.clusterConfig.TickLength) {
+		return nil, fmt.Errorf("DeliverMessagesCtx : envDeliverMsgsTime > r.clusterConfig.TickLength")
+	}
 
 	newState := &RedisClusterState{
 		NodeStates: make(map[uint64]*RedisNodeState),
@@ -746,8 +753,13 @@ func (r *RedisRaftEnv) DropMessagesCtx(messages []types.Message, epCtx *types.Ep
 	return newState, nil
 }
 
-func (r *RedisRaftEnv) TickCtx(epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
-	time.Sleep(time.Duration(r.clusterConfig.TickLength) * time.Millisecond)
+func (r *RedisRaftEnv) TickCtx(epCtx *types.EpisodeContext, timePassed int) (types.PartitionedSystemState, error) {
+	toSleep := max(0, r.clusterConfig.TickLength-timePassed)
+
+	if toSleep > 0 {
+		time.Sleep(time.Duration(toSleep) * time.Millisecond)
+	}
+
 	select {
 	case <-epCtx.TimeoutContext.Done():
 		return nil, errors.New("TickCtx : episode timed out")
@@ -920,3 +932,10 @@ func PrintableIntStats(data map[string]([]int)) string {
 }
 
 var _ types.PartitionedSystemEnvironment = &RedisRaftEnv{}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}

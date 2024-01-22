@@ -261,6 +261,68 @@ func (n *InterceptNetwork) SendMessage(id string) error {
 	return nil
 }
 
+func (n *InterceptNetwork) SendMessageCtx(id string, epCtx *types.EpisodeContext) error {
+	var start time.Time
+
+	start = time.Now()
+	n.lock.Lock()
+	m, ok1 := n.messages[id] // get message from the list
+	nodeAddr := ""
+	if ok1 { // if present, read the target node address
+		nodeAddr = n.nodes[m.To()]
+	}
+	n.lock.Unlock()
+	epCtx.Report.AddTimeEntry(time.Since(start), "net_send_msg_get_msg", "InterceptNetwork.SendMessageCtx")
+
+	if !ok1 { // if message not present, return
+		return errors.New("SendMessage : read message is invalid")
+	}
+
+	start = time.Now()
+	// marshal the message to send it
+	bs, err := json.Marshal(m)
+	if err != nil {
+		return errors.New("SendMessage : error marshaling the message")
+	}
+	epCtx.Report.AddTimeEntry(time.Since(start), "net_send_msg_marshal", "InterceptNetwork.SendMessageCtx")
+
+	start = time.Now()
+	// set up http client to send it?
+	client := &http.Client{
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout:   5 * time.Second,
+				KeepAlive: 5 * time.Second,
+			}).DialContext,
+			TLSHandshakeTimeout:   5 * time.Second,
+			ResponseHeaderTimeout: 5 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			DisableKeepAlives:     true,
+		},
+	}
+	epCtx.Report.AddTimeEntry(time.Since(start), "net_send_msg_setup_client", "InterceptNetwork.SendMessageCtx")
+
+	start = time.Now()
+	// send the message over http
+	resp, err := client.Post("http://"+nodeAddr+"/message", "application/json", bytes.NewBuffer(bs))
+	epCtx.Report.AddTimeEntry(time.Since(start), "net_send_msg_post", "InterceptNetwork.SendMessageCtx")
+	if err == nil { // what happens here?
+		start = time.Now()
+		io.ReadAll(resp.Body)
+		resp.Body.Close()
+		epCtx.Report.AddTimeEntry(time.Since(start), "net_send_msg_post_read", "InterceptNetwork.SendMessageCtx")
+	} else {
+		return fmt.Errorf(fmt.Sprintf("SendMessage : error with post operation \n%s", err))
+	}
+
+	// take the lock and delete the sent message from the list
+	n.lock.Lock()
+	delete(n.messages, id)
+	n.lock.Unlock()
+
+	return nil
+}
+
 // delete a message from the list given its id, if there is no such message => no-op
 func (n *InterceptNetwork) DeleteMessage(id string) {
 	n.lock.Lock()

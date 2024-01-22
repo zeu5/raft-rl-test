@@ -254,6 +254,107 @@ func NodesCommitValuesAtLeast(val int) types.RewardFuncSingle {
 	}
 }
 
+// returns true if there is at least one node having the specified entries in the log.
+//
+// - quantity: the required number of entries
+//
+// - committed: if true, the entries must be committed (index <= commitIndex)
+//
+// - minTerm: the entries must have term >= minTerm
+//
+// - maxTerm: the entries must have term <= maxTerm
+//
+// - entryType: the entries must have the specified type, if "" no constraint is applied
+func AtLeastOneNodeEntries(quantity int, committed bool, minTerm int, maxTerm int, entryType string) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		ps, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+		for _, state := range ps.ReplicaStates {
+			rState := state.(*RedisNodeState)
+			if rState.Commit < quantity {
+				break
+			}
+			amount := 0
+			for _, entry := range rState.Logs {
+				if filterEntry(entry, *rState, committed, minTerm, maxTerm, entryType) {
+					amount++
+				}
+			}
+			if amount < quantity {
+				break
+			}
+			return true
+		}
+		return false
+	}
+}
+
+// returns true if all nodes have the specified number of entries in their logs, with the specified constraints.
+//
+// - quantity: the required number of entries
+//
+// - committed: if true, the entries must be committed (index <= commitIndex)
+//
+// - minTerm: the entries must have term >= minTerm
+//
+// - maxTerm: the entries must have term <= maxTerm
+//
+// - entryType: the entries must have the specified type, if "" no constraint is applied
+func AllNodesEntries(quantity int, committed bool, minTerm int, maxTerm int, entryType string) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		ps, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+		for _, state := range ps.ReplicaStates {
+			rState := state.(*RedisNodeState)
+			if rState.Commit < quantity {
+				return false
+			}
+			amount := 0
+			for _, entry := range rState.Logs {
+				if filterEntry(entry, *rState, committed, minTerm, maxTerm, entryType) {
+					amount++
+				}
+			}
+			if amount < quantity {
+				return false
+			}
+		}
+		return true
+	}
+}
+
+// returns true if all nodes have at least the given commit value, counts only entries up to the specified term.
+//
+// PROBLEM if we work with crashes?
+func NodesCommitValuesAtLeastMaxTerm(val int, term int) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		ps, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+		for _, state := range ps.ReplicaStates {
+			rState := state.(*RedisNodeState)
+			if rState.Commit < val {
+				return false
+			}
+			inTerm := 0
+			for _, entry := range rState.Logs {
+				if entry.Term <= term {
+					inTerm++
+				}
+			}
+			if inTerm < val {
+				return false
+			}
+		}
+		return true
+	}
+}
+
 // returns true if all nodes have at most the given commit value.
 func NodesCommitValuesAtMost(val int) types.RewardFuncSingle {
 	return func(s types.State) bool {
@@ -401,4 +502,27 @@ func PendingRequestsAtLeast(val int) types.RewardFuncSingle {
 		}
 		return len(ps.PendingRequests) >= val
 	}
+}
+
+// UTIL
+
+// take an entry and a rediNode state, and return true if the entry satisfies the given constraints
+// committed: if true, the entry must be committed (index <= commitIndex)
+// minTerm: the entry must have term >= minTerm
+// maxTerm: the entry must have term <= maxTerm
+// entryType: the entry must have the specified type, if "" no constraint is applied
+func filterEntry(entry RedisEntry, redisState RedisNodeState, committed bool, minTerm int, maxTerm int, entryType string) bool {
+	if committed && entry.Index > redisState.Commit {
+		return false
+	}
+	if entry.Term < minTerm {
+		return false
+	}
+	if entry.Term > maxTerm {
+		return false
+	}
+	if entryType != "" && EntryTypeToString(entry.Type) != entryType {
+		return false
+	}
+	return true
 }

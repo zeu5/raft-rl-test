@@ -39,9 +39,48 @@ func getSetOfMachines(command string) []string {
 		return []string{"EntriesDifferentTerms", "EntriesDifferentTermsSteps", "LogDifference3", "SyncTo6WithPReq5"}
 	case "Set2":
 		return []string{"EntriesDifferentTerms", "EntriesDifferentTermsSteps", "LogDifference3", "SyncTo6WithPReq5", "SyncTo7WithPReq5", "Sync7_LogDifference3", "Sync6_LogDifference4"}
+	case "Set3":
+		return []string{"SyncA6_PR3", "SyncA6_PR3_MT1", "SyncA6_PR3_MT1_>>_CReq1_PR2", "SA6_PR3_MT1_>>_C1T1_E1T2_PR2", "SA6_PR3_MT1_>>_2CommitsInDiffTerms"}
 	default:
 		return []string{}
 	}
+}
+
+type predHierState struct {
+	RewFunc types.RewardFuncSingle
+	Name    string
+}
+
+// adds a set of steps to a predicate hierarchy
+func RedisPredHierAddBuildBlocks(pHier *policies.RewardMachine, name string) {
+	var toAdd []predHierState
+
+	switch name {
+
+	// Sync all nodes to 6 generic entries, with 3 pending requests
+	case "SyncA6_PR3":
+		toAdd = append(toAdd, predHierState{RewFunc: redisraft.NodesCommitValuesAtLeast(4).And(redisraft.PendingRequestsAtLeast(3)), Name: "SyncAll4PReq3"})
+		toAdd = append(toAdd, predHierState{RewFunc: redisraft.NodesCommitValuesAtLeast(5).And(redisraft.PendingRequestsAtLeast(3)), Name: "SyncAll5PReq3"})
+		toAdd = append(toAdd, predHierState{RewFunc: redisraft.NodesCommitValuesAtLeast(6).And(redisraft.PendingRequestsAtLeast(3)), Name: "SyncAll6PReq3"})
+
+	// Sync all nodes to 6 generic entries, with 3 pending requests
+	case "SyncA6_PR3_MT1":
+		toAdd = append(toAdd, predHierState{RewFunc: redisraft.AllNodesEntries(4, true, 1, 1, "").And(redisraft.PendingRequestsAtLeast(3)), Name: "SyncAll4PReq3MT1"})
+		toAdd = append(toAdd, predHierState{RewFunc: redisraft.AllNodesEntries(5, true, 1, 1, "").And(redisraft.PendingRequestsAtLeast(3)), Name: "SyncAll5PReq3MT1"})
+		toAdd = append(toAdd, predHierState{RewFunc: redisraft.AllNodesEntries(6, true, 1, 1, "").And(redisraft.PendingRequestsAtLeast(3)), Name: "SyncAll6PReq3MT1"})
+
+	// Sync all nodes to 6 generic entries, with 3 pending requests
+	case "SyncA6_PR3_MT1_>>_CReq1_PR2":
+		toAdd = append(toAdd, predHierState{RewFunc: redisraft.AllNodesEntries(4, true, 1, 1, "").And(redisraft.PendingRequestsAtLeast(3)), Name: "SyncAll4PReq3MT1"})
+		toAdd = append(toAdd, predHierState{RewFunc: redisraft.AllNodesEntries(5, true, 1, 1, "").And(redisraft.PendingRequestsAtLeast(3)), Name: "SyncAll5PReq3MT1"})
+		toAdd = append(toAdd, predHierState{RewFunc: redisraft.AllNodesEntries(6, true, 1, 1, "").And(redisraft.PendingRequestsAtLeast(3)), Name: "SyncAll6PReq3MT1"})
+		toAdd = append(toAdd, predHierState{RewFunc: redisraft.AllNodesEntries(6, true, 1, 1, "").And(redisraft.PendingRequestsAtLeast(2)).And(redisraft.AllNodesEntries(1, true, 1, 1, "NORMAL")), Name: "Comm1PReq2MT1"})
+	}
+
+	for _, state := range toAdd {
+		pHier.AddState(state.RewFunc, state.Name)
+	}
+
 }
 
 func getRedisPredicateHeirarchy(name string) (*policies.RewardMachine, bool, bool) {
@@ -132,6 +171,32 @@ func getRedisPredicateHeirarchy(name string) (*policies.RewardMachine, bool, boo
 		machine.AddState(redisraft.NodesCommitValuesAtLeast(6).And(redisraft.DiffInCommittedEntries(3)).And(redisraft.PendingRequestsAtLeast(2)), "Diff3_PReq2")
 		oneTime = true
 
+	case "SyncA6_PR3":
+		machine = policies.NewRewardMachine(redisraft.NodesCommitValuesAtLeast(6).And(redisraft.PendingRequestsAtLeast(3)))
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(4).And(redisraft.PendingRequestsAtLeast(3)), "SyncAll4PReq3")
+		machine.AddState(redisraft.NodesCommitValuesAtLeast(5).And(redisraft.PendingRequestsAtLeast(3)), "SyncAll5PReq3")
+		oneTime = true
+
+	case "SyncA6_PR3_MT1":
+		machine = policies.NewRewardMachine(redisraft.NodesCommitValuesAtLeastMaxTerm(6, 1).And(redisraft.PendingRequestsAtLeast(3)))
+		machine.AddState(redisraft.AllNodesEntries(4, true, 1, 1, "").And(redisraft.PendingRequestsAtLeast(3)), "SyncAll4PReq3Mt1")
+		machine.AddState(redisraft.AllNodesEntries(5, true, 1, 1, "").And(redisraft.PendingRequestsAtLeast(3)), "SyncAll5PReq3Mt1")
+		oneTime = true
+
+	case "SyncA6_PR3_MT1_>>_CReq1_PR2":
+		machine = policies.NewRewardMachine(redisraft.AllNodesEntries(6, true, 1, 1, "").And(redisraft.PendingRequestsAtLeast(2)).And(redisraft.AllNodesEntries(1, true, 1, 1, "NORMAL")))
+		RedisPredHierAddBuildBlocks(machine, "SyncA6_PR3_MT1")
+		oneTime = true
+
+	case "SA6_PR3_MT1_>>_C1T1_E1T2_PR2":
+		machine = policies.NewRewardMachine(redisraft.AllNodesEntries(6, true, 1, 1, "").And(redisraft.PendingRequestsAtLeast(2)).And(redisraft.AllNodesEntries(1, true, 1, 1, "NORMAL")).And(redisraft.AtLeastOneNodeEntries(1, false, 2, 2, "")))
+		RedisPredHierAddBuildBlocks(machine, "SyncA6_PR3_MT1_>>_CReq1_PR2")
+		oneTime = true
+
+	case "SA6_PR3_MT1_>>_2CommitsInDiffTerms":
+		machine = policies.NewRewardMachine(redisraft.AllNodesEntries(6, true, 1, 1, "").And(redisraft.AllNodesEntries(1, true, 1, 1, "NORMAL")).And(redisraft.AllNodesEntries(1, true, 2, 10, "NORMAL")))
+		RedisPredHierAddBuildBlocks(machine, "SyncA6_PR3_MT1_>>_CReq1_PR2")
+		oneTime = true
 	}
 
 	return machine, oneTime, machine != nil
@@ -145,12 +210,12 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		ID:                  1,
 		InterceptListenAddr: "localhost:7074",
 		WorkingDir:          path.Join(saveFile, "tmp"),
-		NumRequests:         3,
+		NumRequests:         5,
 
-		RequestTimeout:  15, // heartbeat in milliseconds (fixed or variable?)
-		ElectionTimeout: 90, // election timeout in milliseconds (from specified value to its double)
+		RequestTimeout:  40,  // heartbeat in milliseconds (fixed or variable?)
+		ElectionTimeout: 120, // election timeout in milliseconds (from specified value to its double)
 
-		TickLength: 10,
+		TickLength: 15,
 	}
 	env := redisraft.NewRedisRaftEnv(ctx, &clusterConfig, path.Join(saveFile, "tickLength"))
 	// env.SetPrintStats(true) // to print the episode stats
@@ -175,10 +240,10 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		"commit",
 		"leader",
 		"vote",
-		"boundedTerm3",
+		"boundedTerm5",
 		"index",
 		// "snapshot",
-		// "log",
+		"log",
 	}
 
 	colors := make([]redisraft.RedisRaftColorFunc, 0)
@@ -196,8 +261,8 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		StaySameStateUpto:      5,
 		NumReplicas:            3,
 		WithCrashes:            false,
-		CrashLimit:             10,
-		MaxInactive:            0,
+		CrashLimit:             3,
+		MaxInactive:            1,
 	}
 	epTimeOut := 5
 
@@ -236,7 +301,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 			Horizon:     horizon,
 			Policy:      policy,
 			Environment: types.NewPartitionEnv(partitionEnvConfig),
-		}, types.RepConfigOff()))
+		}, types.RepConfigStandard()))
 	}
 
 	c.AddExperiment(types.NewExperiment("rl", &types.AgentConfig{

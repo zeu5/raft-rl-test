@@ -76,7 +76,7 @@ func RepConfigComplete() *ReportsPrintConfig {
 		PrintIfError:   true,
 		PrintIfTimeout: true,
 
-		Sampling: 0.05,
+		Sampling: 1.0,
 	}
 }
 
@@ -96,6 +96,7 @@ type EpisodeReport struct {
 	Timeline   []*EpisodeReportEntry // generic timeline containing all the entries ordered by index
 	TimeValues map[string][]*EpisodeReportEntry
 	IntValues  map[string][]*EpisodeReportEntry
+	Logs       map[string]string
 }
 
 func NewEpisodeReport(episodeNumber int, experimentName string) *EpisodeReport {
@@ -112,6 +113,7 @@ func NewEpisodeReport(episodeNumber int, experimentName string) *EpisodeReport {
 		Timeline:   make([]*EpisodeReportEntry, 0),
 		TimeValues: make(map[string][]*EpisodeReportEntry),
 		IntValues:  make(map[string][]*EpisodeReportEntry),
+		Logs:       make(map[string]string),
 	}
 }
 
@@ -172,6 +174,13 @@ func (e *EpisodeReport) AddTimeEntry(value time.Duration, entryType string, call
 	e.TimeValues[entryType] = values
 }
 
+func (e *EpisodeReport) AddLog(value string, key string) {
+	e.lock.Lock()
+	defer e.lock.Unlock()
+
+	e.Logs[key] = value
+}
+
 // return a string representation of the report timeline
 func (e *EpisodeReport) StringTimeline() string {
 	result := "Length: " + fmt.Sprintf("%d", len(e.Timeline)) + "\n"
@@ -183,10 +192,13 @@ func (e *EpisodeReport) StringTimeline() string {
 func (e *EpisodeReport) StringPerType() string {
 	result := ""
 	for entryType, entries := range e.TimeValues {
-		result = fmt.Sprintf("%s\n%s :\n%s", result, entryType, StringEntriesList(entries))
+		result = fmt.Sprintf("%s\n%s [%d]:\n%s", result, entryType, len(entries), StringEntriesListLite(entries))
 	}
 	for entryType, entries := range e.IntValues {
-		result = fmt.Sprintf("%s\n%s :\n%s", result, entryType, StringEntriesList(entries))
+		result = fmt.Sprintf("%s\n%s [%d]:\n%s", result, entryType, len(entries), StringEntriesListLite(entries))
+	}
+	for key, value := range e.Logs {
+		result = fmt.Sprintf("%s\n%s :\n%s", result, key, value)
 	}
 	return result
 }
@@ -261,6 +273,17 @@ func (en *EpisodeReportEntry) StringValue() string {
 	return "N/A"
 }
 
+func (en *EpisodeReportEntry) StringLite() string {
+	switch en.Value.(type) {
+	case time.Duration:
+		return fmt.Sprintf("[ %5d | %3d ] %12s (%20s)", en.Timestamp.Milliseconds(), en.EpisodeStep, en.Value.(time.Duration).String(), en.Caller)
+	case int:
+		return fmt.Sprintf("[ %5d | %3d ] %5d (%20s)", en.Timestamp.Milliseconds(), en.EpisodeStep, en.Value.(int), en.Caller)
+	default:
+		return "wrong entry type"
+	}
+}
+
 // return a string representation of the list of entries
 func StringEntriesList(list []*EpisodeReportEntry) string {
 	result := ""
@@ -270,12 +293,21 @@ func StringEntriesList(list []*EpisodeReportEntry) string {
 	return result
 }
 
+// return a string representation of the list of entries
+func StringEntriesListLite(list []*EpisodeReportEntry) string {
+	result := ""
+	for _, entry := range list {
+		result = fmt.Sprintf("%s%s\n", result, entry.StringLite())
+	}
+	return result
+}
+
 // return a string representation of the list of entries values
 func StringEntriesValuesList(list []*EpisodeReportEntry) string {
 	result := ""
 	for i, entry := range list {
 		result = fmt.Sprintf("%s %s", result, entry.StringValue())
-		if i%20 == 0 && i != 0 {
+		if (i+1)%20 == 0 {
 			result = fmt.Sprintf("%s\n", result)
 		}
 	}

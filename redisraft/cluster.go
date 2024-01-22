@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/zeu5/raft-rl-test/types"
 )
 
 // An entry in a node's log
@@ -187,7 +188,7 @@ func (r *RedisNode) Create() {
 // start the RedisNode server process, returns an error if already started
 func (r *RedisNode) Start() error {
 	if r.ctx != nil || r.process != nil {
-		return errors.New("redis server already started")
+		return errors.New("(redisraft:cluster.go:RedisNode:Start:1): redis server already started")
 	}
 
 	r.Create()
@@ -200,42 +201,75 @@ func (r *RedisNode) Cleanup() error {
 
 func (r *RedisNode) Stop() error {
 	if r.ctx == nil || r.process == nil {
-		return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Stop : redis server not started", r.ID))
+		// return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Stop (redisraft:cluster.go:RedisNode:Stop:1): redis server not started", r.ID))
+		// return nil
+		r.ctx = nil
+		r.cancel = func() {}
+		r.process = nil
+
+		return nil
 	}
 	select {
 	case <-r.ctx.Done():
-		return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Stop : redis server already stopped", r.ID))
+		// return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Stop (redisraft:cluster.go:RedisNode:Stop:2): redis server already stopped", r.ID))
 	default:
+		r.cancel()
+		err := r.process.Wait()
+
+		if err != nil {
+			if err.Error() != "signal: killed" {
+				return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Stop (redisraft:cluster.go:RedisNode:Stop:3): \n%s : %s", r.ID, err.Error(), r.process.ProcessState.String()))
+			}
+		}
 	}
-	r.cancel()
-	err := r.process.Wait()
+
 	r.ctx = nil
 	r.cancel = func() {}
 	r.process = nil
 
-	if err != nil {
-		return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Stop : \n%s", r.ID, err))
-	}
-	return err
+	return nil
 }
 
 func (r *RedisNode) Terminate() error {
 	err := r.Stop()
 	if err != nil {
-		return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Terminate : \n%s", r.ID, err))
+		return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Terminate (redisraft:cluster.go:RedisNode:Terminate:1): \n%s", r.ID, err))
 	}
 
 	err = r.Cleanup()
 	if err != nil {
-		return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Terminate : \n%s", r.ID, err))
+		return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Terminate (redisraft:cluster.go:RedisNode:Terminate:2): \n%s", r.ID, err))
 	}
 
-	stdout := strings.ToLower(r.stdout.String())
-	stderr := strings.ToLower(r.stderr.String())
+	// stdout := strings.ToLower(r.stdout.String())
+	// stderr := strings.ToLower(r.stderr.String())
 
-	if strings.Contains(stdout, "redis bug report") || strings.Contains(stderr, "redis bug report") {
-		return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Terminate : failed to terminate, redis crashed", r.ID))
+	// if strings.Contains(stdout, "redis bug report") || strings.Contains(stderr, "redis bug report") {
+	// 	return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Terminate (redisraft:cluster.go:RedisNode:Terminate:3): failed to terminate, redis crashed", r.ID))
+	// }
+	return nil
+}
+
+func (r *RedisNode) TerminateCtx(epCtx *types.EpisodeContext) error {
+	err := r.Stop()
+	if err != nil {
+		serr := strings.ToLower(r.stderr.String())
+		epCtx.Report.AddLog(serr, fmt.Sprintf("redis_node_log_%d", r.ID))
+
+		return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Terminate (redisraft:cluster.go:RedisNode:Terminate:1): \n%s", r.ID, err))
 	}
+
+	err = r.Cleanup()
+	if err != nil {
+		return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Terminate (redisraft:cluster.go:RedisNode:Terminate:2): \n%s", r.ID, err))
+	}
+
+	// stdout := strings.ToLower(r.stdout.String())
+	// stderr := strings.ToLower(r.stderr.String())
+
+	// if strings.Contains(stdout, "redis bug report") || strings.Contains(stderr, "redis bug report") {
+	// 	return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Terminate (redisraft:cluster.go:RedisNode:Terminate:3): failed to terminate, redis crashed", r.ID))
+	// }
 	return nil
 }
 
@@ -485,16 +519,16 @@ func (c *Cluster) Start() error {
 	for i := 1; i <= c.config.NumNodes; i++ {
 		node := c.Nodes[i]
 		if err := node.Start(); err != nil {
-			return fmt.Errorf("error starting node %d: %s", i, err)
+			return fmt.Errorf("error starting node %d (redisraft:cluster.go:Cluster:Start:1):\n%s", i, err)
 		}
 		if i == 1 {
 			if err := node.cluster("init"); err != nil {
-				return fmt.Errorf("failed to initialize: %s", err)
+				return fmt.Errorf("failed to initialize (redisraft:cluster.go:Cluster:Start:2):\n%s", err)
 			}
 			primaryAddr = "localhost:" + strconv.Itoa(node.config.Port)
 		} else {
 			if err := node.cluster("join", primaryAddr); err != nil {
-				return fmt.Errorf("failed to join cluster: %s", err)
+				return fmt.Errorf("failed to join cluster (redisraft:cluster.go:Cluster:Start:3):\n%s", err)
 			}
 		}
 	}
@@ -503,9 +537,26 @@ func (c *Cluster) Start() error {
 
 func (c *Cluster) Destroy() error {
 	var err error = nil
-	for _, node := range c.Nodes {
+	for i, node := range c.Nodes {
 		err = node.Terminate()
+		if err != nil {
+			return fmt.Errorf("failed to terminate node %d (redisraft:cluster.go:Cluster:Destroy:1):\n%s", i, err)
+		}
 	}
+	return err
+}
+
+func (c *Cluster) DestroyCtx(epCtx *types.EpisodeContext) error {
+	var err error = nil
+	for i, node := range c.Nodes {
+		err = node.TerminateCtx(epCtx)
+		if err != nil {
+			return fmt.Errorf("failed to terminate node %d (redisraft:cluster.go:Cluster:Destroy:1):\n%s", i, err)
+		}
+	}
+
+	time.Sleep(1 * time.Second)
+
 	return err
 }
 
