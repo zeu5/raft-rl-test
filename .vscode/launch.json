@@ -223,9 +223,9 @@
                 "-e",
                 "10",
                 "comet-rm",
-                "Commit1",
-                "--save",
-                "results_debug",
+                "AnyRound1",
+                "--horizon",
+                "100"
             ]
         },
         {

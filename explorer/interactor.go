@@ -96,19 +96,20 @@ func (e *Explorer) getQValues(state string) string {
 }
 
 func (e *Explorer) getInitialStates() string {
-	initalStates := make(map[string]*State)
+	initalStates := make(map[string]int)
 	for _, t := range e.Traces {
 		if t.Len() == 0 {
 			continue
 		}
 		i := t.States[0]
 		if _, ok := initalStates[i.Key]; !ok {
-			initalStates[i.Key] = i
+			initalStates[i.Key] = 0
 		}
+		initalStates[i.Key] += 1
 	}
 	out := "Initial States are:\n"
-	for k := range initalStates {
-		out += k + "\n"
+	for k, o := range initalStates {
+		out += fmt.Sprintf("%s: %d\n", k, o)
 	}
 	return out
 }

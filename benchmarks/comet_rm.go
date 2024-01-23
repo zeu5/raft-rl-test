@@ -86,9 +86,9 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 		RecordPath: saveFile,
 		Timeout:    0 * time.Second,
 		// record flags
-		RecordTraces: false,
+		RecordTraces: true,
 		RecordTimes:  false,
-		RecordPolicy: false,
+		RecordPolicy: true,
 		// last traces
 		PrintLastTraces:     0,
 		PrintLastTracesFunc: nil,
@@ -100,7 +100,7 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 	c.AddAnalysis("crashes", cbft.NewCrashesAnalyzer(saveFile), types.NoopComparator())
 
 	bugs := []types.BugDesc{
-		{Name: "Round1", Check: cbft.ReachedRound1()},
+		// {Name: "Round1", Check: cbft.ReachedRound1()},
 		{Name: "DifferentProposers", Check: cbft.DifferentProposers()},
 	}
 	c.AddAnalysis("bugs", types.NewBugAnalyzer(saveFile, bugs...), types.BugComparator(saveFile))
@@ -127,14 +127,19 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 		types.NewRandomPolicy(),
 		types.NewPartitionEnv(partitionEnvConfig),
 	))
-	strict := policies.NewStrictPolicy(types.NewRandomPolicy())
-	strict.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
-
 	c.AddExperiment(types.NewExperiment(
-		"Strict",
-		strict,
+		"BonusMax",
+		policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
 		types.NewPartitionEnv(partitionEnvConfig),
 	))
+	// strict := policies.NewStrictPolicy(types.NewRandomPolicy())
+	// strict.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
+
+	// c.AddExperiment(types.NewExperiment(
+	// 	"Strict",
+	// 	strict,
+	// 	types.NewPartitionEnv(partitionEnvConfig),
+	// ))
 
 	c.Run(ctx)
 	env.Cleanup()
