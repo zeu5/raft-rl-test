@@ -209,8 +209,8 @@
             "program": "${workspaceFolder}",
             "args": [
                 "explore",
-                "results_comet_step_precommit/policy_0_RM_Init.jsonl",
-                "results_comet_step_precommit/traces_0_Random.jsonl"
+                "results/policy_0_RM_Init.jsonl",
+                "results/traces_0_RM.jsonl"
             ]
         },
         {

@@ -47,9 +47,27 @@ func ColorHRS() CometColorFunc {
 	}
 }
 
+func ColorHeight() CometColorFunc {
+	return func(cns *CometNodeState) (string, interface{}) {
+		return "height", cns.Height
+	}
+}
+
+func ColorStep() CometColorFunc {
+	return func(cns *CometNodeState) (string, interface{}) {
+		return "step", cns.Step
+	}
+}
+
+func ColorRound() CometColorFunc {
+	return func(cns *CometNodeState) (string, interface{}) {
+		return "round", cns.Round
+	}
+}
+
 func ColorProposal() CometColorFunc {
 	return func(s *CometNodeState) (string, interface{}) {
-		return "proposal", s.ProposalBlockHash
+		return "have_proposal", s.ProposalBlockHash != ""
 	}
 }
 
@@ -84,6 +102,28 @@ func ColorNumVotes() CometColorFunc {
 			votes = append(votes, []int{prevotes, precommits})
 		}
 		return "num_votes", votes
+	}
+}
+
+func ColorCurRoundVotes() CometColorFunc {
+	return func(cns *CometNodeState) (string, interface{}) {
+		if len(cns.Votes) <= cns.Round {
+			return "round_votes", []int{}
+		}
+		votes := cns.Votes[cns.Round]
+		prevotes := 0
+		precommits := 0
+		for _, pv := range votes.Prevotes {
+			if pv != "nil-Vote" {
+				prevotes += 1
+			}
+		}
+		for _, pcv := range votes.Precommits {
+			if pcv != "nil-Vote" {
+				precommits += 1
+			}
+		}
+		return "round_votes", []int{prevotes, precommits}
 	}
 }
 

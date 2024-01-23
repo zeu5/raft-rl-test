@@ -63,12 +63,50 @@ func (e *Explorer) Interact() {
 			}
 			e.interactTrace(traceNo-1, reader)
 		case 5:
+			fmt.Printf("Enter the state key: ")
+			stateK, err := reader.ReadString('\n')
+			if err != nil {
+				fmt.Println("Invalid input! Try again")
+				continue
+			}
+			fmt.Printf("Enter the action key: ")
+			actionK, err := reader.ReadString('\n')
+			if err != nil {
+				fmt.Println("Invalid input! Try again")
+				continue
+			}
+			fmt.Printf("%s", e.getNextStates(strings.Replace(stateK, "\n", "", -1), strings.Replace(actionK, "\n", "", -1)))
+		case 6:
 			fmt.Println("Quitting! Thank you")
 			return
 		default:
 			fmt.Println("Wrong choice! Try again!")
 		}
 	}
+}
+
+func (e *Explorer) getNextStates(stateKey, actionKey string) string {
+	nextStates := make(map[string][]int)
+	for i, t := range e.Traces {
+		if t.Len() == 0 {
+			continue
+		}
+		for step, s := range t.States {
+			if s.Key == stateKey && t.Actions[step].Key == actionKey {
+				nextStateKey := t.NextStates[step].Key
+				if _, ok := nextStates[nextStateKey]; !ok {
+					nextStates[nextStateKey] = make([]int, 0)
+				}
+				nextStates[nextStateKey] = append(nextStates[nextStateKey], i)
+			}
+		}
+	}
+
+	out := "Next states are:\n"
+	for nextState, traces := range nextStates {
+		out += fmt.Sprintf("%s: %v\n", nextState, traces)
+	}
+	return out
 }
 
 func (e *Explorer) getFullState(stateKey string) string {
@@ -128,7 +166,8 @@ Select one of the following options:
 2. Show QValues
 3. Show full state
 4. Explore a trace
-5. Quit
+5. Next States
+6. Quit
 Enter your choice: `
 }
 
