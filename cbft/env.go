@@ -143,8 +143,11 @@ func (r *CometEnv) Reset(epCtx *types.EpisodeContext) (types.PartitionedSystemSt
 	return newState, nil
 }
 
-func (r *CometEnv) Tick(epCtx *types.EpisodeContext, passedTime int) (types.PartitionedSystemState, error) {
-	time.Sleep(20 * time.Millisecond)
+func (r *CometEnv) Tick(ctx *types.EpisodeContext, _ int) (types.PartitionedSystemState, error) {
+	select {
+	case <-time.After(r.clusterConfig.TickDuration):
+	case <-ctx.Context.Done():
+	}
 	newState := &CometClusterState{
 		NodeStates: r.cluster.GetNodeStates(),
 		Messages:   r.network.GetAllMessages(),

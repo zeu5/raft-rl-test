@@ -60,6 +60,7 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 		NumNodes:            4,
 		NumRequests:         20,
 		CreateEmptyBlocks:   true,
+		TickDuration:        50 * time.Millisecond,
 	})
 	colors := []cbft.CometColorFunc{cbft.ColorHRS(), cbft.ColorProposal(), cbft.ColorNumVotes(), cbft.ColorProposer()}
 
@@ -75,7 +76,7 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 		MaxInactive:            2,
 		WithByzantine:          false,
 		// Enables storing the time values in the partition environment
-		RecordStats: false,
+		RecordStats: true,
 	}
 
 	c := types.NewComparison(&types.ComparisonConfig{

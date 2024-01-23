@@ -14,6 +14,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -314,6 +315,8 @@ type CometClusterConfig struct {
 	TimeoutPrevote   int
 	TimeoutPrecommit int
 	TimeoutCommit    int
+
+	TickDuration time.Duration
 }
 
 func (c *CometClusterConfig) SetDefaults() {
@@ -328,6 +331,9 @@ func (c *CometClusterConfig) SetDefaults() {
 	}
 	if c.TimeoutCommit == 0 {
 		c.TimeoutCommit = 20
+	}
+	if c.TickDuration == 0 {
+		c.TickDuration = 30 * time.Millisecond
 	}
 }
 
@@ -391,18 +397,43 @@ func NewCluster(config *CometClusterConfig) (*CometCluster, error) {
 
 func (c *CometCluster) GetNodeStates() map[uint64]*CometNodeState {
 	out := make(map[uint64]*CometNodeState)
-	for id, node := range c.Nodes {
-		state, err := node.Info()
-		if err != nil {
-			e := EmptyCometNodeState()
-			e.LogStdout = node.stdout.String()
-			e.LogStderr = node.stderr.String()
+	outCh := make(chan struct {
+		State *CometNodeState
+		Node  int
+	}, c.config.NumNodes)
 
-			out[uint64(id)] = e
-			continue
-		}
-		out[uint64(id)] = state.Copy()
+	wg := new(sync.WaitGroup)
+	for id, node := range c.Nodes {
+		wg.Add(1)
+		go func(id int, node *CometNode, wg *sync.WaitGroup, sCh chan struct {
+			State *CometNodeState
+			Node  int
+		}) {
+			state, err := node.Info()
+			if err != nil {
+				state = EmptyCometNodeState()
+				state.LogStdout = node.stdout.String()
+				state.LogStderr = node.stderr.String()
+			}
+			sCh <- struct {
+				State *CometNodeState
+				Node  int
+			}{
+				State: state,
+				Node:  id,
+			}
+
+			wg.Done()
+		}(id, node, wg, outCh)
 	}
+
+	wg.Wait()
+	close(outCh)
+
+	for s := range outCh {
+		out[uint64(s.Node)] = s.State.Copy()
+	}
+
 	return out
 }
 
