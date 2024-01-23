@@ -3,7 +3,6 @@ package types
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"path"
 	"sync"
 	"time"
@@ -64,7 +63,7 @@ func (e *EpisodeContext) RecordReport(path string, config *ReportsPrintConfig) {
 		reason = fmt.Sprintf("error: %s", e.Err.Error())
 	} else if e.TimedOut {
 		reason = "timeout"
-	} else if rand.Float32() < config.Sampling {
+	} else {
 		reason = "randomly sampled"
 	}
 

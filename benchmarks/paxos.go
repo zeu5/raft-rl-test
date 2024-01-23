@@ -2,6 +2,7 @@ package benchmarks
 
 import (
 	"context"
+	"time"
 
 	"github.com/zeu5/raft-rl-test/lpaxos"
 	"github.com/zeu5/raft-rl-test/policies"
@@ -24,11 +25,19 @@ func Paxos(episodes, horizon, runs int, saveFile string, ctx context.Context) {
 	// property := lpaxos.InconsistentLogs()
 	// Comparison runs different agents as specified below. Then analyzes the traces for each agent configuration and compares them
 	c := types.NewComparison(&types.ComparisonConfig{
-		Runs:         runs,
-		Episodes:     episodes,
-		Horizon:      horizon,
-		Record:       false,
-		RecordPath:   saveFile,
+		Runs:       runs,
+		Episodes:   episodes,
+		Horizon:    horizon,
+		RecordPath: saveFile,
+		Timeout:    0 * time.Second,
+		// record flags
+		RecordTraces: false,
+		RecordTimes:  false,
+		RecordPolicy: false,
+		// last traces
+		PrintLastTraces:     0,
+		PrintLastTracesFunc: nil,
+		// report config
 		ReportConfig: types.RepConfigOff(),
 	})
 	c.AddAnalysis("Plot", lpaxos.NewLPaxosAnalyzer(saveFile), lpaxos.LPaxosComparator(saveFile))

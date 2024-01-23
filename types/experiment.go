@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"path"
 	"strconv"
@@ -13,15 +14,26 @@ import (
 )
 
 type experimentRunConfig struct {
-	CurrentRun         int
-	Episodes           int
-	Horizon            int
-	Analyzers          []Analyzer
-	Record             bool
+	// execution configuration
+	CurrentRun int
+	Episodes   int
+	Horizon    int
+	Analyzers  []Analyzer
+	Timeout    time.Duration
+	Context    context.Context
+
+	// record flags
+	RecordTraces bool
+	RecordTimes  bool
+	RecordPolicy bool
+
+	// last traces configuration
+	PrintLastTraces     int
+	PrintLastTracesFunc func(*Trace) string
+
+	// reports configuration
 	ReportsPrintConfig *ReportsPrintConfig
 	ReportSavePath     string
-	Timeout            time.Duration
-	Context            context.Context
 }
 
 // Experiment encapsulates the different parameters to configure an agent and analyze the traces
@@ -59,7 +71,7 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 	default:
 	}
 
-	if rConfig.Record {
+	if rConfig.RecordTraces {
 		tracesFolder := path.Join(rConfig.ReportSavePath, "traces")
 		if _, err := os.Stat(tracesFolder); err != nil {
 			os.MkdirAll(tracesFolder, os.ModePerm)
@@ -79,6 +91,8 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 		Environment: e.environment,
 	})
 
+	printTracesIndex := rConfig.Episodes - rConfig.PrintLastTraces
+
 	for i := 0; i < rConfig.Episodes; i++ {
 		select {
 		case <-rConfig.Context.Done():
@@ -89,7 +103,7 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 		fmt.Printf("\rExperiment: %s, Episode: %d/%d, Timed out: %d, With Error: %d", e.Name, i+1, rConfig.Episodes, totalTimeout, totalWithError)
 
 		eCtx := NewEpisodeContext(i, e.Name, rConfig.Timeout, rConfig.Context)
-		e.runEpisode(eCtx, agent)
+		e.runEpisode(eCtx, agent, rConfig)
 		episodeTimes = append(episodeTimes, eCtx.RunDuration)
 
 		if eCtx.TimedOut {
@@ -106,17 +120,23 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 			consecutiveErrors = 0
 		}
 
-		if rConfig.Record {
+		if rConfig.RecordTraces {
 			e.recordTrace(rConfig, eCtx.Trace)
-			eCtx.RecordReport(rConfig.ReportSavePath, rConfig.ReportsPrintConfig)
+			// eCtx.RecordReport(rConfig.ReportSavePath, rConfig.ReportsPrintConfig)
 		}
 
 		for _, a := range rConfig.Analyzers {
 			a.Analyze(rConfig.CurrentRun, i, e.Name, eCtx.Trace)
 		}
 
+		if i >= printTracesIndex {
+			readableTrace := rConfig.PrintLastTracesFunc(eCtx.Trace)
+			filePath := path.Join(rConfig.ReportSavePath, "lastTraces", e.Name+"_run"+strconv.Itoa(rConfig.CurrentRun)+"_ep"+strconv.Itoa(i)+".txt")
+			util.WriteToFile(filePath, readableTrace)
+		}
+
 		if len(episodeTimes) == 10 {
-			if rConfig.Record {
+			if rConfig.RecordTimes {
 				e.printEpTimesMs(episodeTimes, rConfig.ReportSavePath)
 				e.printEpTimesS(episodeTimes, rConfig.ReportSavePath)
 			}
@@ -140,14 +160,14 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 	default:
 	}
 
-	if rConfig.Record {
+	if rConfig.RecordPolicy {
 		e.policy.Record(path.Join(rConfig.ReportSavePath, "policies", e.Name+"_"+strconv.Itoa(rConfig.CurrentRun)))
 	}
 
 	fmt.Println("")
 }
 
-func (e *Experiment) runEpisode(eCtx *EpisodeContext, agent *Agent) {
+func (e *Experiment) runEpisode(eCtx *EpisodeContext, agent *Agent, rConfig *experimentRunConfig) {
 	defer func() {
 		if r := recover(); r != nil {
 			eCtx.SetError(fmt.Errorf("%v", r))
@@ -163,7 +183,7 @@ func (e *Experiment) runEpisode(eCtx *EpisodeContext, agent *Agent) {
 
 	done := make(chan error, 1)
 
-	go func(eCtx *EpisodeContext, agent *Agent) {
+	go func(eCtx *EpisodeContext, agent *Agent, rConfig *experimentRunConfig) {
 		start := time.Now()
 		agent.RunEpisode(eCtx)
 		duration := time.Since(start)
@@ -175,15 +195,20 @@ func (e *Experiment) runEpisode(eCtx *EpisodeContext, agent *Agent) {
 		case <-eCtx.Context.Done():
 			if deadline, ok := eCtx.Context.Deadline(); ok && time.Now().After(deadline) {
 				eCtx.SetTimedOut()
+				eCtx.RecordReport(rConfig.ReportSavePath, rConfig.ReportsPrintConfig)
 			}
 		default:
 			if eCtx.Err != nil {
 				done <- eCtx.Err
+				eCtx.RecordReport(rConfig.ReportSavePath, rConfig.ReportsPrintConfig)
 			} else {
 				done <- nil
+				if rand.Float32() < rConfig.ReportsPrintConfig.Sampling {
+					eCtx.RecordReport(rConfig.ReportSavePath, rConfig.ReportsPrintConfig)
+				}
 			}
 		}
-	}(eCtx, agent)
+	}(eCtx, agent, rConfig)
 
 	select {
 	case <-eCtx.Context.Done():
@@ -245,13 +270,22 @@ func NoopComparator() Comparator {
 
 // ComparisonConfig contains the configuration for the comparison
 type ComparisonConfig struct {
-	Runs         int                 // number of runs
-	Episodes     int                 // number of episodes
-	Horizon      int                 // number of steps
-	Record       bool                // record the traces and policy
+	Runs     int // number of runs
+	Episodes int // number of episodes
+	Horizon  int // number of steps
+
 	RecordPath   string              // path to store the results
 	ReportConfig *ReportsPrintConfig // configuration for the reports
 	Timeout      time.Duration       // timeout for each episode
+
+	// record flags
+	RecordTraces bool
+	RecordTimes  bool
+	RecordPolicy bool
+
+	// last traces configuration
+	PrintLastTraces     int
+	PrintLastTracesFunc func(*Trace) string
 }
 
 // record the configuration of the comparison
@@ -271,7 +305,11 @@ func (c *Comparison) recordConfig() {
 	out["runs"] = cfg.Runs
 	out["episodes"] = cfg.Episodes
 	out["horizon"] = cfg.Horizon
-	out["record"] = cfg.Record
+	out["record_traces"] = cfg.RecordTraces
+	out["record_times"] = cfg.RecordTimes
+	out["record_policy"] = cfg.RecordPolicy
+	out["print_last_traces"] = cfg.PrintLastTraces
+	// out["print_last_traces_func"] = cfg.PrintLastTracesFunc
 	out["report_config"] = cfg.ReportConfig
 	if cfg.Timeout != 0 {
 		out["timeout"] = cfg.Timeout.String()
@@ -307,20 +345,42 @@ type Comparison struct {
 
 // NewComparison creates a comparison instance
 func NewComparison(config *ComparisonConfig) *Comparison {
-	if config.Record {
-		if _, ok := os.Stat(config.RecordPath); ok == nil {
-			os.RemoveAll(config.RecordPath)
-		}
-		os.MkdirAll(config.RecordPath, 0777)
 
-		foldersToCreate := []string{"epTimes", "epReports", "traces", "policies"}
-		for _, s := range foldersToCreate {
-			fldPath := path.Join(config.RecordPath, s)
-			if _, ok := os.Stat(fldPath); ok != nil {
-				os.MkdirAll(fldPath, 0777)
-			}
+	if _, ok := os.Stat(config.RecordPath); ok == nil {
+		os.RemoveAll(config.RecordPath)
+	}
+	os.MkdirAll(config.RecordPath, 0777)
+
+	foldersToCreate := make([]string, 0)
+
+	foldersToCreate = append(foldersToCreate, "epReports")
+
+	if config.RecordTraces {
+		foldersToCreate = append(foldersToCreate, "traces")
+	}
+
+	if config.RecordTimes {
+		foldersToCreate = append(foldersToCreate, "epTimes")
+	}
+
+	if config.RecordPolicy {
+		foldersToCreate = append(foldersToCreate, "policies")
+	}
+
+	if config.PrintLastTraces > 0 {
+		if config.PrintLastTracesFunc == nil {
+			panic("PrintLastTracesFunc must be defined")
+		}
+		foldersToCreate = append(foldersToCreate, "lastTraces")
+	}
+
+	for _, s := range foldersToCreate {
+		fldPath := path.Join(config.RecordPath, s)
+		if _, ok := os.Stat(fldPath); ok != nil {
+			os.MkdirAll(fldPath, 0777)
 		}
 	}
+
 	return &Comparison{
 		Experiments: make([]*Experiment, 0),
 		analyzers:   make(map[string]Analyzer),
@@ -376,14 +436,18 @@ func (c *Comparison) Run(ctx context.Context) {
 // prepare the run configuration for the experiment
 func (c *Comparison) prepareRunConfig(ctx context.Context) *experimentRunConfig {
 	rCfg := &experimentRunConfig{
-		Episodes:           c.cConfig.Episodes,
-		Horizon:            c.cConfig.Horizon,
-		Analyzers:          make([]Analyzer, 0),
-		Record:             c.cConfig.Record,
-		ReportsPrintConfig: c.cConfig.ReportConfig,
-		ReportSavePath:     c.cConfig.RecordPath,
-		Timeout:            c.cConfig.Timeout,
-		Context:            ctx,
+		Episodes:            c.cConfig.Episodes,
+		Horizon:             c.cConfig.Horizon,
+		Analyzers:           make([]Analyzer, 0),
+		RecordTraces:        c.cConfig.RecordTraces,
+		RecordTimes:         c.cConfig.RecordTimes,
+		RecordPolicy:        c.cConfig.RecordPolicy,
+		PrintLastTraces:     c.cConfig.PrintLastTraces,
+		PrintLastTracesFunc: c.cConfig.PrintLastTracesFunc,
+		ReportsPrintConfig:  c.cConfig.ReportConfig,
+		ReportSavePath:      c.cConfig.RecordPath,
+		Timeout:             c.cConfig.Timeout,
+		Context:             ctx,
 	}
 
 	for _, a := range c.analyzers {

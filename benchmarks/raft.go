@@ -2,6 +2,7 @@ package benchmarks
 
 import (
 	"context"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/zeu5/raft-rl-test/policies"
@@ -23,11 +24,19 @@ func Raft(episodes, horizon int, saveFile string, ctx context.Context) {
 		Requests:      requests,
 	}
 	c := types.NewComparison(&types.ComparisonConfig{
-		Runs:         runs,
-		Episodes:     episodes,
-		Horizon:      horizon,
-		Record:       false,
-		RecordPath:   saveFile,
+		Runs:       runs,
+		Episodes:   episodes,
+		Horizon:    horizon,
+		RecordPath: saveFile,
+		Timeout:    0 * time.Second,
+		// record flags
+		RecordTraces: false,
+		RecordTimes:  false,
+		RecordPolicy: false,
+		// last traces
+		PrintLastTraces:     0,
+		PrintLastTracesFunc: nil,
+		// report config
 		ReportConfig: types.RepConfigOff(),
 	})
 	c.AddAnalysis("Plot", raft.NewRaftAnalyzer(saveFile), raft.RaftPlotComparator(saveFile))

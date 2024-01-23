@@ -3,6 +3,7 @@ package benchmarks
 import (
 	"context"
 	"path"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/zeu5/raft-rl-test/lpaxos"
@@ -35,11 +36,19 @@ func PaxosRewardMachine(episodes, horizon, runs int, saveFile string, ctx contex
 	// guideRM.AddState(onlyMajorityDecided, "OnlyMajorityDecided")
 
 	c := types.NewComparison(&types.ComparisonConfig{
-		Runs:         runs,
-		Episodes:     episodes,
-		Horizon:      horizon,
-		Record:       false,
-		RecordPath:   saveFile,
+		Runs:       runs,
+		Episodes:   episodes,
+		Horizon:    horizon,
+		RecordPath: saveFile,
+		Timeout:    0 * time.Second,
+		// record flags
+		RecordTraces: false,
+		RecordTimes:  false,
+		RecordPolicy: false,
+		// last traces
+		PrintLastTraces:     0,
+		PrintLastTracesFunc: nil,
+		// report config
 		ReportConfig: types.RepConfigOff(),
 	})
 	c.AddAnalysis("Bugs", types.NewBugAnalyzer(

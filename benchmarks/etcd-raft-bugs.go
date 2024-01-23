@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/zeu5/raft-rl-test/policies"
@@ -145,11 +146,19 @@ func EtcdRaftBugs(episodes, horizon int, savePath string, ctx context.Context) {
 	// Analyzer takes the path to save data and colors... is the abstraction used to plot => makes the datasets
 	// PlotComparator => makes plots from data
 	c := types.NewComparison(&types.ComparisonConfig{
-		Runs:         runs,
-		Episodes:     episodes,
-		Horizon:      horizon,
-		Record:       true,
-		RecordPath:   saveFile,
+		Runs:       runs,
+		Episodes:   episodes,
+		Horizon:    horizon,
+		RecordPath: saveFile,
+		Timeout:    0 * time.Second,
+		// record flags
+		RecordTraces: false,
+		RecordTimes:  false,
+		RecordPolicy: false,
+		// last traces
+		PrintLastTraces:     0,
+		PrintLastTracesFunc: nil,
+		// report config
 		ReportConfig: types.RepConfigOff(),
 	})
 

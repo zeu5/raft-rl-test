@@ -158,6 +158,33 @@ func PrintReadableTrace(trace *types.Trace, savePath string) {
 	os.WriteFile(savePath, []byte(singleString), 0644)
 }
 
+func ReadableTracePrintable(trace *types.Trace) string {
+	readTrace := make([]string, 0)
+	for i := 0; i < trace.Len(); i++ {
+		readStep := make([]string, 0)
+
+		readStep = append(readStep, fmt.Sprintf("--- STEP: %d --- \n", i))
+		state, action, _, _ := trace.Get(i)   // state, action, next_state, reward
+		rState, _ := state.(*types.Partition) // .(*types.Partition) type cast into a concrete type - * pointer type - second arg is for safety OK (bool)
+
+		readState := ReadableState(*rState)
+		readStep = append(readStep, readState...)
+		readStep = append(readStep, "---------------- \n\n")
+
+		readAction := fmt.Sprintf("ACTION: %s\n\n", action.Hash())
+		readStep = append(readStep, readAction)
+
+		readTrace = append(readTrace, readStep...)
+	}
+	// fileName := fmt.Sprintf("%06d.txt", j)
+	singleString := ""
+	for _, st := range readTrace {
+		singleString = fmt.Sprintf("%s%s", singleString, st)
+	}
+
+	return singleString
+}
+
 // takes a state of the system and returns a list of readable states, one for each replica
 func ReadableState(p types.Partition) []string {
 	result := make([]string, 0)

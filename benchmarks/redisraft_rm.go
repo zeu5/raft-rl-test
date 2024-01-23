@@ -268,13 +268,20 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 	}
 
 	c := types.NewComparison(&types.ComparisonConfig{
-		Runs:         runs,
-		Episodes:     episodes,
-		Horizon:      horizon,
-		Record:       false,
-		RecordPath:   saveFile,
+		Runs:       runs,
+		Episodes:   episodes,
+		Horizon:    horizon,
+		RecordPath: saveFile,
+		Timeout:    5 * time.Second,
+		// record flags
+		RecordTraces: false,
+		RecordTimes:  true,
+		RecordPolicy: false,
+		// last traces
+		PrintLastTraces:     10,
+		PrintLastTracesFunc: redisraft.ReadableTracePrintable,
+		// report config
 		ReportConfig: types.RepConfigStandard(),
-		Timeout:      5 * time.Second,
 	})
 
 	c.AddAnalysis("Plot", redisraft.NewCoverageAnalyzer(colors...), redisraft.CoverageComparator(saveFile))
