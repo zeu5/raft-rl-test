@@ -13,8 +13,9 @@ import (
 	"github.com/zeu5/raft-rl-test/types"
 )
 
-func getCometPredicateHeirarchy(name string) (*policies.RewardMachine, bool) {
+func getCometPredicateHeirarchy(name string) (*policies.RewardMachine, bool, bool) {
 	var machine *policies.RewardMachine = nil
+	onetime := false
 	switch name {
 	case "AnyRound1AfterCommit":
 		machine = policies.NewRewardMachine(cbft.AllAtLeastRound(1).And(cbft.AtLeastHeight(2)))
@@ -40,15 +41,22 @@ func getCometPredicateHeirarchy(name string) (*policies.RewardMachine, bool) {
 		machine.AddState(cbft.EmptyLockedForAll().Not(), "AnyLocked")
 		machine.AddState(cbft.AnyReachedRound(1), "Round1")
 	case "Commit1":
-		machine = policies.NewRewardMachine(cbft.AnyAtHeight(2))
+		machine = policies.NewRewardMachine(cbft.AnyAtLeastHeight(2))
 	case "StepPreCommit":
-		machine = policies.NewRewardMachine(cbft.AnyReachedStep("RoundStepPrecommit"))
+		machine = policies.NewRewardMachine(cbft.AllInRound(0).And(cbft.AnyReachedStep("RoundStepPrecommit")))
+		onetime = true
 	case "StepPrevote":
 		machine = policies.NewRewardMachine(cbft.AnyReachedStep("RoundStepPrevote"))
+	case "KeepQuorumCommit":
+		machine = policies.NewRewardMachine(cbft.AnyAtHeight(2))
+		machine.AddState(types.NSamePartitionActive(3), "KeepQuorum")
+	case "CommitWithPreCommit":
+		machine = policies.NewRewardMachine(cbft.AnyAtHeight(2))
+		machine.AddState(cbft.AnyReachedStep("RoundStepPrecommit"), "Precommit")
 	case "Commit1WithRemainingRequests":
 		machine = policies.NewRewardMachine(cbft.AtLeastHeight(2).And(types.RemainingRequests(15))) // .And(types.Rema))
 	}
-	return machine, machine != nil
+	return machine, onetime, machine != nil
 }
 
 func CometRM(machine string, episodes, horizon int, saveFile string, ctx context.Context) {
@@ -60,13 +68,14 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 		NumNodes:            4,
 		NumRequests:         20,
 		CreateEmptyBlocks:   true,
+		TickDuration:        50 * time.Millisecond,
 	})
-	colors := []cbft.CometColorFunc{cbft.ColorHRS(), cbft.ColorProposal(), cbft.ColorNumVotes(), cbft.ColorProposer()}
+	colors := []cbft.CometColorFunc{cbft.ColorHeight(), cbft.ColorStep(), cbft.ColorProposal(), cbft.ColorCurRoundVotes(), cbft.ColorRound()}
 
 	partitionEnvConfig := types.PartitionEnvConfig{
 		Painter:                cbft.NewCometStatePainter(colors...),
 		Env:                    env,
-		TicketBetweenPartition: 1,
+		TicketBetweenPartition: 3,
 		MaxMessagesPerTick:     100,
 		StaySameStateUpto:      2,
 		NumReplicas:            4,
@@ -75,7 +84,7 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 		MaxInactive:            2,
 		WithByzantine:          false,
 		// Enables storing the time values in the partition environment
-		RecordStats: false,
+		RecordStats: true,
 	}
 
 	c := types.NewComparison(&types.ComparisonConfig{
@@ -85,9 +94,9 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 		RecordPath: saveFile,
 		Timeout:    0 * time.Second,
 		// record flags
-		RecordTraces: false,
+		RecordTraces: true,
 		RecordTimes:  false,
-		RecordPolicy: false,
+		RecordPolicy: true,
 		// last traces
 		PrintLastTraces:     0,
 		PrintLastTracesFunc: nil,
@@ -99,7 +108,7 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 	c.AddAnalysis("crashes", cbft.NewCrashesAnalyzer(saveFile), types.NoopComparator())
 
 	bugs := []types.BugDesc{
-		{Name: "Round1", Check: cbft.ReachedRound1()},
+		// {Name: "Round1", Check: cbft.ReachedRound1()},
 		{Name: "DifferentProposers", Check: cbft.DifferentProposers()},
 	}
 	c.AddAnalysis("bugs", types.NewBugAnalyzer(saveFile, bugs...), types.BugComparator(saveFile))
@@ -107,12 +116,12 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 	// c.AddAnalysis("logs", cbft.RecordLogsAnalyzer(saveFile), types.NoopComparator())
 	// c.AddAnalysis("states", cbft.RecordStateTraceAnalyzer(saveFile), types.NoopComparator())
 
-	rm, ok := getCometPredicateHeirarchy(machine)
+	rm, onetime, ok := getCometPredicateHeirarchy(machine)
 	if !ok {
 		env.Cleanup()
 		return
 	}
-	RMPolicy := policies.NewRewardMachinePolicy(rm, false)
+	RMPolicy := policies.NewRewardMachinePolicy(rm, onetime)
 
 	c.AddAnalysis("rm", policies.NewRewardMachineAnalyzer(RMPolicy), policies.RewardMachineCoverageComparator(saveFile, machine))
 
@@ -126,14 +135,19 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 		types.NewRandomPolicy(),
 		types.NewPartitionEnv(partitionEnvConfig),
 	))
-	strict := policies.NewStrictPolicy(types.NewRandomPolicy())
-	strict.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
-
 	c.AddExperiment(types.NewExperiment(
-		"Strict",
-		strict,
+		"BonusMax",
+		policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
 		types.NewPartitionEnv(partitionEnvConfig),
 	))
+	// strict := policies.NewStrictPolicy(types.NewRandomPolicy())
+	// strict.AddPolicy(policies.If(policies.Always()).Then(types.PickKeepSame()))
+
+	// c.AddExperiment(types.NewExperiment(
+	// 	"Strict",
+	// 	strict,
+	// 	types.NewPartitionEnv(partitionEnvConfig),
+	// ))
 
 	c.Run(ctx)
 	env.Cleanup()

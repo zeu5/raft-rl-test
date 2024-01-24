@@ -37,6 +37,8 @@ func getPredHierEtcd(name string) (*policies.RewardMachine, bool, bool) {
 	case "Term1":
 		machine = policies.NewRewardMachine(raft.AllInTerm(3))
 		oneTime = false
+	case "Leader":
+		machine = policies.NewRewardMachine(raft.InState(r.StateLeader))
 	}
 
 	return machine, oneTime, machine != nil

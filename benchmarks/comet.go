@@ -20,27 +20,28 @@ func CometExploration(episodes, horizon int, saveFile string, ctx context.Contex
 	curDir := filepath.Dir(exec)
 
 	env := cbft.NewCometEnv(ctx, &cbft.CometClusterConfig{
-		CometBinaryPath:     path.Join(curDir, "cbft", "cometbft"),
+		CometBinaryPath:     "/home/snagendra/go/src/github.com/zeu5/cometbft/build/cometbft",
 		InterceptListenPort: 7074,
 		BaseRPCPort:         26756,
 		BaseWorkingDir:      path.Join(curDir, saveFile, "tmp"),
 		NumNodes:            4,
 		NumRequests:         2,
 	})
-	colors := []cbft.CometColorFunc{cbft.ColorHRS(), cbft.ColorProposal(), cbft.ColorNumVotes(), cbft.ColorProposer()}
+	colors := []cbft.CometColorFunc{cbft.ColorHeight(), cbft.ColorStep(), cbft.ColorProposal(), cbft.ColorCurRoundVotes(), cbft.ColorRound()}
 
 	partitionEnv := types.NewPartitionEnv(types.PartitionEnvConfig{
 		Painter:                cbft.NewCometStatePainter(colors...),
 		Env:                    env,
 		TicketBetweenPartition: 3,
-		MaxMessagesPerTick:     20,
+		MaxMessagesPerTick:     100,
 		StaySameStateUpto:      2,
 		NumReplicas:            4,
-		WithCrashes:            true,
+		WithCrashes:            false,
 		CrashLimit:             10,
 		MaxInactive:            2,
-		WithByzantine:          true,
+		WithByzantine:          false,
 		MaxByzantine:           1,
+		RecordStats:            false,
 	})
 
 	c := types.NewComparison(&types.ComparisonConfig{

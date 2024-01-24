@@ -28,6 +28,18 @@ func AnyReachedStep(step string) types.RewardFuncSingle {
 	}
 }
 
+func AllInRound(round int) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		for _, rs := range s.(*types.Partition).ReplicaStates {
+			ns := rs.(*CometNodeState)
+			if ns.Round != round {
+				return false
+			}
+		}
+		return true
+	}
+}
+
 func AllAtLeastRound(round int) types.RewardFuncSingle {
 	return func(s types.State) bool {
 		for _, rs := range s.(*types.Partition).ReplicaStates {
@@ -57,6 +69,18 @@ func AnyAtHeight(height int) types.RewardFuncSingle {
 		for _, rs := range s.(*types.Partition).ReplicaStates {
 			ns := rs.(*CometNodeState)
 			if ns.Height == height {
+				return true
+			}
+		}
+		return false
+	}
+}
+
+func AnyAtLeastHeight(height int) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		for _, rs := range s.(*types.Partition).ReplicaStates {
+			ns := rs.(*CometNodeState)
+			if ns.Height >= height {
 				return true
 			}
 		}

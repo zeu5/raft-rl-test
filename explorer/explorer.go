@@ -74,7 +74,7 @@ func readTraces(path string) ([]*Trace, error) {
 		traces = append(traces, t)
 	} else if strings.Contains(path, "jsonl") {
 		scanner := bufio.NewScanner(file)
-		maxTraceSize := 2 * 1024 * 1024
+		maxTraceSize := 5 * 1024 * 1024
 		scanner.Buffer(make([]byte, maxTraceSize), maxTraceSize)
 		for scanner.Scan() {
 			t := NewTrace()
@@ -90,6 +90,9 @@ func readTraces(path string) ([]*Trace, error) {
 				return traces, fmt.Errorf("number of states, actions and next states mismatched")
 			}
 			traces = append(traces, t)
+		}
+		if scanner.Err() != nil {
+			return traces, fmt.Errorf("failed to read traces: %s", err)
 		}
 	}
 	return traces, nil
