@@ -61,6 +61,7 @@ func (e *EpisodeContext) SetTimedOut() {
 	e.TimedOut = true
 }
 
+// record the report of the episode. Based on the reason (error, timeout, randomly sampled) and the printing configuration (standard, only values, timeline), the report is printed.
 func (e *EpisodeContext) RecordReport() {
 	// TODO: complete this function
 	reason := ""

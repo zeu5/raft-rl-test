@@ -79,6 +79,11 @@ func RedisPredHierAddBuildBlocks(pHier *policies.RewardMachine, name string) {
 		toAdd = append(toAdd, predHierState{RewFunc: redisraft.AllNodesEntries(5, true, 1, 1, "").And(redisraft.PendingRequestsAtLeast(3)), Name: "SyncAll5PReq3MT1"})
 		toAdd = append(toAdd, predHierState{RewFunc: redisraft.AllNodesEntries(6, true, 1, 1, "").And(redisraft.PendingRequestsAtLeast(3)), Name: "SyncAll6PReq3MT1"})
 		toAdd = append(toAdd, predHierState{RewFunc: redisraft.AllNodesEntries(6, true, 1, 1, "").And(redisraft.PendingRequestsAtLeast(2)).And(redisraft.AllNodesEntries(1, true, 1, 1, "NORMAL")), Name: "Comm1PReq2MT1"})
+
+	case "InitSync_C1T1_EntryT2_PReq2":
+		RedisPredHierAddBuildBlocks(pHier, "SyncA6_PR3_MT1_>>_CReq1_PR2")
+		toAdd = append(toAdd, predHierState{RewFunc: redisraft.AllNodesEntries(1, true, 2, 2, "NORMAL").And(redisraft.PendingRequestsAtLeast(2)), Name: "Entry2PReq2"})
+
 	}
 
 	for _, state := range toAdd {
@@ -216,10 +221,10 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		WorkingDir:          path.Join(saveFile, "tmp"),
 		NumRequests:         5,
 
-		RequestTimeout:  30, // heartbeat in milliseconds (fixed or variable?)
-		ElectionTimeout: 90, // election timeout in milliseconds (from specified value to its double)
+		RequestTimeout:  25,  // heartbeat in milliseconds (fixed or variable?)
+		ElectionTimeout: 150, // election timeout in milliseconds (from specified value to its double)
 
-		TickLength: 15,
+		TickLength: 20,
 	}
 	env := redisraft.NewRedisRaftEnv(ctx, &clusterConfig, path.Join(saveFile, "tickLength"))
 	// env.SetPrintStats(true) // to print the episode stats
@@ -264,7 +269,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 	partitionEnvConfig := types.PartitionEnvConfig{
 		Painter:                redisraft.NewRedisRaftStatePainter(colors...),
 		Env:                    env,
-		TicketBetweenPartition: 3,
+		TicketBetweenPartition: 5,
 		MaxMessagesPerTick:     100,
 		StaySameStateUpto:      5,
 		NumReplicas:            3,
@@ -278,7 +283,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		Episodes:   episodes,
 		Horizon:    horizon,
 		RecordPath: saveFile,
-		Timeout:    5 * time.Second,
+		Timeout:    10 * time.Second,
 		// record flags
 		RecordTraces: false,
 		RecordTimes:  true,
