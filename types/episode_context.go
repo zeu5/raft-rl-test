@@ -29,14 +29,21 @@ type EpisodeContext struct {
 	RunDuration time.Duration  // duration of the episode
 }
 
+// Context related with each step
 type StepContext struct {
+	// Wraps the episode context
 	*EpisodeContext
-	State     State
-	Action    Action
+	// State of this current state
+	State State
+	// Action taken at this step
+	Action Action
+	// Next state at this step
 	NextState State
-	addInfo   map[string]interface{}
+	// Additional info related to step
+	addInfo map[string]interface{}
 }
 
+// Create a new step context with the episode context
 func NewStepContext(eCtx *EpisodeContext) *StepContext {
 	return &StepContext{
 		EpisodeContext: eCtx,
@@ -44,10 +51,12 @@ func NewStepContext(eCtx *EpisodeContext) *StepContext {
 	}
 }
 
+// Add info to this step
 func (s *StepContext) AddInfo(key string, value interface{}) {
 	s.addInfo[key] = value
 }
 
+// Create a new episode context
 func NewEpisodeContext(episodeNumber int, experimentName string, eConfig *experimentRunConfig) *EpisodeContext {
 	e := &EpisodeContext{
 		Episode:           episodeNumber,
@@ -67,19 +76,23 @@ func NewEpisodeContext(episodeNumber int, experimentName string, eConfig *experi
 	return e
 }
 
+// Update the step and also in the report
 func (e *EpisodeContext) SetStep(step int) {
 	e.Step = step
 	e.Report.setEpisodeStep(step)
 }
 
+// Set the error
 func (e *EpisodeContext) SetError(err error) {
 	e.Err = err
 }
 
+// Set timeout flag to true
 func (e *EpisodeContext) SetTimedOut() {
 	e.TimedOut = true
 }
 
+// Record to the report to the path "reportSavePath" using "reportPrintConfig"
 func (e *EpisodeContext) RecordReport() {
 	// TODO: complete this function
 	reason := ""
