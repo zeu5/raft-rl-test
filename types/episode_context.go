@@ -18,6 +18,9 @@ type EpisodeContext struct {
 	Step           int
 	ExperimentName string
 
+	reportSavePath    string
+	reportPrintConfig *ReportsPrintConfig
+
 	// parameters to be used post running episode
 	Err         error          // error of the episode
 	TimedOut    bool           // true if the episode timed out
@@ -26,19 +29,21 @@ type EpisodeContext struct {
 	RunDuration time.Duration  // duration of the episode
 }
 
-func NewEpisodeContext(episodeNumber int, experimentName string, timeout time.Duration, parentCtx context.Context) *EpisodeContext {
+func NewEpisodeContext(episodeNumber int, experimentName string, eConfig *experimentRunConfig) *EpisodeContext {
 	e := &EpisodeContext{
-		Episode:        episodeNumber,
-		ExperimentName: experimentName,
-		Report:         NewEpisodeReport(episodeNumber, experimentName),
-		Trace:          NewTrace(),
+		Episode:           episodeNumber,
+		ExperimentName:    experimentName,
+		Report:            NewEpisodeReport(episodeNumber, experimentName),
+		Trace:             NewTrace(),
+		reportSavePath:    eConfig.ReportSavePath,
+		reportPrintConfig: eConfig.ReportsPrintConfig,
 	}
-	if timeout > 0 {
-		toCtx, toCancel := context.WithTimeout(parentCtx, timeout)
+	if eConfig.Timeout > 0 {
+		toCtx, toCancel := context.WithTimeout(eConfig.Context, eConfig.Timeout)
 		e.Context = toCtx
 		e.Cancel = toCancel
 	} else {
-		e.Context, e.Cancel = context.WithCancel(parentCtx)
+		e.Context, e.Cancel = context.WithCancel(eConfig.Context)
 	}
 	return e
 }
@@ -56,7 +61,7 @@ func (e *EpisodeContext) SetTimedOut() {
 	e.TimedOut = true
 }
 
-func (e *EpisodeContext) RecordReport(path string, config *ReportsPrintConfig) {
+func (e *EpisodeContext) RecordReport() {
 	// TODO: complete this function
 	reason := ""
 	if e.Err != nil {
@@ -67,14 +72,14 @@ func (e *EpisodeContext) RecordReport(path string, config *ReportsPrintConfig) {
 		reason = "randomly sampled"
 	}
 
-	if config.PrintStd {
-		e.Report.Store(path, reason)
+	if e.reportPrintConfig.PrintStd {
+		e.Report.Store(e.reportSavePath, reason)
 	}
-	if config.PrintValues {
-		e.Report.StoreValues(path, reason)
+	if e.reportPrintConfig.PrintValues {
+		e.Report.StoreValues(e.reportSavePath, reason)
 	}
-	if config.PrintTimeline {
-		e.Report.StoreTimeline(path, reason)
+	if e.reportPrintConfig.PrintTimeline {
+		e.Report.StoreTimeline(e.reportSavePath, reason)
 	}
 }
 

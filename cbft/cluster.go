@@ -174,7 +174,7 @@ func (r *CometNode) Cleanup() {
 }
 
 func (r *CometNode) Stop() error {
-	if r.ctx == nil || r.process == nil {
+	if !r.active || r.ctx == nil || r.process == nil {
 		return errors.New("comet server not started")
 	}
 	select {
@@ -189,11 +189,18 @@ func (r *CometNode) Stop() error {
 	r.cancel = func() {}
 	r.process = nil
 
+	if err != nil && strings.Contains(err.Error(), "signal: killed") {
+		return nil
+	}
+
 	return err
 }
 
 func (r *CometNode) Terminate() error {
-	err := r.Stop()
+	var err error = nil
+	if r.active {
+		err = r.Stop()
+	}
 	r.Cleanup()
 
 	// stdout := strings.ToLower(r.stdout.String())
@@ -295,13 +302,25 @@ func (r *CometNode) SendRequest(req string) error {
 			DisableKeepAlives:     true,
 		},
 	}
-	resp, err := client.Get("http://" + r.config.RPCAddress + "/" + req)
-	if err != nil {
-		return fmt.Errorf("error sending request: %s", err)
+	errCh := make(chan error)
+	go func() {
+		resp, err := client.Get("http://" + r.config.RPCAddress + "/" + req)
+		if err != nil {
+			errCh <- fmt.Errorf("error sending request: %s", err)
+			return
+		}
+		defer resp.Body.Close()
+		io.ReadAll(resp.Body)
+		errCh <- nil
+	}()
+	select {
+	case <-time.After(10 * time.Millisecond):
+		// The reason being that a broadcast_tx_req waits for a commit before responding
+		// We want to move on
+		return nil
+	case err := <-errCh:
+		return err
 	}
-	defer resp.Body.Close()
-	io.ReadAll(resp.Body)
-	return nil
 }
 
 type CometClusterConfig struct {
@@ -389,9 +408,7 @@ func NewCluster(config *CometClusterConfig) (*CometCluster, error) {
 	stderr := new(bytes.Buffer)
 	cmd.Stderr = stderr
 	if err := cmd.Run(); err != nil {
-		fmt.Println(stdout.String())
-		fmt.Println(stderr.String())
-		return nil, fmt.Errorf("error creating config: %s", err)
+		return nil, fmt.Errorf("error creating config: %s\n\nstdout: \n%s\n\n stderr: %s", err, stdout.String(), stderr.String())
 	}
 
 	return c, nil

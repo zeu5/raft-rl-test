@@ -242,7 +242,7 @@ func (n *InterceptNetwork) WaitForNodes(numNodes int) bool {
 	return true
 }
 
-func (n *InterceptNetwork) SendMessage(id string) {
+func (n *InterceptNetwork) SendMessage(ctx context.Context, id string) error {
 	n.lock.Lock()
 	m, ok := n.messages[id]
 	nodeAddr := ""
@@ -252,12 +252,12 @@ func (n *InterceptNetwork) SendMessage(id string) {
 	n.lock.Unlock()
 
 	if !ok {
-		return
+		return fmt.Errorf("no such message with id: %s", id)
 	}
 
 	bs, err := json.Marshal(m)
 	if err != nil {
-		return
+		return fmt.Errorf("error marshalling message: %s", err)
 	}
 	client := &http.Client{
 		Transport: &http.Transport{
@@ -271,15 +271,25 @@ func (n *InterceptNetwork) SendMessage(id string) {
 			DisableKeepAlives:     true,
 		},
 	}
-	resp, err := client.Post("http://"+nodeAddr+"/message", "application/json", bytes.NewBuffer(bs))
-	if err == nil {
-		io.ReadAll(resp.Body)
-		resp.Body.Close()
+	req, err := http.NewRequest("POST", "http://"+nodeAddr+"/message", bytes.NewBuffer(bs))
+	if err != nil {
+		return err
 	}
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(ctx)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	io.ReadAll(resp.Body)
+	resp.Body.Close()
 
 	n.lock.Lock()
 	delete(n.messages, id)
 	n.lock.Unlock()
+	return nil
 }
 
 func (n *InterceptNetwork) DeleteMessage(id string) {

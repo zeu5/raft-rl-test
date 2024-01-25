@@ -6,6 +6,9 @@ import (
 
 func AnyReachedRound(round int) types.RewardFuncSingle {
 	return func(s types.State) bool {
+		if s == nil {
+			return false
+		}
 		for _, rs := range s.(*types.Partition).ReplicaStates {
 			ns := rs.(*CometNodeState)
 			if ns.Round >= round {
@@ -18,6 +21,9 @@ func AnyReachedRound(round int) types.RewardFuncSingle {
 
 func AnyReachedStep(step string) types.RewardFuncSingle {
 	return func(s types.State) bool {
+		if s == nil {
+			return false
+		}
 		for _, rs := range s.(*types.Partition).ReplicaStates {
 			ns := rs.(*CometNodeState)
 			if ns.Step == step {
@@ -30,6 +36,9 @@ func AnyReachedStep(step string) types.RewardFuncSingle {
 
 func AllInRound(round int) types.RewardFuncSingle {
 	return func(s types.State) bool {
+		if s == nil {
+			return false
+		}
 		for _, rs := range s.(*types.Partition).ReplicaStates {
 			ns := rs.(*CometNodeState)
 			if ns.Round != round {
@@ -42,6 +51,9 @@ func AllInRound(round int) types.RewardFuncSingle {
 
 func AllAtLeastRound(round int) types.RewardFuncSingle {
 	return func(s types.State) bool {
+		if s == nil {
+			return false
+		}
 		for _, rs := range s.(*types.Partition).ReplicaStates {
 			ns := rs.(*CometNodeState)
 			if ns.Round < round {
@@ -54,6 +66,9 @@ func AllAtLeastRound(round int) types.RewardFuncSingle {
 
 func AtLeastHeight(height int) types.RewardFuncSingle {
 	return func(s types.State) bool {
+		if s == nil {
+			return false
+		}
 		for _, rs := range s.(*types.Partition).ReplicaStates {
 			ns := rs.(*CometNodeState)
 			if ns.Height < height {
@@ -66,6 +81,9 @@ func AtLeastHeight(height int) types.RewardFuncSingle {
 
 func AnyAtHeight(height int) types.RewardFuncSingle {
 	return func(s types.State) bool {
+		if s == nil {
+			return false
+		}
 		for _, rs := range s.(*types.Partition).ReplicaStates {
 			ns := rs.(*CometNodeState)
 			if ns.Height == height {
@@ -78,6 +96,9 @@ func AnyAtHeight(height int) types.RewardFuncSingle {
 
 func AnyAtLeastHeight(height int) types.RewardFuncSingle {
 	return func(s types.State) bool {
+		if s == nil {
+			return false
+		}
 		for _, rs := range s.(*types.Partition).ReplicaStates {
 			ns := rs.(*CometNodeState)
 			if ns.Height >= height {
@@ -90,6 +111,9 @@ func AnyAtLeastHeight(height int) types.RewardFuncSingle {
 
 func EmptyLockedForAll() types.RewardFuncSingle {
 	return func(s types.State) bool {
+		if s == nil {
+			return false
+		}
 		for _, rs := range s.(*types.Partition).ReplicaStates {
 			ns := rs.(*CometNodeState)
 			if ns.LockedBlockHash != "" {
@@ -102,6 +126,9 @@ func EmptyLockedForAll() types.RewardFuncSingle {
 
 func LockedForAll() types.RewardFuncSingle {
 	return func(s types.State) bool {
+		if s == nil {
+			return false
+		}
 		for _, rs := range s.(*types.Partition).ReplicaStates {
 			ns := rs.(*CometNodeState)
 			if ns.LockedBlockHash == "" {
@@ -114,6 +141,9 @@ func LockedForAll() types.RewardFuncSingle {
 
 func SameLockedForAll() types.RewardFuncSingle {
 	return func(s types.State) bool {
+		if s == nil {
+			return false
+		}
 		lockedValues := make(map[string]bool)
 		for _, rs := range s.(*types.Partition).ReplicaStates {
 			ns := rs.(*CometNodeState)
@@ -129,6 +159,9 @@ func SameLockedForAll() types.RewardFuncSingle {
 
 func DifferentLocked() types.RewardFuncSingle {
 	return func(s types.State) bool {
+		if s == nil {
+			return false
+		}
 		lockedValues := make(map[string]bool)
 		for _, rs := range s.(*types.Partition).ReplicaStates {
 			ns := rs.(*CometNodeState)

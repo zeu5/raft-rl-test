@@ -102,8 +102,8 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 
 		fmt.Printf("\rExperiment: %s, Episode: %d/%d, Timed out: %d, With Error: %d", e.Name, i+1, rConfig.Episodes, totalTimeout, totalWithError)
 
-		eCtx := NewEpisodeContext(i, e.Name, rConfig.Timeout, rConfig.Context)
-		e.runEpisode(eCtx, agent, rConfig)
+		eCtx := NewEpisodeContext(i, e.Name, rConfig)
+		e.runEpisode(eCtx, agent)
 		episodeTimes = append(episodeTimes, eCtx.RunDuration)
 
 		if eCtx.TimedOut {
@@ -122,11 +122,12 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 
 		if rConfig.RecordTraces {
 			e.recordTrace(rConfig, eCtx.Trace)
-			// eCtx.RecordReport(rConfig.ReportSavePath, rConfig.ReportsPrintConfig)
 		}
 
-		for _, a := range rConfig.Analyzers {
-			a.Analyze(rConfig.CurrentRun, i, e.Name, eCtx.Trace)
+		if !eCtx.TimedOut && eCtx.Err == nil {
+			for _, a := range rConfig.Analyzers {
+				a.Analyze(rConfig.CurrentRun, i, e.Name, eCtx.Trace)
+			}
 		}
 
 		if i >= printTracesIndex {
@@ -167,7 +168,7 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 	fmt.Println("")
 }
 
-func (e *Experiment) runEpisode(eCtx *EpisodeContext, agent *Agent, rConfig *experimentRunConfig) {
+func (e *Experiment) runEpisode(eCtx *EpisodeContext, agent *Agent) {
 	defer func() {
 		if r := recover(); r != nil {
 			eCtx.SetError(fmt.Errorf("%v", r))
@@ -183,7 +184,7 @@ func (e *Experiment) runEpisode(eCtx *EpisodeContext, agent *Agent, rConfig *exp
 
 	done := make(chan error, 1)
 
-	go func(eCtx *EpisodeContext, agent *Agent, rConfig *experimentRunConfig) {
+	go func(eCtx *EpisodeContext, agent *Agent) {
 		start := time.Now()
 		agent.RunEpisode(eCtx)
 		duration := time.Since(start)
@@ -195,20 +196,20 @@ func (e *Experiment) runEpisode(eCtx *EpisodeContext, agent *Agent, rConfig *exp
 		case <-eCtx.Context.Done():
 			if deadline, ok := eCtx.Context.Deadline(); ok && time.Now().After(deadline) {
 				eCtx.SetTimedOut()
-				eCtx.RecordReport(rConfig.ReportSavePath, rConfig.ReportsPrintConfig)
+				eCtx.RecordReport()
 			}
 		default:
 			if eCtx.Err != nil {
 				done <- eCtx.Err
-				eCtx.RecordReport(rConfig.ReportSavePath, rConfig.ReportsPrintConfig)
+				eCtx.RecordReport()
 			} else {
 				done <- nil
-				if rand.Float32() < rConfig.ReportsPrintConfig.Sampling {
-					eCtx.RecordReport(rConfig.ReportSavePath, rConfig.ReportsPrintConfig)
+				if rand.Float32() < eCtx.reportPrintConfig.Sampling {
+					eCtx.RecordReport()
 				}
 			}
 		}
-	}(eCtx, agent, rConfig)
+	}(eCtx, agent)
 
 	select {
 	case <-eCtx.Context.Done():

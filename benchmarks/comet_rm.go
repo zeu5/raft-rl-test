@@ -59,6 +59,26 @@ func getCometPredicateHeirarchy(name string) (*policies.RewardMachine, bool, boo
 	return machine, onetime, machine != nil
 }
 
+func allPredicatesNames() []string {
+	return []string{
+		"AnyRound1AfterCommit",
+		"AnyRound1",
+		"AllRound1",
+		"AnyLocked",
+		"AllLocked",
+		"DifferentLocked",
+		"SameLocked",
+		"Round1NoLocked",
+		"Round1Locked",
+		"Commit1",
+		"StepPreCommit",
+		"StepPrevote",
+		"KeepQuorumCommit",
+		"CommitWithPreCommit",
+		"Commit1WithRemainingRequests",
+	}
+}
+
 func CometRM(machine string, episodes, horizon int, saveFile string, ctx context.Context) {
 	env := cbft.NewCometEnv(ctx, &cbft.CometClusterConfig{
 		CometBinaryPath:     "/home/snagendra/go/src/github.com/zeu5/cometbft/build/cometbft",
@@ -94,42 +114,54 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 		RecordPath: saveFile,
 		Timeout:    0 * time.Second,
 		// record flags
-		RecordTraces: true,
+		RecordTraces: false,
 		RecordTimes:  false,
-		RecordPolicy: true,
+		RecordPolicy: false,
 		// last traces
 		PrintLastTraces:     0,
 		PrintLastTracesFunc: nil,
 		// report config
-		ReportConfig: types.RepConfigOff(),
+		ReportConfig: types.RepConfigStandard(),
 	})
 
 	// Record the stats (time values) to the file
 	c.AddAnalysis("crashes", cbft.NewCrashesAnalyzer(saveFile), types.NoopComparator())
 
-	bugs := []types.BugDesc{
-		// {Name: "Round1", Check: cbft.ReachedRound1()},
-		{Name: "DifferentProposers", Check: cbft.DifferentProposers()},
-	}
-	c.AddAnalysis("bugs", types.NewBugAnalyzer(saveFile, bugs...), types.BugComparator(saveFile))
-	c.AddAnalysis("bugs_logs", cbft.NewBugLogRecorder(saveFile, bugs...), types.NoopComparator())
+	// bugs := []types.BugDesc{
+	// 	// {Name: "Round1", Check: cbft.ReachedRound1()},
+	// 	{Name: "DifferentProposers", Check: cbft.DifferentProposers()},
+	// }
+	// c.AddAnalysis("bugs", types.NewBugAnalyzer(saveFile, bugs...), types.BugComparator(saveFile))
+	// c.AddAnalysis("bugs_logs", cbft.NewBugLogRecorder(saveFile, bugs...), types.NoopComparator())
 	// c.AddAnalysis("logs", cbft.RecordLogsAnalyzer(saveFile), types.NoopComparator())
 	// c.AddAnalysis("states", cbft.RecordStateTraceAnalyzer(saveFile), types.NoopComparator())
 
-	rm, onetime, ok := getCometPredicateHeirarchy(machine)
-	if !ok {
-		env.Cleanup()
-		return
+	if machine == "all" {
+		for _, heirarchyName := range allPredicatesNames() {
+			machine, onetime, ok := getCometPredicateHeirarchy(heirarchyName)
+			if !ok {
+				continue
+			}
+			policy := policies.NewRewardMachinePolicy(machine, onetime)
+			c.AddExperiment(types.NewExperiment(heirarchyName, policy, types.NewPartitionEnv(partitionEnvConfig)))
+			c.AddAnalysis(heirarchyName, policies.NewRewardMachineAnalyzer(policy), policies.RewardMachineCoverageComparator(saveFile, heirarchyName))
+		}
+	} else {
+		rm, onetime, ok := getCometPredicateHeirarchy(machine)
+		if !ok {
+			env.Cleanup()
+			return
+		}
+		RMPolicy := policies.NewRewardMachinePolicy(rm, onetime)
+
+		c.AddAnalysis("rm", policies.NewRewardMachineAnalyzer(RMPolicy), policies.RewardMachineCoverageComparator(saveFile, machine))
+		c.AddExperiment(types.NewExperiment(
+			"RM",
+			RMPolicy,
+			types.NewPartitionEnv(partitionEnvConfig),
+		))
 	}
-	RMPolicy := policies.NewRewardMachinePolicy(rm, onetime)
 
-	c.AddAnalysis("rm", policies.NewRewardMachineAnalyzer(RMPolicy), policies.RewardMachineCoverageComparator(saveFile, machine))
-
-	c.AddExperiment(types.NewExperiment(
-		"RM",
-		RMPolicy,
-		types.NewPartitionEnv(partitionEnvConfig),
-	))
 	c.AddExperiment(types.NewExperiment(
 		"Random",
 		types.NewRandomPolicy(),

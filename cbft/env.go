@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/zeu5/raft-rl-test/types"
@@ -114,11 +115,16 @@ func (r *CometEnv) Cleanup() {
 
 func (r *CometEnv) Reset(epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	if r.cluster != nil {
-		r.cluster.Destroy()
+		if err := r.cluster.Destroy(); err != nil {
+			return nil, err
+		}
 	}
 	r.network.Reset()
 	r.cluster, _ = NewCluster(r.clusterConfig)
-	r.cluster.Start()
+	if err := r.cluster.Start(); err != nil {
+		r.cluster.Destroy()
+		return nil, err
+	}
 
 	r.network.WaitForNodes(r.clusterConfig.NumNodes)
 
@@ -162,12 +168,20 @@ func (r *CometEnv) Tick(ctx *types.EpisodeContext, _ int) (types.PartitionedSyst
 func (r *CometEnv) DeliverMessages(messages []types.Message, epCtx *types.EpisodeContext) (types.PartitionedSystemState, error) {
 	newState := r.curState.Copy()
 
+	errs := []string{}
 	for _, m := range messages {
 		rm, ok := m.(Message)
 		if !ok {
 			continue
 		}
-		r.network.SendMessage(rm.ID)
+		if err := r.network.SendMessage(epCtx.Context, rm.ID); err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
+	// too many errors delivering messages
+	if len(errs) > 0 && len(errs) >= len(messages)/10 {
+		epCtx.Report.AddLog(r.cluster.GetLogs(), "logs")
+		return nil, fmt.Errorf("too many errors sending messages: %s", strings.Join(errs, "\n"))
 	}
 	newState.Messages = r.network.GetAllMessages()
 	r.curState = newState
@@ -210,7 +224,7 @@ func (r *CometEnv) ReceiveRequest(req types.Request, epCtx *types.EpisodeContext
 		return newState, nil
 	}
 
-	go r.cluster.Execute(queryString)
+	r.cluster.Execute(queryString)
 	newState.Requests = copyRequests(newState.Requests[1:])
 
 	r.curState = newState
@@ -228,8 +242,7 @@ func (r *CometEnv) Stop(nodeID uint64, epCtx *types.EpisodeContext) error {
 	if !node.IsActive() {
 		return nil
 	}
-	node.Stop()
-	return nil
+	return node.Stop()
 }
 
 func (r *CometEnv) Start(nodeID uint64, epCtx *types.EpisodeContext) (err error) {
@@ -243,6 +256,5 @@ func (r *CometEnv) Start(nodeID uint64, epCtx *types.EpisodeContext) (err error)
 	if node.IsActive() {
 		return
 	}
-	node.Start()
-	return nil
+	return node.Start()
 }
