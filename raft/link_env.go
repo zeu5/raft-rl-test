@@ -168,7 +168,7 @@ func (r *LinkRaftEnvironment) Reset(_ *types.EpisodeContext) (types.State, error
 	return r.curState, nil
 }
 
-func (r *LinkRaftEnvironment) Step(action types.Action, _ *types.EpisodeContext) (types.State, error) {
+func (r *LinkRaftEnvironment) Step(action types.Action, _ *types.StepContext) (types.State, error) {
 	linkAction := action.(*LinkAction)
 	message, ok := r.popMessage(linkAction.From, linkAction.To)
 	if !ok {

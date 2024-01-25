@@ -5,7 +5,7 @@ type Environment interface {
 	// Reset called at the end of each episode
 	Reset(*EpisodeContext) (State, error)
 	// Step function with context to cancel it
-	Step(Action, *EpisodeContext) (State, error)
+	Step(Action, *StepContext) (State, error)
 }
 
 // State of the system that RL policies observe

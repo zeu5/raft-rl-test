@@ -9,7 +9,7 @@ var FinalState string = "Final"
 
 type RewardMachine struct {
 	predicates map[string]types.RewardFuncSingle
-	policies   map[string]types.RmPolicy
+	policies   map[string]RMPolicy
 	states     []string
 }
 
@@ -22,7 +22,7 @@ func TruePred() types.RewardFuncSingle {
 func NewRewardMachine(pred types.RewardFuncSingle) *RewardMachine {
 	rm := &RewardMachine{
 		predicates: make(map[string]types.RewardFuncSingle),
-		policies:   make(map[string]types.RmPolicy),
+		policies:   make(map[string]RMPolicy),
 		states:     make([]string, 0),
 	}
 	rm.policies[FinalState] = NewBonusPolicyGreedy(0.1, 0.99, 0.05)
@@ -51,7 +51,7 @@ func (rm *RewardMachine) AddState(pred types.RewardFuncSingle, name string) *Rew
 }
 
 // add a new state in the reward machine, in the second last position (before final exploration), with predicate to go to 'to'?
-func (rm *RewardMachine) AddStateWithPolicy(pred types.RewardFuncSingle, name string, policy types.RmPolicy) *RewardMachine {
+func (rm *RewardMachine) AddStateWithPolicy(pred types.RewardFuncSingle, name string, policy RMPolicy) *RewardMachine {
 	index := len(rm.states) - 1
 	rm.states = append(rm.states, rm.states[index]) // duplicate last element
 
@@ -63,7 +63,7 @@ func (rm *RewardMachine) AddStateWithPolicy(pred types.RewardFuncSingle, name st
 	return rm
 }
 
-func (rm *RewardMachine) WithExplorationPolicy(policy types.RmPolicy) *RewardMachine {
+func (rm *RewardMachine) WithExplorationPolicy(policy RMPolicy) *RewardMachine {
 	rm.policies[FinalState] = policy
 	return rm
 }
@@ -80,7 +80,7 @@ type RewardMachinePolicy struct {
 	oneTime bool // if true, the last predicate needs to be satisfied only once throughout the episode
 	reached bool // flag for the last predicate to be reached within an episode
 
-	curTraceSegments map[string]*types.RmTrace
+	curTraceSegments map[string]*RMTrace
 }
 
 func NewRewardMachinePolicy(rm *RewardMachine, oneTime bool) *RewardMachinePolicy {
@@ -88,7 +88,7 @@ func NewRewardMachinePolicy(rm *RewardMachine, oneTime bool) *RewardMachinePolic
 		curRMState:       InitState,
 		curRmStatePos:    0,
 		rm:               rm,
-		curTraceSegments: make(map[string]*types.RmTrace),
+		curTraceSegments: make(map[string]*RMTrace),
 		oneTime:          oneTime,
 		reached:          false,
 	}
@@ -106,7 +106,7 @@ func (rp *RewardMachinePolicy) UpdateIteration(iteration int, trace *types.Trace
 	// Resetting values at the end of an iteration
 	rp.curRMState = InitState
 	rp.curRmStatePos = 0
-	rp.curTraceSegments = make(map[string]*types.RmTrace)
+	rp.curTraceSegments = make(map[string]*RMTrace)
 	rp.reached = false
 }
 
@@ -135,7 +135,12 @@ func (rp *RewardMachinePolicy) NextAction(step int, state types.State, actions [
 }
 
 // updates the trace segments for the policies to update at the end of the episode
-func (rp *RewardMachinePolicy) Update(step int, state types.State, action types.Action, nextState types.State) {
+func (rp *RewardMachinePolicy) Update(sCtx *types.StepContext) {
+	step := sCtx.Step
+	state := sCtx.State
+	action := sCtx.Action
+	nextState := sCtx.NextState
+
 	// curPolicy := rp.rm.policies[rp.curRMState]
 	curRmStatePos := rp.curRmStatePos
 	curRmState := rp.curRMState
@@ -171,7 +176,7 @@ func (rp *RewardMachinePolicy) Update(step int, state types.State, action types.
 	}
 
 	if _, ok := rp.curTraceSegments[curRmState]; !ok {
-		rp.curTraceSegments[curRmState] = types.NewRmTrace()
+		rp.curTraceSegments[curRmState] = NewRMTrace()
 	}
 	rp.curTraceSegments[curRmState].Append(step, state, action, nextState, reward, out_of_space)
 
@@ -188,6 +193,6 @@ func (rp *RewardMachinePolicy) Reset() {
 	}
 	rp.curRMState = InitState
 	rp.curRmStatePos = 0
-	rp.curTraceSegments = make(map[string]*types.RmTrace)
+	rp.curTraceSegments = make(map[string]*RMTrace)
 	rp.reached = false
 }

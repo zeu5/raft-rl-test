@@ -340,7 +340,7 @@ func (r *RaftEnvironment) Reset(_ *types.EpisodeContext) (types.State, error) {
 }
 
 // this is probably not called by the partition environment...
-func (r *RaftEnvironment) Step(action types.Action, _ *types.EpisodeContext) (types.State, error) {
+func (r *RaftEnvironment) Step(action types.Action, _ *types.StepContext) (types.State, error) {
 	raftAction := action.(*RaftAction)
 	switch raftAction.Type {
 	case "DeliverMessage":

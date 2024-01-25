@@ -50,7 +50,7 @@ func (g *GridEnvironment) Reset(_ *types.EpisodeContext) (types.State, error) {
 	return g.CurPos, nil
 }
 
-func (g *GridEnvironment) Step(a types.Action, _ *types.EpisodeContext) (types.State, error) {
+func (g *GridEnvironment) Step(a types.Action, _ *types.StepContext) (types.State, error) {
 	movement := a.(*Movement)
 	newPos := &Position{I: g.CurPos.I, J: g.CurPos.J, K: g.CurPos.K}
 	if movement.Direction == "Next" {

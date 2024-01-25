@@ -210,3 +210,79 @@ func PredicatesComparator() types.Comparator {
 		}
 	}
 }
+
+// Generic RM Policy interface
+type RMPolicy interface {
+	types.Policy
+	// Update with explicit reward flag, called after each transition
+	UpdateRm(int, types.State, types.Action, types.State, bool, bool)
+	// Update iteration with explicit reward flag, called after each transition
+	UpdateIterationRm(int, *RMTrace)
+}
+
+// To capture a trace segment
+type RMTrace struct {
+	states     []types.State
+	actions    []types.Action
+	nextStates []types.State
+	rewards    []bool
+	outOfSpace []bool
+}
+
+func NewRMTrace() *RMTrace {
+	return &RMTrace{
+		states:     make([]types.State, 0),
+		actions:    make([]types.Action, 0),
+		nextStates: make([]types.State, 0),
+		rewards:    make([]bool, 0),
+		outOfSpace: make([]bool, 0),
+	}
+}
+
+func (t *RMTrace) Slice(from, to int) *RMTrace {
+	slicedTrace := NewRMTrace()
+	for i := from; i < to; i++ {
+		slicedTrace.Append(i-from, t.states[i], t.actions[i], t.nextStates[i], t.rewards[i], t.outOfSpace[i])
+	}
+	return slicedTrace
+}
+
+func (t *RMTrace) Append(step int, state types.State, action types.Action, nextState types.State, reward bool, outOfSpace bool) {
+	t.states = append(t.states, state)
+	t.actions = append(t.actions, action)
+	t.nextStates = append(t.nextStates, nextState)
+	t.rewards = append(t.rewards, reward)
+	t.outOfSpace = append(t.outOfSpace, outOfSpace)
+}
+
+func (t *RMTrace) Len() int {
+	return len(t.states)
+}
+
+func (t *RMTrace) Get(i int) (types.State, types.Action, types.State, bool, bool, bool) {
+	if i >= len(t.states) {
+		return nil, nil, nil, false, false, false
+	}
+	return t.states[i], t.actions[i], t.nextStates[i], t.rewards[i], t.outOfSpace[i], true
+}
+
+func (t *RMTrace) Last() (types.State, types.Action, types.State, bool, bool, bool) {
+	if len(t.states) < 1 {
+		return nil, nil, nil, false, false, false
+	}
+	lastIndex := len(t.states) - 1
+	return t.states[lastIndex], t.actions[lastIndex], t.nextStates[lastIndex], t.rewards[lastIndex], t.outOfSpace[lastIndex], true
+}
+
+func (t *RMTrace) GetPrefix(i int) (*RMTrace, bool) {
+	if i > len(t.states) {
+		return nil, false
+	}
+	return &RMTrace{
+		states:     t.states[0:i],
+		actions:    t.actions[0:i],
+		nextStates: t.nextStates[0:i],
+		rewards:    t.rewards[0:i],
+		outOfSpace: t.outOfSpace[0:i],
+	}, true
+}

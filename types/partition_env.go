@@ -431,10 +431,11 @@ func NewPartitionEnv(c PartitionEnvConfig) *PartitionEnv {
 	return p
 }
 
-func (p *PartitionEnv) Step(a Action, epCtx *EpisodeContext) (State, error) {
+func (p *PartitionEnv) Step(a Action, sCtx *StepContext) (State, error) {
 	// 1. Change partition
 	// 2. Perform ticks, delivering messages in between
 	// 3. Update states, partitions and return
+	epCtx := sCtx.EpisodeContext
 
 	start := time.Now()
 	var nextState *Partition = nil

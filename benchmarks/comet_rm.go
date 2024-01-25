@@ -114,9 +114,9 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 		RecordPath: saveFile,
 		Timeout:    0 * time.Second,
 		// record flags
-		RecordTraces: false,
+		RecordTraces: true,
 		RecordTimes:  false,
-		RecordPolicy: false,
+		RecordPolicy: true,
 		// last traces
 		PrintLastTraces:     0,
 		PrintLastTracesFunc: nil,

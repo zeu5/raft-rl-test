@@ -194,7 +194,7 @@ func (e *LPaxosEnv) Reset(_ *types.EpisodeContext) (types.State, error) {
 	return e.curState, nil
 }
 
-func (e *LPaxosEnv) Step(a types.Action, _ *types.EpisodeContext) (types.State, error) {
+func (e *LPaxosEnv) Step(a types.Action, _ *types.StepContext) (types.State, error) {
 	lAction := a.(*LPaxosAction)
 	switch lAction.Type {
 	case "Deliver":
