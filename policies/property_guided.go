@@ -360,7 +360,12 @@ func (p *PropertyGuidedPolicy) nextActionExp(statehash string, actions []types.A
 }
 
 // update the general Exploration policy, ??? it can be done at each step, or at the end of each episode ???
-func (p *PropertyGuidedPolicy) Update(step int, state types.State, action types.Action, nextState types.State) {
+func (p *PropertyGuidedPolicy) Update(sCtx *types.StepContext) {
+	step := sCtx.Step
+	state := sCtx.State
+	action := sCtx.Action
+	nextState := sCtx.NextState
+
 	stateHash := state.Hash()
 
 	nextStateHash := nextState.Hash()
@@ -381,7 +386,7 @@ func (p *PropertyGuidedPolicy) Update(step int, state types.State, action types.
 // Appends the current step (s,a,s') to the current trace and checks whether it satisfies or not the current prop,
 // if yes => sets reached to true, switching off the specific policy for the remaining steps of the episode
 func (p *PropertyGuidedPolicy) checkReached(step int, state types.State, action types.Action, nextState types.State) {
-	p.current_trace.Append(step, state, action, nextState)
+	p.current_trace.Append(step, state, action, nextState, nil)
 	prop := p.properties[p.currentProp]
 
 	if _, ok := prop.Check(p.current_trace); ok {

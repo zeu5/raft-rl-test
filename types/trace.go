@@ -10,40 +10,43 @@ type Trace struct {
 	states     []State
 	actions    []Action
 	nextStates []State
-	rewards    []bool
+	// Additional info related to each step
+	additionalInfo []map[string]interface{}
 }
 
 func NewTrace() *Trace {
 	return &Trace{
-		states:     make([]State, 0),
-		actions:    make([]Action, 0),
-		nextStates: make([]State, 0),
-		rewards:    make([]bool, 0),
+		states:         make([]State, 0),
+		actions:        make([]Action, 0),
+		nextStates:     make([]State, 0),
+		additionalInfo: make([]map[string]interface{}, 0),
 	}
 }
 
 func (t *Trace) Slice(from, to int) *Trace {
 	slicedTrace := NewTrace()
 	for i := from; i < to; i++ {
-		slicedTrace.AppendWithReward(i-from, t.states[i], t.actions[i], t.nextStates[i], t.rewards[i])
+		slicedTrace.Append(i-from, t.states[i], t.actions[i], t.nextStates[i], t.additionalInfo[i])
 	}
 	return slicedTrace
 }
 
-func (t *Trace) Append(step int, state State, action Action, nextState State) {
+func (t *Trace) AppendCtx(sCtx *StepContext) {
+	addInfo := make(map[string]interface{})
+	if sCtx.addInfo != nil {
+		for k, v := range sCtx.addInfo {
+			addInfo[k] = v
+		}
+	}
+	t.Append(sCtx.Step, sCtx.State, sCtx.Action, sCtx.NextState, addInfo)
+}
+
+func (t *Trace) Append(step int, state State, action Action, nextState State, addInfo map[string]interface{}) {
 	t.states = append(t.states, state)
 	t.actions = append(t.actions, action)
 	t.nextStates = append(t.nextStates, nextState)
-	t.rewards = append(t.rewards, false)
+	t.additionalInfo = append(t.additionalInfo, addInfo)
 }
-
-func (t *Trace) AppendWithReward(step int, state State, action Action, nextState State, reward bool) {
-	t.states = append(t.states, state)
-	t.actions = append(t.actions, action)
-	t.nextStates = append(t.nextStates, nextState)
-	t.rewards = append(t.rewards, reward)
-}
-
 func (t *Trace) Len() int {
 	if t == nil {
 		return 0
@@ -58,11 +61,11 @@ func (t *Trace) Get(i int) (State, Action, State, bool) {
 	return t.states[i], t.actions[i], t.nextStates[i], true
 }
 
-func (t *Trace) GetWithReward(i int) (State, Action, State, bool, bool) {
-	if i >= len(t.states) {
-		return nil, nil, nil, false, false
+func (t *Trace) GetAdditionalInfo(step int) (map[string]interface{}, bool) {
+	if step >= len(t.states) {
+		return nil, false
 	}
-	return t.states[i], t.actions[i], t.nextStates[i], t.rewards[i], true
+	return t.additionalInfo[step], true
 }
 
 func (t *Trace) Last() (State, Action, State, bool) {
@@ -78,10 +81,10 @@ func (t *Trace) GetPrefix(i int) (*Trace, bool) {
 		return nil, false
 	}
 	return &Trace{
-		states:     t.states[0:i],
-		actions:    t.actions[0:i],
-		nextStates: t.nextStates[0:i],
-		rewards:    t.rewards[0:i],
+		states:         t.states[0:i],
+		actions:        t.actions[0:i],
+		nextStates:     t.nextStates[0:i],
+		additionalInfo: t.additionalInfo[0:i],
 	}, true
 }
 
@@ -111,7 +114,7 @@ func (t *Trace) MarshalJSON() ([]byte, error) {
 		}
 	}
 	out["next_states"] = nextStates
-	out["rewards"] = t.rewards
+	out["additionalInfo"] = t.additionalInfo
 	return json.Marshal(out)
 }
 
@@ -136,70 +139,3 @@ func (t *Trace) Record(p string) {
 // 	end := "### TRACE END ###\n"
 // 	os.WriteFile(p, bs, 0644)
 // }
-
-// Trace used by RM (state, action, nextState, reward, outOfSpace)
-type RmTrace struct {
-	states     []State
-	actions    []Action
-	nextStates []State
-	rewards    []bool
-	outOfSpace []bool
-}
-
-func NewRmTrace() *RmTrace {
-	return &RmTrace{
-		states:     make([]State, 0),
-		actions:    make([]Action, 0),
-		nextStates: make([]State, 0),
-		rewards:    make([]bool, 0),
-		outOfSpace: make([]bool, 0),
-	}
-}
-
-func (t *RmTrace) Slice(from, to int) *RmTrace {
-	slicedTrace := NewRmTrace()
-	for i := from; i < to; i++ {
-		slicedTrace.Append(i-from, t.states[i], t.actions[i], t.nextStates[i], t.rewards[i], t.outOfSpace[i])
-	}
-	return slicedTrace
-}
-
-func (t *RmTrace) Append(step int, state State, action Action, nextState State, reward bool, outOfSpace bool) {
-	t.states = append(t.states, state)
-	t.actions = append(t.actions, action)
-	t.nextStates = append(t.nextStates, nextState)
-	t.rewards = append(t.rewards, reward)
-	t.outOfSpace = append(t.outOfSpace, outOfSpace)
-}
-
-func (t *RmTrace) Len() int {
-	return len(t.states)
-}
-
-func (t *RmTrace) Get(i int) (State, Action, State, bool, bool, bool) {
-	if i >= len(t.states) {
-		return nil, nil, nil, false, false, false
-	}
-	return t.states[i], t.actions[i], t.nextStates[i], t.rewards[i], t.outOfSpace[i], true
-}
-
-func (t *RmTrace) Last() (State, Action, State, bool, bool, bool) {
-	if len(t.states) < 1 {
-		return nil, nil, nil, false, false, false
-	}
-	lastIndex := len(t.states) - 1
-	return t.states[lastIndex], t.actions[lastIndex], t.nextStates[lastIndex], t.rewards[lastIndex], t.outOfSpace[lastIndex], true
-}
-
-func (t *RmTrace) GetPrefix(i int) (*RmTrace, bool) {
-	if i > len(t.states) {
-		return nil, false
-	}
-	return &RmTrace{
-		states:     t.states[0:i],
-		actions:    t.actions[0:i],
-		nextStates: t.nextStates[0:i],
-		rewards:    t.rewards[0:i],
-		outOfSpace: t.outOfSpace[0:i],
-	}, true
-}

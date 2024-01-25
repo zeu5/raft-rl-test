@@ -57,6 +57,8 @@ func (a *Agent) RunEpisode(ctx *EpisodeContext) {
 		default:
 		}
 		ctx.SetStep(i)
+		sCtx := NewStepContext(ctx)
+		sCtx.State = state
 		if len(actions) == 0 {
 			break
 		}
@@ -67,24 +69,25 @@ func (a *Agent) RunEpisode(ctx *EpisodeContext) {
 		if !ok {
 			break
 		}
+		sCtx.Action = nextAction
 		start = time.Now()
-		nextState, err := a.environment.Step(nextAction, ctx)
+		nextState, err := a.environment.Step(nextAction, sCtx)
 		duration = time.Since(start)
 		ctx.Report.AddTimeEntry(duration, "step_time", "agent.RunEpisode")
 		if err != nil {
 			ctx.SetError(err)
 			return
 		}
-
+		sCtx.NextState = nextState
 		select {
 		case <-ctx.Context.Done():
 			return
 		default:
 		}
 
-		a.policy.Update(i, state, nextAction, nextState)
+		a.policy.Update(sCtx)
 
-		ctx.Trace.Append(i, state, nextAction, nextState)
+		ctx.Trace.AppendCtx(sCtx)
 		state = nextState
 		actions = nextState.Actions()
 	}

@@ -29,6 +29,25 @@ type EpisodeContext struct {
 	RunDuration time.Duration  // duration of the episode
 }
 
+type StepContext struct {
+	*EpisodeContext
+	State     State
+	Action    Action
+	NextState State
+	addInfo   map[string]interface{}
+}
+
+func NewStepContext(eCtx *EpisodeContext) *StepContext {
+	return &StepContext{
+		EpisodeContext: eCtx,
+		addInfo:        make(map[string]interface{}),
+	}
+}
+
+func (s *StepContext) AddInfo(key string, value interface{}) {
+	s.addInfo[key] = value
+}
+
 func NewEpisodeContext(episodeNumber int, experimentName string, eConfig *experimentRunConfig) *EpisodeContext {
 	e := &EpisodeContext{
 		Episode:           episodeNumber,

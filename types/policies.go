@@ -21,21 +21,12 @@ type Policy interface {
 	// The second return param indicates if the policy did choose an action
 	NextAction(int, State, []Action) (Action, bool)
 	// Update called after each transition
-	Update(int, State, Action, State)
+	Update(*StepContext)
 	// Reset at the end of running all the episodes
 	// Used to invoke a cleanup of in memory resources
 	Reset()
 	// Record the QTable to a path in a specific format that can be parsed and assessed later
 	Record(string)
-}
-
-// Generic RM Policy interface
-type RmPolicy interface {
-	Policy
-	// Update with explicit reward flag, called after each transition
-	UpdateRm(int, State, Action, State, bool, bool)
-	// Update iteration with explicit reward flag, called after each transition
-	UpdateIterationRm(int, *RmTrace)
 }
 
 // A fixed negative reward policy (-1) at all states
@@ -144,7 +135,11 @@ func (s *SoftMaxNegPolicy) NextAction(step int, state State, actions []Action) (
 	return actions[i], true
 }
 
-func (s *SoftMaxNegPolicy) Update(step int, state State, action Action, nextState State) {
+func (s *SoftMaxNegPolicy) Update(sCtx *StepContext) {
+	state := sCtx.State
+	action := sCtx.Action
+	nextState := sCtx.NextState
+
 	stateHash := state.Hash()
 
 	nextStateHash := nextState.Hash()
@@ -193,4 +188,4 @@ func (r *RandomPolicy) NextAction(step int, state State, actions []Action) (Acti
 	return actions[i], true
 }
 
-func (r *RandomPolicy) Update(_ int, _ State, _ Action, _ State) {}
+func (r *RandomPolicy) Update(_ *StepContext) {}

@@ -52,7 +52,7 @@ func IgnoreVote() StateAbstracter {
 	}
 }
 
-func (r *AbsRaftEnvironment) Step(action types.Action, _ *types.EpisodeContext) (types.State, error) {
+func (r *AbsRaftEnvironment) Step(action types.Action, _ *types.StepContext) (types.State, error) {
 	raftAction := action.(*RaftAction)
 	switch raftAction.Type {
 	case "DeliverMessage":

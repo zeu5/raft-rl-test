@@ -16,7 +16,7 @@ type GuidedPolicy struct {
 	rand    *rand.Rand
 }
 
-var _ types.RmPolicy = &GuidedPolicy{}
+var _ RMPolicy = &GuidedPolicy{}
 
 func NewGuidedPolicy(reward types.RewardFuncSingle, alpha, gamma, epsilon float64) *GuidedPolicy {
 	return &GuidedPolicy{
@@ -40,7 +40,7 @@ func (g *GuidedPolicy) Reset() {
 func (g *GuidedPolicy) UpdateIteration(iteration int, trace *types.Trace) {
 }
 
-func (g *GuidedPolicy) UpdateIterationRm(iteration int, trace *types.RmTrace) {
+func (g *GuidedPolicy) UpdateIterationRm(iteration int, trace *RMTrace) {
 }
 
 func (g *GuidedPolicy) NextAction(step int, state types.State, actions []types.Action) (types.Action, bool) {
@@ -67,7 +67,11 @@ func (g *GuidedPolicy) NextAction(step int, state types.State, actions []types.A
 	return actionsMap[maxActionKey], true
 }
 
-func (g *GuidedPolicy) Update(step int, state types.State, action types.Action, nextState types.State) {
+func (g *GuidedPolicy) Update(sCtx *types.StepContext) {
+	state := sCtx.State
+	action := sCtx.Action
+	nextState := sCtx.NextState
+
 	reward := 0
 	if g.reward(nextState) {
 		reward = 1

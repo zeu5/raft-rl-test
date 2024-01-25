@@ -7,6 +7,8 @@ type SoftMaxNegFreqPolicy struct {
 	Freq map[string]int
 }
 
+var _ types.Policy = &SoftMaxNegFreqPolicy{}
+
 func NewSoftMaxNegFreqPolicy(alpha, gamma, temp float64) *SoftMaxNegFreqPolicy {
 	return &SoftMaxNegFreqPolicy{
 		SoftMaxNegPolicy: types.NewSoftMaxNegPolicy(alpha, gamma, temp),
@@ -14,7 +16,11 @@ func NewSoftMaxNegFreqPolicy(alpha, gamma, temp float64) *SoftMaxNegFreqPolicy {
 	}
 }
 
-func (t *SoftMaxNegFreqPolicy) Update(step int, state types.State, action types.Action, nextState types.State) {
+func (t *SoftMaxNegFreqPolicy) Update(sCtx *types.StepContext) {
+	state := sCtx.State
+	action := sCtx.Action
+	nextState := sCtx.NextState
+
 	stateHash := state.Hash()
 
 	nextStateHash := nextState.Hash()

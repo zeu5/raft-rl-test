@@ -18,7 +18,7 @@ func NewLPaxosAbsEnv(config LPaxosEnvConfig, abs Abstracter) *LPaxosAbsEnv {
 	}
 }
 
-func (e *LPaxosAbsEnv) Step(a types.Action, _ *types.EpisodeContext) (types.State, error) {
+func (e *LPaxosAbsEnv) Step(a types.Action, _ *types.StepContext) (types.State, error) {
 	lAction := a.(*LPaxosAction)
 	switch lAction.Type {
 	case "Deliver":

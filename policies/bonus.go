@@ -16,7 +16,7 @@ type BonusPolicyGreedy struct {
 	rand     rand.Rand
 }
 
-var _ types.RmPolicy = &BonusPolicyGreedy{}
+var _ RMPolicy = &BonusPolicyGreedy{}
 
 func NewBonusPolicyGreedy(alpha, discount, epsilon float64) *BonusPolicyGreedy {
 	return &BonusPolicyGreedy{
@@ -59,7 +59,11 @@ func (b *BonusPolicyGreedy) NextAction(step int, state types.State, actions []ty
 	return actionsMap[maxAction], true
 }
 
-func (b *BonusPolicyGreedy) Update(step int, state types.State, action types.Action, nextState types.State) {
+func (b *BonusPolicyGreedy) Update(sCtx *types.StepContext) {
+	state := sCtx.State
+	action := sCtx.Action
+	nextState := sCtx.NextState
+
 	stateHash := state.Hash()
 	actionHash := action.Hash()
 	nextStateHash := nextState.Hash()
@@ -91,7 +95,7 @@ func (b *BonusPolicyGreedy) UpdateIteration(iteration int, trace *types.Trace) {
 
 }
 
-func (b *BonusPolicyGreedy) UpdateIterationRm(iteration int, trace *types.RmTrace) {
+func (b *BonusPolicyGreedy) UpdateIterationRm(iteration int, trace *RMTrace) {
 	lastIndex := trace.Len() - 1
 
 	for i := lastIndex; i > -1; i-- { // going backwards in the segment

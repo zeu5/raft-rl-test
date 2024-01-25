@@ -48,4 +48,4 @@ func (r *OnlyDeliverPolicy) NextAction(step int, state types.State, actions []ty
 	return deliverActions[i], true
 }
 
-func (r *OnlyDeliverPolicy) Update(_ int, _ types.State, _ types.Action, _ types.State) {}
+func (r *OnlyDeliverPolicy) Update(_ *types.StepContext) {}
