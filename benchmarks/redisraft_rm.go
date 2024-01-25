@@ -43,6 +43,8 @@ func getSetOfMachines(command string) []string {
 		return []string{"EntriesDifferentTerms", "EntriesDifferentTermsSteps", "LogDifference3", "SyncTo6WithPReq5", "SyncTo7WithPReq5", "Sync7_LogDifference3", "Sync6_LogDifference4"}
 	case "Set3":
 		return []string{"SyncA6_PR3", "SyncA6_PR3_MT1", "SyncA6_PR3_MT1_>>_CReq1_PR2", "SA6_PR3_MT1_>>_C1T1_E1T2_PR2", "SA6_PR3_MT1_>>_2CommitsInDiffTerms"}
+	case "Set4":
+		return []string{"SyncA6_PR3_MT1_>>_CReq1_PR2", "SA6_PR3_MT1_>>_C1T1_E1T2_PR2", "SA6_PR3_MT1_>>_2CommitsInDiffTerms"}
 	default:
 		return []string{}
 	}
@@ -214,8 +216,8 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		WorkingDir:          path.Join(saveFile, "tmp"),
 		NumRequests:         5,
 
-		RequestTimeout:  40,  // heartbeat in milliseconds (fixed or variable?)
-		ElectionTimeout: 120, // election timeout in milliseconds (from specified value to its double)
+		RequestTimeout:  30, // heartbeat in milliseconds (fixed or variable?)
+		ElectionTimeout: 90, // election timeout in milliseconds (from specified value to its double)
 
 		TickLength: 15,
 	}
@@ -236,6 +238,9 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 	availableColors["applied"] = redisraft.ColorApplied()
 	availableColors["snapshot"] = redisraft.ColorSnapshot()
 	availableColors["log"] = redisraft.ColorLog()
+	availableColors["boundedLog3"] = redisraft.ColorBoundedLog(3)
+	availableColors["boundedLog5"] = redisraft.ColorBoundedLog(5)
+	availableColors["boundedLog10"] = redisraft.ColorBoundedLog(10)
 
 	chosenColors := []string{
 		"state",
@@ -245,7 +250,8 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		"boundedTerm5",
 		"index",
 		// "snapshot",
-		"log",
+		// "log",
+		"boundedLog5",
 	}
 
 	colors := make([]redisraft.RedisRaftColorFunc, 0)
@@ -278,7 +284,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		RecordTimes:  true,
 		RecordPolicy: false,
 		// last traces
-		PrintLastTraces:     10,
+		PrintLastTraces:     20,
 		PrintLastTracesFunc: redisraft.ReadableTracePrintable,
 		// report config
 		ReportConfig: types.RepConfigStandard(),

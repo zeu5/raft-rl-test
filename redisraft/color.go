@@ -136,6 +136,22 @@ func ColorLog() RedisRaftColorFunc {
 	}
 }
 
+// Abstraction for the log, it consists of the list of entries considering only their Term (bounded to a given limit) and Type
+func ColorBoundedLog(termLimit int) RedisRaftColorFunc {
+	return func(rns *RedisNodeState) (string, interface{}) {
+		result := make([]string, 0)
+		for _, entry := range rns.Logs {
+			term := entry.Term
+			if entry.Term > termLimit {
+				term = termLimit + 1
+			}
+			entryVal := fmt.Sprintf("%d-%d", term, entry.Type) // the log is seen as a list of term-type elements
+			result = append(result, entryVal)
+		}
+		return "log", result
+	}
+}
+
 type RedisRaftStatePainter struct {
 	paramFuncs []RedisRaftColorFunc
 }

@@ -64,10 +64,13 @@ func (e *EpisodeContext) SetTimedOut() {
 func (e *EpisodeContext) RecordReport() {
 	// TODO: complete this function
 	reason := ""
-	if e.Err != nil {
-		reason = fmt.Sprintf("error: %s", e.Err.Error())
-	} else if e.TimedOut {
-		reason = "timeout"
+	if e.TimedOut {
+		reason = "TIMEOUT\n" + fmt.Sprintf("timeout: %s", e.RunDuration.String())
+		if e.Err != nil {
+			reason = fmt.Sprintf("%s\nerror: %s", reason, e.Err.Error())
+		}
+	} else if e.Err != nil {
+		reason = "ERROR\n" + fmt.Sprintf("error: %s", e.Err.Error())
 	} else {
 		reason = "randomly sampled"
 	}
