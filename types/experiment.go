@@ -124,18 +124,21 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 			e.recordTrace(rConfig, eCtx.Trace)
 		}
 
+		// if the episode did not timeout and there was no error, analyze the trace
 		if !eCtx.TimedOut && eCtx.Err == nil {
 			for _, a := range rConfig.Analyzers {
 				a.Analyze(rConfig.CurrentRun, i, e.Name, eCtx.Trace)
 			}
 		}
 
+		// print the last N traces
 		if i >= printTracesIndex {
 			readableTrace := rConfig.PrintLastTracesFunc(eCtx.Trace)
 			filePath := path.Join(rConfig.ReportSavePath, "lastTraces", e.Name+"_run"+strconv.Itoa(rConfig.CurrentRun)+"_ep"+strconv.Itoa(i)+".txt")
 			util.WriteToFile(filePath, readableTrace)
 		}
 
+		// print episode times
 		if len(episodeTimes) == 10 {
 			if rConfig.RecordTimes {
 				e.printEpTimesMs(episodeTimes, rConfig.ReportSavePath)
@@ -144,6 +147,7 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 			episodeTimes = make([]time.Duration, 0)
 		}
 
+		// check to eventually abort the experiment
 		if consecutiveTimeouts == 10 {
 			fmt.Printf("\n Aborting experiment %s : 10 consecutive timeouts\n", e.Name)
 			break

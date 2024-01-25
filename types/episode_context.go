@@ -92,7 +92,7 @@ func (e *EpisodeContext) SetTimedOut() {
 	e.TimedOut = true
 }
 
-// Record to the report to the path "reportSavePath" using "reportPrintConfig"
+// record the report of the episode. Based on the reason (error, timeout, randomly sampled) and the printing configuration (standard, only values, timeline), the report is printed.
 func (e *EpisodeContext) RecordReport() {
 	// TODO: complete this function
 	reason := ""
