@@ -254,6 +254,87 @@ func NodesCommitValuesAtLeast(val int) types.RewardFuncSingle {
 	}
 }
 
+// returns true if all nodes are in the specified range of terms
+func AllNodesTerms(min int, max int) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		ps, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+
+		for _, state := range ps.ReplicaStates {
+			rState := state.(*RedisNodeState)
+			if rState.Term < min || rState.Term > max {
+				return false
+			}
+		}
+		return true
+	}
+}
+
+// returns true if there is at least one node having term in the specified range
+func AtLeastOneNodeTerm(min int, max int) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		ps, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+
+		for _, state := range ps.ReplicaStates {
+			rState := state.(*RedisNodeState)
+			if rState.Term >= min && rState.Term <= max {
+				return true
+			}
+		}
+		return false
+	}
+}
+
+// returns true if there is at least one node having the specified state
+func AtLeastOneNodeStates(states []string) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		ps, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+
+		for _, state := range ps.ReplicaStates {
+			rState := state.(*RedisNodeState)
+			for _, st := range states {
+				if rState.State == st {
+					return true
+				}
+			}
+		}
+		return false
+	}
+}
+
+// returns true if all nodes are in of the specified states
+func AllNodesStates(states []string) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		ps, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+
+		for _, state := range ps.ReplicaStates {
+			rState := state.(*RedisNodeState)
+			found := false
+			for _, st := range states {
+				if rState.State == st {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return false
+			}
+		}
+		return true
+	}
+}
+
 // returns true if there is at least one node having the specified entries in the log.
 //
 // - quantity: the required number of entries
@@ -273,8 +354,8 @@ func AtLeastOneNodeEntries(quantity int, committed bool, minTerm int, maxTerm in
 		}
 		for _, state := range ps.ReplicaStates {
 			rState := state.(*RedisNodeState)
-			if rState.Commit < quantity {
-				break
+			if rState.Index < quantity {
+				continue
 			}
 			amount := 0
 			for _, entry := range rState.Logs {
@@ -283,7 +364,7 @@ func AtLeastOneNodeEntries(quantity int, committed bool, minTerm int, maxTerm in
 				}
 			}
 			if amount < quantity {
-				break
+				continue
 			}
 			return true
 		}
@@ -310,7 +391,7 @@ func AllNodesEntries(quantity int, committed bool, minTerm int, maxTerm int, ent
 		}
 		for _, state := range ps.ReplicaStates {
 			rState := state.(*RedisNodeState)
-			if rState.Commit < quantity {
+			if rState.Index < quantity {
 				return false
 			}
 			amount := 0

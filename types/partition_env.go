@@ -590,6 +590,12 @@ func (p *PartitionEnv) handlePartition(a Action, epCtx *EpisodeContext) (*Partit
 			}
 		}
 
+		// add current messages to report
+		for _, m := range messages {
+			messageString := fmt.Sprintf("tick: %d | from: %d | to: %d | %s", i, m.From(), m.To(), m.Hash())
+			epCtx.Report.AddStringEntry(messageString, "messages_available", "partitionEnv.handlePartitionCtx")
+		}
+
 		mToDeliver := 0
 
 		epCtx.Report.AddIntEntry(len(messages), "messages_total_number", "partitionEnv.handlePartitionCtx")
@@ -619,8 +625,19 @@ func (p *PartitionEnv) handlePartition(a Action, epCtx *EpisodeContext) (*Partit
 				}
 			}
 
+			// update report with messages to deliver
 			epCtx.Report.AddIntEntry(len(messagesToDeliver), "messages_to_deliver_number", "partitionEnv.handlePartitionCtx")
+			for _, m := range messagesToDeliver {
+				messageString := fmt.Sprintf("tick: %d | from: %d | to: %d | %s", i, m.From(), m.To(), m.Hash())
+				epCtx.Report.AddStringEntry(messageString, "messages_to_deliver", "partitionEnv.handlePartitionCtx")
+			}
+
+			// update report with messages to drop
 			epCtx.Report.AddIntEntry(len(messagesToDrop), "messages_to_drop_number", "partitionEnv.handlePartitionCtx")
+			for _, m := range messagesToDrop {
+				messageString := fmt.Sprintf("tick: %d | from: %d | to: %d | %s", i, m.From(), m.To(), m.Hash())
+				epCtx.Report.AddStringEntry(messageString, "messages_to_drop", "partitionEnv.handlePartitionCtx")
+			}
 
 			if len(messagesToDeliver) > 0 {
 				start = time.Now()

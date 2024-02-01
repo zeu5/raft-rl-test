@@ -141,6 +141,9 @@ func (rp *RewardMachinePolicy) Update(sCtx *types.StepContext) {
 	action := sCtx.Action
 	nextState := sCtx.NextState
 
+	// add current rm state to the info of the trace
+	sCtx.AddInfo("current_rm_state", rp.curRMState)
+
 	// curPolicy := rp.rm.policies[rp.curRMState]
 	curRmStatePos := rp.curRmStatePos
 	curRmState := rp.curRMState

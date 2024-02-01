@@ -164,14 +164,29 @@ func ReadableTracePrintable(trace *types.Trace) string {
 		readStep := make([]string, 0)
 
 		readStep = append(readStep, fmt.Sprintf("--- STEP: %d --- \n", i))
-		state, action, _, _ := trace.Get(i)   // state, action, next_state, reward
+		state, action, _, _ := trace.Get(i) // state, action, next_state, reward
+
+		// get the hierarchy state of the predicate hierarchy
+		predHierState := ""
+		addInfo, ok := trace.GetAdditionalInfo(i) // get the additional info for the step
+		if ok {
+			if addInfo["current_rm_state"] != nil {
+				predHierState = addInfo["current_rm_state"].(string) // get the current rm state
+			} else {
+				predHierState = "nil"
+			}
+		}
+
 		rState, _ := state.(*types.Partition) // .(*types.Partition) type cast into a concrete type - * pointer type - second arg is for safety OK (bool)
 
 		readState := ReadableState(*rState)
 		readStep = append(readStep, readState...)
 		readStep = append(readStep, "---------------- \n\n")
 
+		readHierState := fmt.Sprintf("PRED_HIER_STATE: %s\n", predHierState)
 		readAction := fmt.Sprintf("ACTION: %s\n\n", action.Hash())
+
+		readStep = append(readStep, readHierState)
 		readStep = append(readStep, readAction)
 
 		readTrace = append(readTrace, readStep...)
@@ -196,6 +211,9 @@ func ReadableState(p types.Partition) []string {
 			result = append(result, fmt.Sprintf(" ID: %d | INACTIVE \n", i))
 		}
 	}
+	result = append(result, "---\n")
+	pendReqs := p.PendingRequests
+	result = append(result, fmt.Sprintf("PENDING REQUESTS: %d\n", len(pendReqs)))
 	result = append(result, "---\n")
 	partition := p.PartitionMap
 	result = append(result, ReadablePartitionMap(partition))

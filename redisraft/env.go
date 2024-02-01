@@ -296,6 +296,7 @@ func (r *RedisRaftEnv) DeliverMessages(messages []types.Message, epCtx *types.Ep
 	default:
 	}
 
+	// add number of messages to deliver to the report
 	epCtx.Report.AddIntEntry(len(messages), "env_deliver_messages_to_deliver_number", "RedisRaftEnv.DeliverMessagesCtx")
 
 	start := time.Now() // time stats
@@ -308,6 +309,9 @@ func (r *RedisRaftEnv) DeliverMessages(messages []types.Message, epCtx *types.Ep
 		if !ok {              // if fails return current state?
 			return r.curState, fmt.Errorf("DeliverMessagesCtx : failed to cast into Message")
 		}
+		// add messages to the report
+		epCtx.Report.AddStringEntry(fmt.Sprintf("Hash: %s | Type: %s | Data: %s", m.Hash(), rm.Type, rm.Data), "env_messages_to_deliver", "RedisRaftEnv.DeliverMessagesCtx")
+
 		wg.Add(1) // increase waitgroup counter
 
 		// routine calling the send message and decreasing the counter upon completion
@@ -377,6 +381,8 @@ func (r *RedisRaftEnv) DropMessages(messages []types.Message, epCtx *types.Episo
 		if !ok {
 			return r.curState, fmt.Errorf("DropMessagesCtx : failed to cast into Message")
 		}
+		// add messages to the report
+		epCtx.Report.AddStringEntry(fmt.Sprintf("Hash: %s | Type: %s | Data: %s", m.Hash(), rm.Type, rm.Data), "env_messages_to_drop", "RedisRaftEnv.DropMessages")
 
 		wg.Add(1)
 

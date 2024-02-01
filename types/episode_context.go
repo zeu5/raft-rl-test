@@ -17,6 +17,7 @@ type EpisodeContext struct {
 	Episode        int
 	Step           int
 	ExperimentName string
+	ToPrintReport  bool // true if the episode should be printed (ex. because in the last N to print)
 
 	reportSavePath    string
 	reportPrintConfig *ReportsPrintConfig
@@ -52,6 +53,7 @@ func NewEpisodeContext(episodeNumber int, experimentName string, eConfig *experi
 	e := &EpisodeContext{
 		Episode:           episodeNumber,
 		ExperimentName:    experimentName,
+		ToPrintReport:     false,
 		Report:            NewEpisodeReport(episodeNumber, experimentName),
 		Trace:             NewTrace(),
 		reportSavePath:    eConfig.ReportSavePath,
@@ -80,6 +82,10 @@ func (e *EpisodeContext) SetTimedOut() {
 	e.TimedOut = true
 }
 
+func (e *EpisodeContext) SetToPrintReport(value bool) {
+	e.ToPrintReport = value
+}
+
 // record the report of the episode. Based on the reason (error, timeout, randomly sampled) and the printing configuration (standard, only values, timeline), the report is printed.
 func (e *EpisodeContext) RecordReport() {
 	// TODO: complete this function
@@ -91,6 +97,8 @@ func (e *EpisodeContext) RecordReport() {
 		}
 	} else if e.Err != nil {
 		reason = "ERROR\n" + fmt.Sprintf("error: %s", e.Err.Error())
+	} else if e.ToPrintReport {
+		reason = "last episodes"
 	} else {
 		reason = "randomly sampled"
 	}
@@ -117,7 +125,13 @@ type ReportsPrintConfig struct {
 	PrintIfError   bool // print the report if an error occurs
 	PrintIfTimeout bool // print the report if a timeout occurs
 
-	Sampling float32 // rate of randomly printed reports (for successful episodes)
+	Sampling          float32 // rate of randomly printed reports (for successful episodes)
+	PrintLastEpisodes int     // number of last episodes to print
+}
+
+// set the value for how many episodes reports to print at the end of the experiment. (ex. if 10, print reports of last 10 episodes)
+func (r *ReportsPrintConfig) SetPrintLastEpisodes(n int) {
+	r.PrintLastEpisodes = n
 }
 
 // configuration of the report with no printing
@@ -175,10 +189,11 @@ type EpisodeReport struct {
 
 	lock *sync.Mutex // mutex to control entries updates
 
-	Timeline   []*EpisodeReportEntry // generic timeline containing all the entries ordered by index
-	TimeValues map[string][]*EpisodeReportEntry
-	IntValues  map[string][]*EpisodeReportEntry
-	Logs       map[string]string
+	Timeline     []*EpisodeReportEntry // generic timeline containing all the entries ordered by index
+	TimeValues   map[string][]*EpisodeReportEntry
+	IntValues    map[string][]*EpisodeReportEntry
+	StringValues map[string][]*EpisodeReportEntry
+	Logs         map[string]string
 }
 
 func NewEpisodeReport(episodeNumber int, experimentName string) *EpisodeReport {
@@ -192,10 +207,11 @@ func NewEpisodeReport(episodeNumber int, experimentName string) *EpisodeReport {
 
 		lock: &sync.Mutex{},
 
-		Timeline:   make([]*EpisodeReportEntry, 0),
-		TimeValues: make(map[string][]*EpisodeReportEntry),
-		IntValues:  make(map[string][]*EpisodeReportEntry),
-		Logs:       make(map[string]string),
+		Timeline:     make([]*EpisodeReportEntry, 0),
+		TimeValues:   make(map[string][]*EpisodeReportEntry),
+		IntValues:    make(map[string][]*EpisodeReportEntry),
+		StringValues: make(map[string][]*EpisodeReportEntry),
+		Logs:         make(map[string]string),
 	}
 }
 
@@ -256,6 +272,32 @@ func (e *EpisodeReport) AddTimeEntry(value time.Duration, entryType string, call
 	e.TimeValues[entryType] = values
 }
 
+// add a new entry of type string to the report
+func (e *EpisodeReport) AddStringEntry(value string, entryType string, caller string) {
+	e.lock.Lock()
+	defer e.lock.Unlock()
+
+	entry := EpisodeReportEntry{
+		Index:     e.nextIndex,
+		Timestamp: time.Since(e.startTime),
+
+		EpisodeStep: e.episodeStep,
+		EntryType:   entryType,
+		Caller:      caller,
+		Value:       value,
+	}
+
+	e.nextIndex += 1
+	e.Timeline = append(e.Timeline, &entry)
+
+	values, ok := e.StringValues[entryType]
+	if !ok {
+		values = make([]*EpisodeReportEntry, 0)
+	}
+	values = append(values, &entry)
+	e.StringValues[entryType] = values
+}
+
 func (e *EpisodeReport) AddLog(value string, key string) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
@@ -279,13 +321,13 @@ func (e *EpisodeReport) StringPerType() string {
 	for entryType, entries := range e.IntValues {
 		result = fmt.Sprintf("%s\n%s [%d]:\n%s", result, entryType, len(entries), StringEntriesListLite(entries))
 	}
-	for key, value := range e.Logs {
-		result = fmt.Sprintf("%s\n%s :\n%s", result, key, value)
+	for entryType, entries := range e.StringValues {
+		result = fmt.Sprintf("%s\n%s [%d]:\n%s", result, entryType, len(entries), StringEntriesListLite(entries))
 	}
 	return result
 }
 
-// return a string representation of the report entries values per type
+// return a string representation of the report entries values per type, ignores string values
 func (e *EpisodeReport) StringPerTypeValues() string {
 	result := ""
 	for entryType, entries := range e.TimeValues {
@@ -378,6 +420,8 @@ func (en *EpisodeReportEntry) String() string {
 		return fmt.Sprintf("[ %6d | %5d | %3d ] %20s : %12s (%20s)", en.Index, en.Timestamp.Milliseconds(), en.EpisodeStep, en.EntryType, en.Value.(time.Duration).String(), en.Caller)
 	case int:
 		return fmt.Sprintf("[ %6d | %5d | %3d ] %20s : %5d (%20s)", en.Index, en.Timestamp.Milliseconds(), en.EpisodeStep, en.EntryType, en.Value.(int), en.Caller)
+	case string:
+		return fmt.Sprintf("[ %6d | %5d | %3d ] %20s : %s (%20s)", en.Index, en.Timestamp.Milliseconds(), en.EpisodeStep, en.EntryType, en.Value.(string), en.Caller)
 	default:
 		return "wrong entry type"
 	}
@@ -400,6 +444,8 @@ func (en *EpisodeReportEntry) StringLite() string {
 		return fmt.Sprintf("[ %5d | %3d ] %12s (%20s)", en.Timestamp.Milliseconds(), en.EpisodeStep, en.Value.(time.Duration).String(), en.Caller)
 	case int:
 		return fmt.Sprintf("[ %5d | %3d ] %5d (%20s)", en.Timestamp.Milliseconds(), en.EpisodeStep, en.Value.(int), en.Caller)
+	case string:
+		return fmt.Sprintf("[ %5d | %3d ] %s (%20s)", en.Timestamp.Milliseconds(), en.EpisodeStep, en.Value.(string), en.Caller)
 	default:
 		return "wrong entry type"
 	}
