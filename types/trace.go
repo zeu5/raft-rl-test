@@ -65,7 +65,7 @@ func (t *Trace) GetAdditionalInfo(step int) (map[string]interface{}, bool) {
 	if step >= len(t.states) {
 		return nil, false
 	}
-	return t.additionalInfo[step], true
+	return t.additionalInfo[step], t.additionalInfo[step] != nil
 }
 
 func (t *Trace) Last() (State, Action, State, bool) {
