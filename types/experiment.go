@@ -103,6 +103,10 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 		fmt.Printf("\rExperiment: %s, Episode: %d/%d, Timed out: %d, With Error: %d", e.Name, i+1, rConfig.Episodes, totalTimeout, totalWithError)
 
 		eCtx := NewEpisodeContext(i, e.Name, rConfig)
+		if i > rConfig.Episodes-rConfig.ReportsPrintConfig.PrintLastEpisodes {
+			eCtx.SetToPrintReport(true)
+		}
+
 		e.runEpisode(eCtx, agent)
 		episodeTimes = append(episodeTimes, eCtx.RunDuration)
 
@@ -208,7 +212,9 @@ func (e *Experiment) runEpisode(eCtx *EpisodeContext, agent *Agent) {
 				eCtx.RecordReport()
 			} else {
 				done <- nil
-				if rand.Float32() < eCtx.reportPrintConfig.Sampling {
+				if eCtx.ToPrintReport {
+					eCtx.RecordReport()
+				} else if rand.Float32() < eCtx.reportPrintConfig.Sampling {
 					eCtx.RecordReport()
 				}
 			}
