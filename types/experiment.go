@@ -92,15 +92,16 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 	})
 
 	printTracesIndex := rConfig.Episodes - rConfig.PrintLastTraces
+	i := 0
 
-	for i := 0; i < rConfig.Episodes; i++ {
+	for i < rConfig.Episodes {
 		select {
 		case <-rConfig.Context.Done():
 			return
 		default:
 		}
 
-		fmt.Printf("\rExperiment: %s, Episode: %d/%d, Timed out: %d, With Error: %d", e.Name, i+1, rConfig.Episodes, totalTimeout, totalWithError)
+		fmt.Printf("\rExperiment: %s, Episode: %d/%d, Timed out: %d, With Error: %d, Total Executed: %d", e.Name, i+1, rConfig.Episodes, totalTimeout, totalWithError, (i + 1 + totalTimeout + totalWithError))
 
 		eCtx := NewEpisodeContext(i, e.Name, rConfig)
 		if i > rConfig.Episodes-rConfig.ReportsPrintConfig.PrintLastEpisodes {
@@ -110,6 +111,7 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 		e.runEpisode(eCtx, agent)
 		episodeTimes = append(episodeTimes, eCtx.RunDuration)
 
+		// episode timedout
 		if eCtx.TimedOut {
 			totalTimeout += 1
 			consecutiveTimeouts += 1
@@ -117,6 +119,7 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 			consecutiveTimeouts = 0
 		}
 
+		// episode with error
 		if eCtx.Err != nil {
 			totalWithError += 1
 			consecutiveErrors += 1
@@ -133,6 +136,7 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 			for _, a := range rConfig.Analyzers {
 				a.Analyze(rConfig.CurrentRun, i, e.Name, eCtx.Trace)
 			}
+			i += 1 // increment the episode number only if the episode was correctly executed
 		}
 
 		// print the last N traces
@@ -157,8 +161,8 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 			break
 		}
 
-		if consecutiveErrors == 10 {
-			fmt.Printf("\n Aborting experiment %s : 10 consecutive errors\n", e.Name)
+		if consecutiveErrors == 30 {
+			fmt.Printf("\n Aborting experiment %s : 30 consecutive errors\n", e.Name)
 			break
 		}
 	}

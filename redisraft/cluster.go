@@ -149,6 +149,11 @@ func (r *RedisNode) Create() {
 	portS := strconv.Itoa(r.config.Port)
 	addr := "localhost:" + portS
 
+	periodicInterval := 100
+	if r.config.RequestTimeout < periodicInterval {
+		periodicInterval = int(r.config.RequestTimeout / 2)
+	}
+
 	serverArgs := []string{
 		"--port", portS,
 		"--bind", "0.0.0.0",
@@ -166,6 +171,7 @@ func (r *RedisNode) Create() {
 		"--raft.trace", "off",
 		"--raft.test-network-server-addr", r.config.InterceptAddr,
 		"--raft.test-network-listen-addr", r.config.InterceptListenAddr,
+		"--raft.periodic-interval", strconv.Itoa(periodicInterval),
 		"--raft.request-timeout", strconv.Itoa(r.config.RequestTimeout),
 		"--raft.election-timeout", strconv.Itoa(r.config.ElectionTimeout),
 	}

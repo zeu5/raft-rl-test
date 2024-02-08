@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"strconv"
 	"sync"
@@ -237,16 +236,16 @@ func (n *InterceptNetwork) SendMessage(id string, epCtx *types.EpisodeContext) e
 	start = time.Now()
 	// set up http client to send it?
 	client := &http.Client{
-		Transport: &http.Transport{
-			DialContext: (&net.Dialer{
-				Timeout:   5 * time.Second,
-				KeepAlive: 5 * time.Second,
-			}).DialContext,
-			TLSHandshakeTimeout:   5 * time.Second,
-			ResponseHeaderTimeout: 5 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-			DisableKeepAlives:     true,
-		},
+		// Transport: &http.Transport{
+		// 	DialContext: (&net.Dialer{
+		// 		Timeout:   5 * time.Second,
+		// 		KeepAlive: 5 * time.Second,
+		// 	}).DialContext,
+		// 	TLSHandshakeTimeout:   5 * time.Second,
+		// 	ResponseHeaderTimeout: 5 * time.Second,
+		// 	ExpectContinueTimeout: 1 * time.Second,
+		// 	DisableKeepAlives:     true,
+		// },
 	}
 	epCtx.Report.AddTimeEntry(time.Since(start), "net_send_msg_setup_client", "InterceptNetwork.SendMessageCtx")
 

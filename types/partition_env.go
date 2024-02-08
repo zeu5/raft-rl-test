@@ -618,8 +618,14 @@ func (p *PartitionEnv) handlePartition(a Action, epCtx *EpisodeContext) (*Partit
 					// check if partitioning allows delivery
 					if (!fromOk || !toOk || fromP == toP) && toActive { // deliver it
 						messagesToDeliver = append(messagesToDeliver, next)
-					} else { // drop it
-						messagesToDrop = append(messagesToDrop, next)
+					} else {
+						if i == 0 {
+							// if it's the first tick, drop the message
+							messagesToDrop = append(messagesToDrop, next)
+						} else {
+							// otherwise, keep it for the next
+							messages = append(messages, next) // probably not needed, but it is unclear where are the messages stored and read...
+						}
 					}
 
 				}

@@ -135,6 +135,9 @@ type BugCrashAnalyzer struct {
 }
 
 func NewBugCrashAnalyzer(savePath string) *BugCrashAnalyzer {
+	if _, ok := os.Stat(savePath); ok != nil {
+		os.MkdirAll(savePath, 0777)
+	}
 	return &BugCrashAnalyzer{
 		savePath:    savePath,
 		occurrences: make([]int, 0),

@@ -85,6 +85,8 @@ type RedisRaftEnv struct {
 	timeStats map[string][]time.Duration
 	intStats  map[string][]int
 
+	ctx context.Context
+
 	// record duration between ticks
 	timeTickDurations [][]int64 // map[episode] = [tick gaps in microseconds]
 	timeLastRecorded  int64     //
@@ -107,6 +109,7 @@ func NewRedisRaftEnv(ctx context.Context, clusterConfig *ClusterConfig, savePath
 		timeEpIndex:       0,
 		savePath:          savePath[0],
 		printStats:        false, // change calling SetPrintStats()
+		ctx:               ctx,
 	}
 	e.network.Start()
 
@@ -145,7 +148,9 @@ func (r *RedisRaftEnv) Reset(epCtx *types.EpisodeContext) (types.PartitionedSyst
 			return nil, e
 		}
 	}
+
 	r.network.Reset()
+
 	r.cluster = NewCluster(r.clusterConfig)
 
 	// try to restart the cluster for a few times until it does not return an error
