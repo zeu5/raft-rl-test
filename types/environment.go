@@ -15,6 +15,8 @@ type State interface {
 	Hash() string
 	// Actions possible from the state
 	Actions() []Action
+	// if the state is terminal
+	Terminal() bool
 }
 
 // And Action that RL policy can take

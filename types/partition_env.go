@@ -123,6 +123,20 @@ type Partition struct {
 	ByzantineNodes     map[uint64]bool
 	RemainingByzantine int
 	WithByzantine      bool
+
+	// for terminal state
+	IsTerminal bool
+}
+
+// default terminal partition, state representation for each state out of the specified bounds
+func TerminalPartition() *Partition {
+	return &Partition{
+		IsTerminal: true,
+	}
+}
+
+func (p *Partition) Terminal() bool {
+	return p.IsTerminal
 }
 
 var _ State = &Partition{}
@@ -346,6 +360,7 @@ func copyPartition(p *Partition) *Partition {
 		WithByzantine:      p.WithByzantine,
 		RemainingByzantine: p.RemainingByzantine,
 		ByzantineNodes:     make(map[uint64]bool),
+		IsTerminal:         p.IsTerminal,
 	}
 	for i, s := range p.ReplicaColors {
 		n.ReplicaColors[i] = s.Copy()
@@ -382,6 +397,8 @@ type PartitionEnv struct {
 	messages      map[string]Message
 	config        PartitionEnvConfig
 	rand          *rand.Rand
+
+	TerminalPredicate func(*Partition) bool
 }
 
 var _ Environment = &PartitionEnv{}
@@ -399,6 +416,9 @@ type PartitionEnvConfig struct {
 	WithByzantine          bool
 	MaxByzantine           int
 	RecordStats            bool
+
+	// predicate to check if a state is terminal
+	TerminalPredicate func(*Partition) bool
 }
 
 func (r *PartitionEnvConfig) Printable() string {
@@ -426,6 +446,8 @@ func NewPartitionEnv(c PartitionEnvConfig) *PartitionEnv {
 		CurPartition:  nil,
 		config:        c,
 		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
+
+		TerminalPredicate: c.TerminalPredicate,
 	}
 	// p.reset()
 	return p
@@ -471,7 +493,18 @@ func (p *PartitionEnv) Step(a Action, sCtx *StepContext) (State, error) {
 	default:
 	}
 
-	p.CurPartition = copyPartition(nextState)
+	terminal := false
+	// check if the state is out of bound
+	if p.TerminalPredicate != nil {
+		terminal = p.TerminalPredicate(nextState)
+	}
+
+	if terminal {
+		nextState = TerminalPartition()
+	} else {
+		p.CurPartition = copyPartition(nextState)
+	}
+
 	return nextState, nil
 }
 

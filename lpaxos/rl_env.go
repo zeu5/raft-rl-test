@@ -121,6 +121,10 @@ func (l *LPaxosState) Actions() []types.Action {
 	return result
 }
 
+func (l *LPaxosState) Terminal() bool {
+	return false
+}
+
 func (l *LPaxosState) Hash() string {
 	bs, _ := json.Marshal(l)
 	hash := sha256.Sum256(bs)

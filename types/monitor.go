@@ -13,6 +13,9 @@ type RewardFunc func(State, State) bool
 // Currently defined on a transition (pair of states)
 type RewardFuncSingle func(State) bool
 
+// Function to specify the terminal state during the execution
+type BoundPredicate func(Partition) bool
+
 func (r RewardFuncSingle) And(other RewardFuncSingle) RewardFuncSingle {
 	return func(s State) bool {
 		return r(s) && other(s)

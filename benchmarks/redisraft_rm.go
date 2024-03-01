@@ -403,6 +403,8 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		WithCrashes:            true,
 		CrashLimit:             3,
 		MaxInactive:            1,
+
+		TerminalPredicate: redisraft.MaxTerm(3),
 	}
 
 	reportConfig := types.RepConfigStandard()
@@ -413,6 +415,9 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		Horizon:    horizon,
 		RecordPath: saveFile,
 		Timeout:    10 * time.Second,
+		// thresholds to abort the experiment
+		ConsecutiveTimeoutsAbort: 10,
+		ConsecutiveErrorsAbort:   10,
 		// record flags
 		RecordTraces: false,
 		RecordTimes:  true,
@@ -424,16 +429,16 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		ReportConfig: reportConfig,
 	})
 
-	c.AddAnalysis("Plot", redisraft.NewCoverageAnalyzer(colors...), redisraft.CoverageComparator(saveFile))
-	c.AddAnalysis("Crashes", redisraft.NewBugCrashAnalyzer(path.Join(saveFile, "crash")), redisraft.BugComparator())
-	c.AddAnalysis("Bugs", redisraft.NewBugAnalyzer(
-		path.Join(saveFile, "bugs"),
-		types.BugDesc{Name: "ReducedLog", Check: redisraft.ReducedLog()},
-		types.BugDesc{Name: "ModifiedLog", Check: redisraft.ModifiedLog()},
-		types.BugDesc{Name: "InconsistentLogs", Check: redisraft.InconsistentLogs()},
-		// types.BugDesc{Name: "True", Check: redisraft.TruePredicate()},
-		// types.BugDesc{Name: "DifferentTermsEntries", Check: redisraft.EntriesInDifferentTermsDummy()},
-	), types.BugComparator(path.Join(saveFile, "bugs")))
+	c.AddAnalysis("Plot", redisraft.NewCoverageAnalyzer(horizon, colors...), redisraft.CoverageComparator(saveFile, horizon))
+	// c.AddAnalysis("Crashes", redisraft.NewBugCrashAnalyzer(path.Join(saveFile, "crash")), redisraft.BugComparator())
+	// c.AddAnalysis("Bugs", redisraft.NewBugAnalyzer(
+	// 	path.Join(saveFile, "bugs"),
+	// 	types.BugDesc{Name: "ReducedLog", Check: redisraft.ReducedLog()},
+	// 	types.BugDesc{Name: "ModifiedLog", Check: redisraft.ModifiedLog()},
+	// 	types.BugDesc{Name: "InconsistentLogs", Check: redisraft.InconsistentLogs()},
+	// 	// types.BugDesc{Name: "True", Check: redisraft.TruePredicate()},
+	// 	// types.BugDesc{Name: "DifferentTermsEntries", Check: redisraft.EntriesInDifferentTermsDummy()},
+	// ), types.BugComparator(path.Join(saveFile, "bugs")))
 
 	machines := getSetOfMachines(machine)
 	pHierarchiesPolicies := make(map[string]*policies.RewardMachinePolicy) // map of PH policies
@@ -453,7 +458,11 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		c.AddExperiment(types.NewExperiment(pHierName, policy, types.NewPartitionEnv(partitionEnvConfig)))
 	}
 
-	baselines := machines[len(machines)-1] == "baselines"
+	baselines := true
+
+	if len(machines) > 0 { // if there are machines to run, check if baselines are included
+		baselines = machines[len(machines)-1] == "baselines"
+	}
 
 	if baselines {
 		c.AddExperiment(types.NewExperiment(

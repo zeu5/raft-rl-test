@@ -125,6 +125,10 @@ func (p *Position) Actions() []types.Action {
 	return AllMovements
 }
 
+func (p *Position) Terminal() bool {
+	return false
+}
+
 func DefaultStateAbstractor() types.StateAbstractor {
 	return func(s types.State) string {
 		return s.Hash()

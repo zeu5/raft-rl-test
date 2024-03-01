@@ -12,22 +12,26 @@ import (
 
 type EpisodeContext struct {
 	// parameters used to run episode
-	Context        context.Context
-	Cancel         context.CancelFunc // cancel function to stop the episode
-	Episode        int
-	Step           int
-	ExperimentName string
-	ToPrintReport  bool // true if the episode should be printed (ex. because in the last N to print)
+	Context         context.Context
+	Cancel          context.CancelFunc // cancel function to stop the episode
+	Episode         int                // number of the episode
+	Step            int                // current step of the episode, can change during the episode execution
+	InitialTimestep int                // initial timestep of the episode (in the total timesteps of the experiment)
+	ExperimentName  string
+	ToPrintReport   bool // true if the episode should be printed (ex. because in the last N to print)
 
 	reportSavePath    string
 	reportPrintConfig *ReportsPrintConfig
 
 	// parameters to be used post running episode
-	Err         error          // error of the episode
-	TimedOut    bool           // true if the episode timed out
-	Trace       *Trace         // trace of the episode
-	Report      *EpisodeReport // report of the episode
-	RunDuration time.Duration  // duration of the episode
+	Err              error          // error of the episode
+	TimedOut         bool           // true if the episode timed out
+	OutOfSpaceBounds bool           // true if the episode went out of space bounds
+	HorizonEnd       bool           // true if the episode ended because of the horizon
+	Timesteps        int            // number of timesteps of the episode
+	Trace            *Trace         // trace of the episode
+	Report           *EpisodeReport // report of the episode
+	RunDuration      time.Duration  // duration of the episode
 }
 
 // Context related with each step
@@ -58,8 +62,9 @@ func (s *StepContext) AddInfo(key string, value interface{}) {
 }
 
 // Create a new episode context
-func NewEpisodeContext(episodeNumber int, experimentName string, eConfig *experimentRunConfig) *EpisodeContext {
+func NewEpisodeContext(InitialTimestep int, episodeNumber int, experimentName string, eConfig *experimentRunConfig) *EpisodeContext {
 	e := &EpisodeContext{
+		InitialTimestep:   InitialTimestep,
 		Episode:           episodeNumber,
 		ExperimentName:    experimentName,
 		ToPrintReport:     false,
@@ -94,6 +99,16 @@ func (e *EpisodeContext) SetTimedOut() {
 	e.TimedOut = true
 }
 
+// Set out of space bounds flag to true
+func (e *EpisodeContext) SetOutOfSpaceBounds() {
+	e.OutOfSpaceBounds = true
+}
+
+// Set horizon end flag to true
+func (e *EpisodeContext) SetHorizonEnd() {
+	e.HorizonEnd = true
+}
+
 func (e *EpisodeContext) SetToPrintReport(value bool) {
 	e.ToPrintReport = value
 }
@@ -114,6 +129,17 @@ func (e *EpisodeContext) RecordReport() {
 	} else {
 		reason = "randomly sampled"
 	}
+
+	// eventually add how the episode ended
+	if e.OutOfSpaceBounds {
+		reason = fmt.Sprintf("%s\nout of space bounds", reason)
+	}
+	if e.HorizonEnd {
+		reason = fmt.Sprintf("%s\nhorizon end", reason)
+	}
+
+	// add the length of the episode
+	reason = fmt.Sprintf("%s\nsteps: %d", reason, e.Timesteps)
 
 	if e.reportPrintConfig.PrintStd {
 		e.Report.Store(e.reportSavePath, reason)

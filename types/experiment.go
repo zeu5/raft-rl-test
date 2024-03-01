@@ -22,6 +22,10 @@ type experimentRunConfig struct {
 	Timeout    time.Duration
 	Context    context.Context
 
+	// thresholds to abort the experiment
+	ConsecutiveTimeoutsAbort int
+	ConsecutiveErrorsAbort   int
+
 	// record flags
 	RecordTraces bool
 	RecordTimes  bool
@@ -78,11 +82,17 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 		}
 	}
 
-	totalTimeout := 0
-	totalWithError := 0
+	totalTimeout := 0   // episodes ended with a timeout
+	totalWithError := 0 // episodes ended with an error
 	consecutiveTimeouts := 0
 	consecutiveErrors := 0
 	episodeTimes := make([]time.Duration, 0)
+
+	totalOutOfSpaceBounds := 0 // episodes ended with a state out of space bounds
+	totalHorizon := 0          // episodes ended with the horizon reached
+	totalEpisodes := 0         // total episodes executed
+	totalValidEpisodes := 0    // total episodes executed without errors or timeouts (used for RL updates)
+	totalValidTimesteps := 0   // total timesteps executed without errors or timeouts (used for RL updates)
 
 	agent := NewAgent(&AgentConfig{
 		Episodes:    rConfig.Episodes,
@@ -91,26 +101,35 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 		Environment: e.environment,
 	})
 
-	printTracesIndex := rConfig.Episodes - rConfig.PrintLastTraces
-	i := 0
+	printTracesIndex := (rConfig.Episodes - rConfig.PrintLastTraces) * rConfig.Horizon // compute the index to print the last N timesteps
+	executedTimesteps := 0
+	availableTimesteps := rConfig.Episodes * rConfig.Horizon
 
-	for i < rConfig.Episodes {
+	// terminal execution display
+	fmt.Printf("\rExperiment: %s, Timesteps: %d/%d, Valid TS:%d [%5.2f%%] | Tot Eps: %d, Valid Eps: %d [%5.2f%%], TOut: %d, WErr: %d | Horizon: %d, Bound: %d",
+		e.Name, executedTimesteps, availableTimesteps, totalValidTimesteps, (float32(totalValidTimesteps)/float32((executedTimesteps)))*100,
+		totalEpisodes, totalValidEpisodes, float32(totalValidEpisodes)/float32(totalEpisodes)*100, totalTimeout, totalWithError,
+		totalHorizon, totalOutOfSpaceBounds)
+
+	for executedTimesteps < availableTimesteps {
 		select {
 		case <-rConfig.Context.Done():
 			return
 		default:
 		}
 
-		fmt.Printf("\rExperiment: %s, Episode: %d/%d, Timed out: %d, With Error: %d, Total Executed: %d", e.Name, i+1, rConfig.Episodes, totalTimeout, totalWithError, (i + 1 + totalTimeout + totalWithError))
-
-		eCtx := NewEpisodeContext(i, e.Name, rConfig)
-		if i > rConfig.Episodes-rConfig.ReportsPrintConfig.PrintLastEpisodes {
+		eCtx := NewEpisodeContext(executedTimesteps, totalEpisodes, e.Name, rConfig) // create a new episode context to store the info used and returned by the episode
+		if executedTimesteps >= printTracesIndex {                                   // print the report for the last N episodes (or timestep-wise)
 			eCtx.SetToPrintReport(true)
 		}
 
-		e.runEpisode(eCtx, agent)
-		episodeTimes = append(episodeTimes, eCtx.RunDuration)
+		e.runEpisode(eCtx, agent)                             // run the episode
+		episodeTimes = append(episodeTimes, eCtx.RunDuration) // store the episode time for the statistics
 
+		executedTimesteps += eCtx.Timesteps // increment the number of valid timesteps executed
+		totalEpisodes += 1                  // increment the number of episodes executed
+
+		// possible outcomes of the episode
 		// episode timedout
 		if eCtx.TimedOut {
 			totalTimeout += 1
@@ -131,18 +150,28 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 			e.recordTrace(rConfig, eCtx.Trace)
 		}
 
-		// if the episode did not timeout and there was no error, analyze the trace
+		// analyze the trace, even if the episode timed out or ended with an error
+		for _, a := range rConfig.Analyzers {
+			a.Analyze(rConfig.CurrentRun, executedTimesteps, e.Name, eCtx.Trace)
+		}
+
+		// if no error or timeout, increment the number of valid episodes executed
 		if !eCtx.TimedOut && eCtx.Err == nil {
-			for _, a := range rConfig.Analyzers {
-				a.Analyze(rConfig.CurrentRun, i, e.Name, eCtx.Trace)
+			// increment the number of valid episodes executed and subcategories
+			totalValidEpisodes += 1
+			totalValidTimesteps += eCtx.Timesteps
+			// episode ending category
+			if eCtx.OutOfSpaceBounds { // terminal state
+				totalOutOfSpaceBounds += 1
+			} else if eCtx.HorizonEnd { // horizon reached
+				totalHorizon += 1
 			}
-			i += 1 // increment the episode number only if the episode was correctly executed
 		}
 
 		// print the last N traces
-		if i >= printTracesIndex {
+		if executedTimesteps >= printTracesIndex {
 			readableTrace := rConfig.PrintLastTracesFunc(eCtx.Trace)
-			filePath := path.Join(rConfig.ReportSavePath, "lastTraces", e.Name+"_run"+strconv.Itoa(rConfig.CurrentRun)+"_ep"+strconv.Itoa(i)+".txt")
+			filePath := path.Join(rConfig.ReportSavePath, "lastTraces", e.Name+"_run"+strconv.Itoa(rConfig.CurrentRun)+"_ep"+strconv.Itoa(totalEpisodes)+".txt")
 			util.WriteToFile(filePath, readableTrace)
 		}
 
@@ -156,15 +185,21 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 		}
 
 		// check to eventually abort the experiment
-		if consecutiveTimeouts == 10 {
-			fmt.Printf("\n Aborting experiment %s : 10 consecutive timeouts\n", e.Name)
+		if consecutiveTimeouts >= rConfig.ConsecutiveTimeoutsAbort {
+			fmt.Printf("\n Aborting experiment %s : %d consecutive timeouts\n", e.Name, consecutiveTimeouts)
 			break
 		}
 
-		if consecutiveErrors == 30 {
-			fmt.Printf("\n Aborting experiment %s : 30 consecutive errors\n", e.Name)
+		if consecutiveErrors >= rConfig.ConsecutiveErrorsAbort {
+			fmt.Printf("\n Aborting experiment %s : %d consecutive errors\n", e.Name, consecutiveErrors)
 			break
 		}
+
+		// terminal execution display
+		fmt.Printf("\rExperiment: %s, Timesteps: %d/%d, Valid TS:%d [%6.2f%%] | Tot Eps: %d, Valid Eps: %d [%6.2f%%], TOut: %d, WErr: %d | Horizon: %d, Bound: %d",
+			e.Name, executedTimesteps, availableTimesteps, totalValidTimesteps, (float32(totalValidTimesteps)/float32((executedTimesteps)))*100,
+			totalEpisodes, totalValidEpisodes, float32(totalValidEpisodes)/float32(totalEpisodes)*100, totalTimeout, totalWithError,
+			totalHorizon, totalOutOfSpaceBounds)
 	}
 
 	select {
@@ -205,17 +240,22 @@ func (e *Experiment) runEpisode(eCtx *EpisodeContext, agent *Agent) {
 		eCtx.RunDuration = duration
 
 		select {
-		case <-eCtx.Context.Done():
+		case <-eCtx.Context.Done(): // episode ended with a timeout
 			if deadline, ok := eCtx.Context.Deadline(); ok && time.Now().After(deadline) {
 				eCtx.SetTimedOut()
 				eCtx.RecordReport()
 			}
 		default:
-			if eCtx.Err != nil {
+			if eCtx.Err != nil { // episode ended with an error
 				done <- eCtx.Err
 				eCtx.RecordReport()
 			} else {
 				done <- nil
+				if eCtx.Timesteps < agent.config.Horizon { // episode ended because reached terminal state before the horizon
+					eCtx.OutOfSpaceBounds = true
+				} else { // episode ended because the horizon was reached
+					eCtx.HorizonEnd = true
+				}
 				if eCtx.ToPrintReport {
 					eCtx.RecordReport()
 				} else if rand.Float32() < eCtx.reportPrintConfig.Sampling {
@@ -267,7 +307,7 @@ type DataSet interface{}
 
 // Analyzer compresses the information in the traces to a DataSet
 type Analyzer interface {
-	// Run, episode number, experiment, trace
+	// Run, total timesteps, experiment, trace
 	Analyze(int, int, string, *Trace)
 	// Resulting dataset
 	DataSet() DataSet
@@ -292,6 +332,10 @@ type ComparisonConfig struct {
 	RecordPath   string              // path to store the results
 	ReportConfig *ReportsPrintConfig // configuration for the reports
 	Timeout      time.Duration       // timeout for each episode
+
+	// thresholds to abort the experiment
+	ConsecutiveTimeoutsAbort int
+	ConsecutiveErrorsAbort   int
 
 	// record flags
 	RecordTraces bool
@@ -417,7 +461,7 @@ func (c *Comparison) AddExperiment(e *Experiment) {
 
 // Run the comparison
 func (c *Comparison) Run(ctx context.Context) {
-	c.recordConfig()
+	c.recordConfig() // store configuration details to a file
 
 	for run := 0; run < c.cConfig.Runs; run++ { // number of runs
 		fmt.Printf("Run %d\n", run+1)
@@ -463,6 +507,13 @@ func (c *Comparison) prepareRunConfig(ctx context.Context) *experimentRunConfig 
 		ReportSavePath:      c.cConfig.RecordPath,
 		Timeout:             c.cConfig.Timeout,
 		Context:             ctx,
+	}
+
+	if rCfg.ConsecutiveErrorsAbort == 0 {
+		rCfg.ConsecutiveErrorsAbort = 10
+	}
+	if rCfg.ConsecutiveTimeoutsAbort == 0 {
+		rCfg.ConsecutiveTimeoutsAbort = 10
 	}
 
 	for _, a := range c.analyzers {

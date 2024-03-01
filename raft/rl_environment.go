@@ -180,6 +180,10 @@ func (r RaftState) Actions() []types.Action {
 	return append(result, additional...)
 }
 
+func (r RaftState) Terminal() bool {
+	return false
+}
+
 type RaftAction struct {
 	Type    string
 	Message pb.Message

@@ -54,7 +54,7 @@ func RedisRaftExploration(episodes, horizon int, saveFile string, ctx context.Co
 		ReportConfig: types.RepConfigOff(),
 	})
 
-	c.AddAnalysis("plot", redisraft.NewCoverageAnalyzer(colors...), redisraft.CoverageComparator(saveFile))
+	c.AddAnalysis("plot", redisraft.NewCoverageAnalyzer(horizon, colors...), redisraft.CoverageComparator(saveFile, horizon))
 	c.AddAnalysis("bugs", redisraft.NewBugAnalyzer(saveFile), redisraft.BugComparator())
 
 	c.AddExperiment(types.NewExperiment(

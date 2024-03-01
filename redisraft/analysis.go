@@ -53,25 +53,71 @@ type CoverageAnalyzer struct {
 	colors          []RedisRaftColorFunc
 	uniqueStates    map[string]bool
 	numUniqueStates []int
+	// timesteps based version
+	AnalyzedSteps  int // count of analyzed steps, used to calculate coverage at fixed intervals
+	EpisodeHorizon int // configured episode horizon, used to calculate coverage at fixed intervals
+
+	TracesToAnalyze       []*types.Trace // buffer for traces to analyze
+	TimestepsToAnalyze    int            // length of the buffer
+	NextIndexOfFirstTrace int            // the first unanalyzed step in the first trace of the buffer
 }
 
-func NewCoverageAnalyzer(colors ...RedisRaftColorFunc) *CoverageAnalyzer {
+func NewCoverageAnalyzer(horizon int, colors ...RedisRaftColorFunc) *CoverageAnalyzer {
 	return &CoverageAnalyzer{
 		colors:          colors,
 		uniqueStates:    make(map[string]bool),
 		numUniqueStates: make([]int, 0),
+		AnalyzedSteps:   0,
+		EpisodeHorizon:  horizon,
+
+		TracesToAnalyze:       make([]*types.Trace, 0),
+		TimestepsToAnalyze:    0,
+		NextIndexOfFirstTrace: 0,
 	}
 }
 
-func (ca *CoverageAnalyzer) Analyze(_, run int, s string, trace *types.Trace) {
-	for j := 0; j < trace.Len(); j++ {
-		s, _, _, _ := trace.Get(j)
-		sHash := newRedisPartState(s.(*types.Partition), ca.colors...).Hash()
-		if _, ok := ca.uniqueStates[sHash]; !ok {
-			ca.uniqueStates[sHash] = true
+// Analyze is called by the benchmark to analyze the traces, it updates the Analyzer's internal buffer of traces to analyze appending the new trace.
+// If the total number of timesteps in the traces buffer is than the specified chunk size (horizon, by default), it analyzes <chunk size> timesteps
+// and updates the dataset of unique states at each timestep interval. The analyzer keeps track of the last analyzed step and the next index of the first trace to analyze next.
+//
+// ex. if the horizon is 50, the analyer will analyze traces in chunks of 50 timesteps and will update the dataset of unique states at each 50 timesteps interval.
+func (ca *CoverageAnalyzer) Analyze(run int, currentTimesteps int, s string, trace *types.Trace) {
+	// fmt.Printf("Analyze Start\n")
+	ca.TracesToAnalyze = append(ca.TracesToAnalyze, trace)
+	ca.TimestepsToAnalyze += trace.Len()
+	// fmt.Printf("Trace added, new length: %d, new timesteps: %d\n", len(ca.TracesToAnalyze), ca.TimestepsToAnalyze)
+
+	if ca.TimestepsToAnalyze >= ca.EpisodeHorizon { // analyze a chunk of size horizon
+		// fmt.Printf("Analyzing chunk of size: %d\n", ca.EpisodeHorizon)
+		analyzed := 0                      // count of analyzed steps
+		index := ca.NextIndexOfFirstTrace  // index of the first unanalyzed step in the first trace of the buffer
+		trace := ca.TracesToAnalyze[0]     // the first trace of the buffer
+		for analyzed < ca.EpisodeHorizon { // until completing the chunk
+			for analyzed < ca.EpisodeHorizon && index < trace.Len() { // until the end of trace or completed the chunk
+				// analyze one step
+				s, _, _, _ := trace.Get(index)
+				sHash := newRedisPartState(s.(*types.Partition), ca.colors...).Hash()
+				if _, ok := ca.uniqueStates[sHash]; !ok {
+					ca.uniqueStates[sHash] = true
+				}
+				analyzed++
+				index++
+			}
+			if index == trace.Len() { // trace ended, remove it from buffer and move to the next one
+				// fmt.Printf("Trace ended, analyzed: %d, traces left: %d\n", analyzed, len(ca.TracesToAnalyze))
+				if len(ca.TracesToAnalyze) > 1 {
+					ca.TracesToAnalyze = ca.TracesToAnalyze[1:]
+					trace = ca.TracesToAnalyze[0]
+					index = 0
+				}
+				ca.NextIndexOfFirstTrace = 0
+			} else { // analyzed all the steps of the chunk, stop here
+				ca.NextIndexOfFirstTrace = index // update the index to start from the next time
+			}
 		}
+		ca.TimestepsToAnalyze -= analyzed                                     // update the total number of timesteps in the buffer
+		ca.numUniqueStates = append(ca.numUniqueStates, len(ca.uniqueStates)) // append the number of unique states in the overall list
 	}
-	ca.numUniqueStates = append(ca.numUniqueStates, len(ca.uniqueStates))
 }
 
 func (ca *CoverageAnalyzer) DataSet() types.DataSet {
@@ -81,13 +127,20 @@ func (ca *CoverageAnalyzer) DataSet() types.DataSet {
 }
 
 func (ca *CoverageAnalyzer) Reset() {
+	// reset the dataset and unique states map
 	ca.uniqueStates = make(map[string]bool)
 	ca.numUniqueStates = make([]int, 0)
+
+	// reset the buffer of traces to analyze
+	ca.AnalyzedSteps = 0
+	ca.TracesToAnalyze = make([]*types.Trace, 0)
+	ca.TimestepsToAnalyze = 0
+	ca.NextIndexOfFirstTrace = 0
 }
 
 var _ types.Analyzer = (*CoverageAnalyzer)(nil)
 
-func CoverageComparator(plotPath string) types.Comparator {
+func CoverageComparator(plotPath string, episodeHorizon int) types.Comparator {
 	if _, err := os.Stat(plotPath); err != nil {
 		os.Mkdir(plotPath, os.ModePerm)
 	}
@@ -95,7 +148,7 @@ func CoverageComparator(plotPath string) types.Comparator {
 		p := plot.New()
 
 		p.Title.Text = "Comparison"
-		p.X.Label.Text = "Iteration"
+		p.X.Label.Text = "Timesteps"
 		p.Y.Label.Text = "States covered"
 
 		coverageData := make(map[string][]int)
@@ -107,7 +160,7 @@ func CoverageComparator(plotPath string) types.Comparator {
 			points := make(plotter.XYs, len(dataset))
 			for j, v := range dataset {
 				points[j] = plotter.XY{
-					X: float64(j),
+					X: float64(j) * float64(episodeHorizon),
 					Y: float64(v),
 				}
 			}

@@ -54,6 +54,10 @@ func (l *LinkRaftState) Actions() []types.Action {
 	return actions
 }
 
+func (l *LinkRaftState) Terminal() bool {
+	return false
+}
+
 type LinkAction struct {
 	Action string
 	From   uint64
