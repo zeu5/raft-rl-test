@@ -91,7 +91,7 @@ func NewRaftAnalyzer(savePath string, colors ...RaftColorFunc) *RaftAnalyzer {
 	}
 }
 
-func (pc *RaftAnalyzer) Analyze(run, _ int, s string, trace *types.Trace) {
+func (pc *RaftAnalyzer) Analyze(run int, episode int, startingTimestep int, s string, trace *types.Trace) {
 	if pc.curExperiment == "" {
 		pc.curExperiment = s
 	}
@@ -310,7 +310,7 @@ func NewRaftReadableAnalyzer(savePath string) *RaftReadableAnalyzer {
 	}
 }
 
-func (r *RaftReadableAnalyzer) Analyze(run, episode int, name string, trace *types.Trace) {
+func (r *RaftReadableAnalyzer) Analyze(run int, episode int, startingTimestep int, name string, trace *types.Trace) {
 	readTrace := make([]string, 0)
 	for i := 0; i < trace.Len(); i++ {
 		readStep := make([]string, 0)

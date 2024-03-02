@@ -66,7 +66,7 @@ func NewGridCoverageAnalyzer() *GridCoverageAnalyzer {
 	}
 }
 
-func (gca *GridCoverageAnalyzer) Analyze(_, run int, s string, trace *types.Trace) {
+func (gca *GridCoverageAnalyzer) Analyze(run int, episode int, startingTimestep int, s string, trace *types.Trace) {
 	for j := 0; j < trace.Len(); j++ {
 		s, _, _, _ := trace.Get(j)
 		gridPosition := s.(*Position)
@@ -120,7 +120,7 @@ func NewGridAnalyzer() *GridAnalyzer {
 	}
 }
 
-func (ga *GridAnalyzer) Analyze(_, run int, s string, trace *types.Trace) {
+func (ga *GridAnalyzer) Analyze(run int, episode int, startingTimestep int, s string, trace *types.Trace) {
 	for i := 0; i < trace.Len(); i++ {
 		state, action, _, _ := trace.Get(i)
 		stateHash := state.Hash()

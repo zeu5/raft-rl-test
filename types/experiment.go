@@ -105,11 +105,15 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 	executedTimesteps := 0
 	availableTimesteps := rConfig.Episodes * rConfig.Horizon
 
+	// paddings
+	TSPadding := len(strconv.Itoa(availableTimesteps))
+	EPPadding := len(strconv.Itoa(rConfig.Episodes))
+
 	// terminal execution display
-	fmt.Printf("\rExperiment: %s, Timesteps: %d/%d, Valid TS:%d [%5.2f%%] | Tot Eps: %d, Valid Eps: %d [%5.2f%%], TOut: %d, WErr: %d | Horizon: %d, Bound: %d",
-		e.Name, executedTimesteps, availableTimesteps, totalValidTimesteps, (float32(totalValidTimesteps)/float32((executedTimesteps)))*100,
-		totalEpisodes, totalValidEpisodes, float32(totalValidEpisodes)/float32(totalEpisodes)*100, totalTimeout, totalWithError,
-		totalHorizon, totalOutOfSpaceBounds)
+	fmt.Printf("\rExp:%25s, TSteps:%*d/%d, Valid:%*d [%5.1f%%] || Eps:%*d, Valid:%*d [%5.1f%%], TOut:%*d, Err:%*d || Horizon:%*d, Bound:%*d",
+		e.Name, TSPadding, executedTimesteps, availableTimesteps, TSPadding, totalValidTimesteps, (float32(totalValidTimesteps)/float32((executedTimesteps)))*100,
+		EPPadding, totalEpisodes, EPPadding, totalValidEpisodes, float32(totalValidEpisodes)/float32(totalEpisodes)*100, EPPadding, totalTimeout, EPPadding, totalWithError,
+		EPPadding, totalHorizon, EPPadding, totalOutOfSpaceBounds)
 
 	for executedTimesteps < availableTimesteps {
 		select {
@@ -126,8 +130,9 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 		e.runEpisode(eCtx, agent)                             // run the episode
 		episodeTimes = append(episodeTimes, eCtx.RunDuration) // store the episode time for the statistics
 
-		executedTimesteps += eCtx.Timesteps // increment the number of valid timesteps executed
-		totalEpisodes += 1                  // increment the number of episodes executed
+		startingTimesteps := executedTimesteps // store the number of timesteps executed before the episode, used for the analysis
+		executedTimesteps += eCtx.Timesteps    // increment the number of valid timesteps executed
+		totalEpisodes += 1                     // increment the number of episodes executed
 
 		// possible outcomes of the episode
 		// episode timedout
@@ -152,7 +157,7 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 
 		// analyze the trace, even if the episode timed out or ended with an error
 		for _, a := range rConfig.Analyzers {
-			a.Analyze(rConfig.CurrentRun, executedTimesteps, e.Name, eCtx.Trace)
+			a.Analyze(rConfig.CurrentRun, totalEpisodes, startingTimesteps, e.Name, eCtx.Trace)
 		}
 
 		// if no error or timeout, increment the number of valid episodes executed
@@ -196,10 +201,10 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 		}
 
 		// terminal execution display
-		fmt.Printf("\rExperiment: %s, Timesteps: %d/%d, Valid TS:%d [%6.2f%%] | Tot Eps: %d, Valid Eps: %d [%6.2f%%], TOut: %d, WErr: %d | Horizon: %d, Bound: %d",
-			e.Name, executedTimesteps, availableTimesteps, totalValidTimesteps, (float32(totalValidTimesteps)/float32((executedTimesteps)))*100,
-			totalEpisodes, totalValidEpisodes, float32(totalValidEpisodes)/float32(totalEpisodes)*100, totalTimeout, totalWithError,
-			totalHorizon, totalOutOfSpaceBounds)
+		fmt.Printf("\rExp:%25s, TSteps:%*d/%d, Valid:%*d [%5.1f%%] || Eps:%*d, Valid:%*d [%5.1f%%], TOut:%*d, Err:%*d || Horizon:%*d, Bound:%*d",
+			e.Name, TSPadding, executedTimesteps, availableTimesteps, TSPadding, totalValidTimesteps, (float32(totalValidTimesteps)/float32((executedTimesteps)))*100,
+			EPPadding, totalEpisodes, EPPadding, totalValidEpisodes, float32(totalValidEpisodes)/float32(totalEpisodes)*100, EPPadding, totalTimeout, EPPadding, totalWithError,
+			EPPadding, totalHorizon, EPPadding, totalOutOfSpaceBounds)
 	}
 
 	select {
@@ -308,7 +313,7 @@ type DataSet interface{}
 // Analyzer compresses the information in the traces to a DataSet
 type Analyzer interface {
 	// Run, total timesteps, experiment, trace
-	Analyze(int, int, string, *Trace)
+	Analyze(int, int, int, string, *Trace)
 	// Resulting dataset
 	DataSet() DataSet
 	// Reset the analyzer

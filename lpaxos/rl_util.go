@@ -105,7 +105,7 @@ func NewLPaxosAnalyzer(savePath string) *LPaxosAnalyzer {
 	}
 }
 
-func (a *LPaxosAnalyzer) Analyze(run, episode int, name string, trace *types.Trace) {
+func (a *LPaxosAnalyzer) Analyze(run int, episode int, startingTimestep int, name string, trace *types.Trace) {
 	if a.CurExperiment == "" {
 		a.CurExperiment = name
 		a.states = make(map[string]bool)
@@ -206,7 +206,7 @@ func NewRewardStatesVisitedAnalyzer(names []string, rewardFuncs []types.RewardFu
 	}
 }
 
-func (ra *RewardStatesVisitedAnalyzer) Analyze(run, episode int, name string, trace *types.Trace) {
+func (ra *RewardStatesVisitedAnalyzer) Analyze(run int, episode int, startingTimestep int, name string, trace *types.Trace) {
 	if ra.experiment == "" {
 		ra.experiment = name
 	}

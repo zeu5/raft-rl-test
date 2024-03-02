@@ -65,7 +65,7 @@ func ModifiedLog() func(*types.Trace) (bool, int) {
 						}
 					}
 
-					replicasLogs[replica_id] = copyLog(curLog) // update previous state log with the current one for next iteration
+					replicasLogs[replica_id] = copyLog(commitLog) // update previous state log with the current one for next iteration
 				}
 			}
 		}

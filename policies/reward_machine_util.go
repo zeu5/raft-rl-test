@@ -11,10 +11,18 @@ import (
 )
 
 type RewardMachineDataset struct {
-	RMStateVisits                  map[string]int
-	FinalPredicateStates           map[string]bool
-	TracesAfterFirstReached        int
-	FirstIterationToFinalPredicate int
+	// counters for the number of times each state is visited
+	RMStateEpisodes  map[string]int // number of episodes each state is visited
+	RMStateTimesteps map[string]int // number of timesteps spent in each state
+
+	FinalPredicateStates map[string]bool // final state coverage
+
+	// values of the first time the final state is reached
+	FirstEpisodeToFinalPredicate  int
+	FirstTimestepToFinalPredicate int
+
+	// total counters
+	totalEpisodes int
 }
 
 // Takes in a sequence of predicates to analyze performance over
@@ -30,73 +38,105 @@ func NewRewardMachineAnalyzer(rmp *RewardMachinePolicy) *RewardMachineAnalyzer {
 	return &RewardMachineAnalyzer{
 		rmp: rmp,
 		ds: &RewardMachineDataset{
-			RMStateVisits:                  make(map[string]int),
-			FinalPredicateStates:           make(map[string]bool),
-			TracesAfterFirstReached:        0,
-			FirstIterationToFinalPredicate: -1,
+			RMStateEpisodes:  make(map[string]int),
+			RMStateTimesteps: make(map[string]int),
+
+			FinalPredicateStates: make(map[string]bool),
+
+			FirstEpisodeToFinalPredicate:  -1,
+			FirstTimestepToFinalPredicate: -1,
+
+			totalEpisodes: 0,
 		},
 	}
 }
 
-func (rma *RewardMachineAnalyzer) Analyze(run int, episode int, s string, trace *types.Trace) {
-	rmp := rma.rmp
-	rm := rmp.rm
-	ds := rma.ds
+func (rma *RewardMachineAnalyzer) Analyze(run int, episode int, startingTimestep int, s string, trace *types.Trace) {
+	rmp := rma.rmp // reward machine policy
+	rm := rmp.rm   // reward machine
+	ds := rma.ds   // dataset
 	finalPredicateReached := false
 	traceRMStatesVisited := make(map[string]bool)
 	curRmStatePos := 0
-	startState, _, _, _ := trace.Get(0)
 
 	finalPredicate := rm.GetFinalPredicate()
+	final := false
 
-	for j := len(rm.states) - 1; j >= 0; j-- {
-		rmState := rm.states[j]
-		predicate, ok := rm.predicates[rmState]
-		if ok && predicate(startState) {
-			curRmStatePos = j
-			if rmState == FinalState {
-				finalPredicateReached = true
-			}
-			break
-		}
+	// first step of the trace
+	startState, _, _, _ := trace.Get(0)
+	curRmStatePos, final = CheckRmCurrentState(rm, startState)
+	rmState := rm.states[curRmStatePos]
+	if _, ok := traceRMStatesVisited[rmState]; !ok { // count unique rm states visited in the episode
+		traceRMStatesVisited[rmState] = true
 	}
-	for i := 0; i < trace.Len(); i++ {
-		_, _, nexState, _ := trace.Get(i)
+	if final && !finalPredicateReached {
+		ds.FirstTimestepToFinalPredicate = startingTimestep
+		finalPredicateReached = true
+	}
+
+	for i := 0; i < trace.Len(); i++ { // iterate through the trace, all states except the first one
+		_, _, nextState, _ := trace.Get(i) // at each timestep, take the nextState
+
+		// update the spent timestep count for the current rm state (before updating the rm state)
+		if _, ok := ds.RMStateTimesteps[rmState]; !ok {
+			ds.RMStateTimesteps[rmState] = 0
+		}
+		ds.RMStateTimesteps[rmState] += 1
+
+		// update the rm state
+		curRmStatePos, final = CheckRmCurrentState(rm, nextState)
+		if final && !finalPredicateReached {
+			ds.FirstTimestepToFinalPredicate = startingTimestep + i
+			finalPredicateReached = true
+		}
+
+		// update the visited rm states in the episode (after updating the rm state with the nextState)
 		rmState := rm.states[curRmStatePos]
-		if _, ok := traceRMStatesVisited[rmState]; !ok {
+		if _, ok := traceRMStatesVisited[rmState]; !ok { // count unique rm states visited in the episode
 			traceRMStatesVisited[rmState] = true
 		}
-		for j := len(rm.states) - 1; j >= 0; j-- {
-			rmState := rm.states[j]
-			predicate, ok := rm.predicates[rmState]
-			if ok && predicate(nexState) {
-				if rmState == FinalState {
-					finalPredicateReached = true
-				}
-				curRmStatePos = j
-				break
-			}
-		}
-		if finalPredicateReached && (rmp.oneTime || finalPredicate(nexState)) { // count unique final states explored, either still in predicate or oneTime machine
-			nextStateHash := nexState.Hash()
-			if _, ok := ds.FinalPredicateStates[nextStateHash]; !ok {
+
+		if finalPredicateReached && (rmp.oneTime || finalPredicate(nextState)) { // count unique final states explored, either still in predicate or oneTime machine
+			nextStateHash := nextState.Hash()
+			if _, ok := ds.FinalPredicateStates[nextStateHash]; !ok { // count number of unique state explored in the target space (after reaching final state)
 				ds.FinalPredicateStates[nextStateHash] = true
 			}
 		}
 	}
+	// update counters for the number of episodes each rm state is visited
 	for state := range traceRMStatesVisited {
-		if _, ok := ds.RMStateVisits[state]; !ok {
-			ds.RMStateVisits[state] = 0
+		if _, ok := ds.RMStateEpisodes[state]; !ok {
+			ds.RMStateEpisodes[state] = 0
 		}
-		ds.RMStateVisits[state] += 1
+		ds.RMStateEpisodes[state] += 1
 	}
 
-	if finalPredicateReached {
-		if ds.FirstIterationToFinalPredicate == -1 {
-			ds.FirstIterationToFinalPredicate = episode
-		}
-		ds.TracesAfterFirstReached += 1
+	// eventually store the first episode reaching the final state
+	if ds.FirstEpisodeToFinalPredicate == -1 && finalPredicateReached {
+		ds.FirstEpisodeToFinalPredicate = episode
+		// ds.TracesAfterFirstReached += 1
 	}
+	// update total episode count
+	ds.totalEpisodes += 1
+}
+
+// takes a reward machine and a state and returns the position of the current state of the reward machine and whether that is the final state or not
+func CheckRmCurrentState(rm *RewardMachine, state types.State) (int, bool) {
+	finalPredicateReached := false
+	curRmStatePos := 0
+
+	for j := len(rm.states) - 1; j >= 0; j-- {
+		rmState := rm.states[j]
+		predicate, ok := rm.predicates[rmState]
+		if ok && predicate(state) {
+			if rmState == FinalState {
+				finalPredicateReached = true
+			}
+			curRmStatePos = j
+			break
+		}
+	}
+	return curRmStatePos, finalPredicateReached
 }
 
 func (rma *RewardMachineAnalyzer) DataSet() types.DataSet {
@@ -105,10 +145,15 @@ func (rma *RewardMachineAnalyzer) DataSet() types.DataSet {
 
 func (rma *RewardMachineAnalyzer) Reset() {
 	rma.ds = &RewardMachineDataset{
-		RMStateVisits:                  make(map[string]int),
-		FinalPredicateStates:           make(map[string]bool),
-		TracesAfterFirstReached:        0,
-		FirstIterationToFinalPredicate: -1,
+		RMStateEpisodes:  make(map[string]int),
+		RMStateTimesteps: make(map[string]int),
+
+		FinalPredicateStates: make(map[string]bool),
+
+		FirstEpisodeToFinalPredicate:  -1,
+		FirstTimestepToFinalPredicate: -1,
+
+		totalEpisodes: 0,
 	}
 }
 
@@ -119,18 +164,22 @@ func RewardMachineCoverageComparator(savePath string, hierachyName string) types
 	if _, err := os.Stat(savePath); err != nil {
 		os.Mkdir(savePath, os.ModePerm)
 	}
-	return func(run, episodes int, policies []string, ds []types.DataSet) {
+	return func(run, _ int, policies []string, ds []types.DataSet) {
 		// readable text file
 		printable := ""
 		for i := 0; i < len(ds); i++ {
 			printable = printable + fmt.Sprintf("For run: %d, experiment: %s\n", run, policies[i])
 			rmDS := ds[i].(*RewardMachineDataset)
-			for state, count := range rmDS.RMStateVisits {
-				printable = printable + fmt.Sprintf("\tRM State %s, Visits: %d\n", state, count)
+			episodes := rmDS.totalEpisodes
+			for state, count := range rmDS.RMStateEpisodes {
+				printable = printable + fmt.Sprintf("\tRM State %s, Visits: %d, Timesteps spent: %d\n", state, count, rmDS.RMStateTimesteps[state])
 			}
-			printable = printable + fmt.Sprintf("\tFinal predicate states: %d\n", len(rmDS.FinalPredicateStates))
-			printable = printable + fmt.Sprintf("\tFirst iteration to Final predicate: %d\n", rmDS.FirstIterationToFinalPredicate)
-			repeatAccuracy := float64(rmDS.TracesAfterFirstReached) / float64(episodes-rmDS.FirstIterationToFinalPredicate)
+			printable = printable + fmt.Sprintf("\tFinal predicate unique states: %d\n", len(rmDS.FinalPredicateStates))
+
+			printable = printable + fmt.Sprintf("\tFirst episode to Final predicate: %d\n", rmDS.FirstEpisodeToFinalPredicate)
+			printable = printable + fmt.Sprintf("\tFirst timestep to Final predicate: %d\n", rmDS.FirstTimestepToFinalPredicate)
+
+			repeatAccuracy := float64(rmDS.RMStateEpisodes["Final"]) / float64(episodes-rmDS.FirstEpisodeToFinalPredicate)
 			printable = printable + fmt.Sprintf("\tTraces repeat accuracy after reaching final states: %f\n", repeatAccuracy)
 		}
 		os.WriteFile(path.Join(savePath, hierachyName+"_"+strconv.Itoa(run)+".txt"), []byte(printable), 0644)
@@ -139,11 +188,12 @@ func RewardMachineCoverageComparator(savePath string, hierachyName string) types
 		data := make(map[string]interface{})
 		for i, policyName := range policies {
 			rmDS := ds[i].(*RewardMachineDataset)
+			episodes := rmDS.totalEpisodes
 			d := make(map[string]interface{})
-			d["rmStateVisits"] = rmDS.RMStateVisits
+			d["rmStateVisits"] = rmDS.RMStateEpisodes
 			d["finalPredicateStates"] = len(rmDS.FinalPredicateStates)
-			d["repeatAccuracy"] = float64(rmDS.TracesAfterFirstReached) / float64(episodes-rmDS.FirstIterationToFinalPredicate)
-			d["firstIterationToFinalPredicate"] = rmDS.FirstIterationToFinalPredicate
+			d["repeatAccuracy"] = float64(rmDS.RMStateEpisodes["Final"]) / float64(episodes-rmDS.FirstEpisodeToFinalPredicate)
+			d["firstEpisodeToFinalPredicate"] = rmDS.FirstEpisodeToFinalPredicate
 			data[policyName] = d
 		}
 		bs, err := json.Marshal(data)
@@ -169,7 +219,7 @@ func NewPredicatesAnalyzer(predicates ...types.RewardFuncSingle) *PredicatesAnal
 	}
 }
 
-func (pa *PredicatesAnalyzer) Analyze(run int, episode int, s string, trace *types.Trace) {
+func (pa *PredicatesAnalyzer) Analyze(run int, episode int, startingTimestep int, s string, trace *types.Trace) {
 	for i := 0; i < trace.Len(); i++ {
 		state, _, _, _ := trace.Get(i)
 		for j, p := range pa.predicates {

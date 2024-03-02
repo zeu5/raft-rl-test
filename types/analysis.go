@@ -27,7 +27,7 @@ func NewPureCoverageAnalyzer() *PureCoverageAnalyzer {
 	}
 }
 
-func (pca *PureCoverageAnalyzer) Analyze(_, run int, s string, trace *Trace) {
+func (pca *PureCoverageAnalyzer) Analyze(run int, episode int, startingTimestep int, s string, trace *Trace) {
 	for j := 0; j < trace.Len(); j++ {
 		s, _, _, _ := trace.Get(j)
 		sHash := s.Hash()
@@ -94,7 +94,7 @@ func NewPartitionCoverage() *PartitionCoverage {
 	}
 }
 
-func (pc *PartitionCoverage) Analyze(_, run int, s string, trace *Trace) {
+func (pc *PartitionCoverage) Analyze(run int, episode int, startingTimestep int, s string, trace *Trace) {
 	for j := 0; j < trace.Len(); j++ {
 		s, _, _, _ := trace.Get(j)
 		sHash := partitionHash(s.(*Partition))
@@ -184,7 +184,7 @@ func NewCrashAnalyzer() *CrashAnalyzer {
 	}
 }
 
-func (ca *CrashAnalyzer) Analyze(_, run int, s string, trace *Trace) {
+func (ca *CrashAnalyzer) Analyze(run int, episode int, startingTimestep int, s string, trace *Trace) {
 	crashes := 0
 	for j := 0; j < trace.Len(); j++ {
 		_, a, _, _ := trace.Get(j)

@@ -49,7 +49,7 @@ func NewCoverageAnalyzer(colors ...CometColorFunc) *CoverageAnalyzer {
 	}
 }
 
-func (c *CoverageAnalyzer) Analyze(i, iter int, s string, trace *types.Trace) {
+func (c *CoverageAnalyzer) Analyze(run int, episode int, startingTimestep int, s string, trace *types.Trace) {
 	for step := 0; step < trace.Len(); step++ {
 		s, _, _, _ := trace.Get(step)
 		stateHash := cometColoredStateHash(s, c.colors...)
@@ -140,8 +140,8 @@ func NewRecordLogsAnalyzer(storePath string) *RecordLogsAnalyzer {
 	}
 }
 
-func (r *RecordLogsAnalyzer) Analyze(i, iter int, s string, trace *types.Trace) {
-	filePath := path.Join(r.StorePath, fmt.Sprintf("%s_%d_%d.log", s, i, iter))
+func (r *RecordLogsAnalyzer) Analyze(run int, episode int, startingTimestep int, s string, trace *types.Trace) {
+	filePath := path.Join(r.StorePath, fmt.Sprintf("%s_%d_%d.log", s, run, episode))
 	state, _, _, _ := trace.Last()
 	pState := state.(*types.Partition)
 	recordLogsToFile(pState, filePath)
@@ -219,8 +219,8 @@ func NewRecordStateTraceAnalyzer(storePath string) *RecordStateTraceAnalyzer {
 	}
 }
 
-func (r *RecordStateTraceAnalyzer) Analyze(i, iter int, s string, trace *types.Trace) {
-	filePath := path.Join(r.StorePath, fmt.Sprintf("%s_%d_%d_states.log", s, i, iter))
+func (r *RecordStateTraceAnalyzer) Analyze(run int, episode int, startingTimestep int, s string, trace *types.Trace) {
+	filePath := path.Join(r.StorePath, fmt.Sprintf("%s_%d_%d_states.log", s, run, episode))
 	recordTraceToFile(trace, filePath)
 }
 
@@ -242,7 +242,7 @@ func NewCrashesAnalyzer(storePath string) *CrashesAnalyzer {
 	}
 }
 
-func (r *CrashesAnalyzer) Analyze(i, iter int, s string, trace *types.Trace) {
+func (r *CrashesAnalyzer) Analyze(run int, episode int, startingTimestep int, s string, trace *types.Trace) {
 	haveCrash := false
 	for step := 0; step < trace.Len(); step++ {
 		s, _, _, _ := trace.Get(step)
@@ -258,8 +258,8 @@ func (r *CrashesAnalyzer) Analyze(i, iter int, s string, trace *types.Trace) {
 		}
 	}
 	if haveCrash {
-		stateFilePath := path.Join(r.StorePath, fmt.Sprintf("%s_%d_%d_states.log", s, i, iter))
-		logFilePath := path.Join(r.StorePath, fmt.Sprintf("%s_%d_%d.log", s, i, iter))
+		stateFilePath := path.Join(r.StorePath, fmt.Sprintf("%s_%d_%d_states.log", s, run, episode))
+		logFilePath := path.Join(r.StorePath, fmt.Sprintf("%s_%d_%d.log", s, run, episode))
 
 		s, _, _, _ := trace.Last()
 		pState := s.(*types.Partition)
@@ -289,11 +289,11 @@ func NewBugLogRecorder(storePath string, bugs ...types.BugDesc) *BugLogRecorder 
 	}
 }
 
-func (r *BugLogRecorder) Analyze(i, iter int, s string, trace *types.Trace) {
+func (r *BugLogRecorder) Analyze(run int, episode int, startingTimestep int, s string, trace *types.Trace) {
 	for _, b := range r.Bugs {
 		bugFound, step := b.Check(trace)
 		if bugFound { // swapped order just to debug
-			bugLogPath := path.Join(r.StorePath, strconv.Itoa(i)+"_"+s+"_"+b.Name+"_"+strconv.Itoa(iter)+"_step"+strconv.Itoa(step)+".log")
+			bugLogPath := path.Join(r.StorePath, strconv.Itoa(run)+"_"+s+"_"+b.Name+"_"+strconv.Itoa(episode)+"_step"+strconv.Itoa(step)+".log")
 			s, _, _, _ := trace.Last()
 			pS := s.(*types.Partition)
 			recordLogsToFile(pS, bugLogPath)

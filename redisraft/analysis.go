@@ -81,7 +81,7 @@ func NewCoverageAnalyzer(horizon int, colors ...RedisRaftColorFunc) *CoverageAna
 // and updates the dataset of unique states at each timestep interval. The analyzer keeps track of the last analyzed step and the next index of the first trace to analyze next.
 //
 // ex. if the horizon is 50, the analyer will analyze traces in chunks of 50 timesteps and will update the dataset of unique states at each 50 timesteps interval.
-func (ca *CoverageAnalyzer) Analyze(run int, currentTimesteps int, s string, trace *types.Trace) {
+func (ca *CoverageAnalyzer) Analyze(run int, episode int, startingTimestep int, s string, trace *types.Trace) {
 	// fmt.Printf("Analyze Start\n")
 	ca.TracesToAnalyze = append(ca.TracesToAnalyze, trace)
 	ca.TimestepsToAnalyze += trace.Len()
@@ -197,7 +197,8 @@ func NewBugCrashAnalyzer(savePath string) *BugCrashAnalyzer {
 	}
 }
 
-func (b *BugCrashAnalyzer) Analyze(run int, episode int, s string, trace *types.Trace) {
+func (b *BugCrashAnalyzer) Analyze(run int, episode int, startingTimestep int, s string, trace *types.Trace) {
+	// check the trace if any of the nodes have a bug report in stdout or stderr
 	for i := 0; i < trace.Len(); i++ {
 		state, _, _, _ := trace.Get(i)
 		pState := state.(*types.Partition)
@@ -213,8 +214,9 @@ func (b *BugCrashAnalyzer) Analyze(run int, episode int, s string, trace *types.
 				haveBug = true
 			}
 		}
+		// if yes, store the occurrence and the logs in a file
 		if haveBug {
-			b.occurrences = append(b.occurrences, episode)
+			b.occurrences = append(b.occurrences, startingTimestep+i)
 			logs := ""
 			for nodeID, s := range pState.ReplicaStates {
 				logs += fmt.Sprintf("logs for node: %d\n", nodeID)
@@ -261,7 +263,7 @@ func NewBugAnalyzer(savePath string, bugs ...types.BugDesc) *BugAnalyzer {
 	}
 }
 
-func (ba *BugAnalyzer) Analyze(run int, episode int, s string, trace *types.Trace) {
+func (ba *BugAnalyzer) Analyze(run int, episode int, startingTimestep int, s string, trace *types.Trace) {
 	for _, b := range ba.Bugs {
 		_, ok := ba.occurrences[b.Name]
 		bugFound, step := b.Check(trace)
@@ -269,7 +271,7 @@ func (ba *BugAnalyzer) Analyze(run int, episode int, s string, trace *types.Trac
 			if !ok {
 				ba.occurrences[b.Name] = make([]int, 0)
 			}
-			ba.occurrences[b.Name] = append(ba.occurrences[b.Name], episode)
+			ba.occurrences[b.Name] = append(ba.occurrences[b.Name], startingTimestep+step)
 			filePrefix := fmt.Sprintf("%d_%s_%s_%d_step%d", run, s, b.Name, episode, step)
 			bugPath := path.Join(ba.savePath, filePrefix+"_bug.json")
 			trace.Record(bugPath)

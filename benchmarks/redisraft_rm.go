@@ -430,15 +430,15 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 	})
 
 	c.AddAnalysis("Plot", redisraft.NewCoverageAnalyzer(horizon, colors...), redisraft.CoverageComparator(saveFile, horizon))
-	// c.AddAnalysis("Crashes", redisraft.NewBugCrashAnalyzer(path.Join(saveFile, "crash")), redisraft.BugComparator())
-	// c.AddAnalysis("Bugs", redisraft.NewBugAnalyzer(
-	// 	path.Join(saveFile, "bugs"),
-	// 	types.BugDesc{Name: "ReducedLog", Check: redisraft.ReducedLog()},
-	// 	types.BugDesc{Name: "ModifiedLog", Check: redisraft.ModifiedLog()},
-	// 	types.BugDesc{Name: "InconsistentLogs", Check: redisraft.InconsistentLogs()},
-	// 	// types.BugDesc{Name: "True", Check: redisraft.TruePredicate()},
-	// 	// types.BugDesc{Name: "DifferentTermsEntries", Check: redisraft.EntriesInDifferentTermsDummy()},
-	// ), types.BugComparator(path.Join(saveFile, "bugs")))
+	c.AddAnalysis("Crashes", redisraft.NewBugCrashAnalyzer(path.Join(saveFile, "crash")), redisraft.BugComparator())
+	c.AddAnalysis("Bugs", redisraft.NewBugAnalyzer(
+		path.Join(saveFile, "bugs"),
+		types.BugDesc{Name: "ReducedLog", Check: redisraft.ReducedLog()},
+		types.BugDesc{Name: "ModifiedLog", Check: redisraft.ModifiedLog()},
+		types.BugDesc{Name: "InconsistentLogs", Check: redisraft.InconsistentLogs()},
+		// types.BugDesc{Name: "True", Check: redisraft.TruePredicate()},
+		// types.BugDesc{Name: "DifferentTermsEntries", Check: redisraft.EntriesInDifferentTermsDummy()},
+	), types.BugComparator(path.Join(saveFile, "bugs")))
 
 	machines := getSetOfMachines(machine)
 	pHierarchiesPolicies := make(map[string]*policies.RewardMachinePolicy) // map of PH policies

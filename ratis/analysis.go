@@ -63,7 +63,7 @@ func NewCoverageAnalyzer(colors ...RatisColorFunc) *CoverageAnalyzer {
 	}
 }
 
-func (ca *CoverageAnalyzer) Analyze(_, run int, s string, trace *types.Trace) {
+func (ca *CoverageAnalyzer) Analyze(run int, episode int, startingTimestep int, s string, trace *types.Trace) {
 	for j := 0; j < trace.Len(); j++ {
 		s, _, _, _ := trace.Get(j)
 		ratisState := newRatisPartState(s, ca.colors...)
@@ -178,7 +178,7 @@ func NewLogAnalyzer(savePath string) *LogAnalyzer {
 	return &LogAnalyzer{savePath: savePath}
 }
 
-func (la *LogAnalyzer) Analyze(run int, episode int, s string, trace *types.Trace) {
+func (la *LogAnalyzer) Analyze(run int, episode int, startingTimestep int, s string, trace *types.Trace) {
 	haveBugInTrace := false
 	logs := ""
 

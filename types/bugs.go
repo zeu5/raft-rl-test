@@ -31,7 +31,7 @@ func NewBugAnalyzer(savePath string, bugs ...BugDesc) *BugAnalyzer {
 	}
 }
 
-func (ba *BugAnalyzer) Analyze(run int, episode int, s string, trace *Trace) {
+func (ba *BugAnalyzer) Analyze(run int, episode int, startingTimestep int, s string, trace *Trace) {
 	for _, b := range ba.Bugs {
 		_, ok := ba.occurrences[b.Name]
 		bugFound, step := b.Check(trace)
@@ -39,7 +39,7 @@ func (ba *BugAnalyzer) Analyze(run int, episode int, s string, trace *Trace) {
 			if !ok {
 				ba.occurrences[b.Name] = make([]int, 0)
 			}
-			ba.occurrences[b.Name] = append(ba.occurrences[b.Name], episode)
+			ba.occurrences[b.Name] = append(ba.occurrences[b.Name], startingTimestep+step)
 			bugPath := path.Join(ba.savePath, strconv.Itoa(run)+"_"+s+"_"+b.Name+"_"+strconv.Itoa(episode)+"_step"+strconv.Itoa(step)+"_bug.json")
 			trace.Record(bugPath)
 		}
