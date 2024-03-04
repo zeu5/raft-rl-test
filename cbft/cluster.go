@@ -35,15 +35,18 @@ func (p *ProposerInfo) Copy() *ProposerInfo {
 }
 
 type CometNodeState struct {
-	Height            int               `json:"-"`
-	Round             int               `json:"-"`
-	Step              string            `json:"-"`
-	HeightRoundStep   string            `json:"height/round/step"`
-	ProposalBlockHash string            `json:"proposal_block_hash"`
-	LockedBlockHash   string            `json:"locked_block_hash"`
-	ValidBlockHash    string            `json:"valid_block_hash"`
-	Votes             []*CometNodeVotes `json:"height_vote_set"`
-	Proposer          *ProposerInfo     `json:"proposer"`
+	Height                  int               `json:"-"`
+	Round                   int               `json:"-"`
+	Step                    string            `json:"-"`
+	HeightRoundStep         string            `json:"height/round/step"`
+	ProposalBlockHash       string            `json:"proposal_block_hash"`
+	LockedBlockHash         string            `json:"locked_block_hash"`
+	ValidBlockHash          string            `json:"valid_block_hash"`
+	Votes                   []*CometNodeVotes `json:"height_vote_set"`
+	Proposer                *ProposerInfo     `json:"proposer"`
+	UnconfirmedTransactions int               `json:"unconfirmed_txs"`
+
+	// TODO: include commit hash of each block up-to height
 
 	LogStdout string `json:"-"`
 	LogStderr string `json:"-"`
@@ -217,6 +220,53 @@ func (r *CometNode) GetLogs() (string, string) {
 	return r.stdout.String(), r.stderr.String()
 }
 
+type rawUnconfirmedTxs struct {
+	Result *rawUnconfirmedTxsResult `json:"result"`
+}
+
+type rawUnconfirmedTxsResult struct {
+	NumUnconfirmedTxs string `json:"n_txs"`
+	Total             string `json:"total"`
+}
+
+func (r *CometNode) fetchUnconfirmedTxs(outCh chan int) {
+	client := &http.Client{
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout:   5 * time.Second,
+				KeepAlive: 5 * time.Second,
+			}).DialContext,
+			TLSHandshakeTimeout:   5 * time.Second,
+			ResponseHeaderTimeout: 5 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			DisableKeepAlives:     true,
+		},
+	}
+
+	resp, err := client.Get("http://" + r.config.RPCAddress + "/num_unconfirmed_txs")
+	if err != nil {
+		outCh <- 0
+		return
+	}
+	defer resp.Body.Close()
+
+	stateBS, err := io.ReadAll(resp.Body)
+	if err != nil {
+		outCh <- 0
+		return
+	}
+
+	unconfirmed := &rawUnconfirmedTxs{}
+	err = json.Unmarshal(stateBS, &unconfirmed)
+	if err != nil {
+		outCh <- 0
+		return
+	}
+
+	numUnconfirmed, _ := strconv.Atoi(unconfirmed.Result.NumUnconfirmedTxs)
+	outCh <- numUnconfirmed
+}
+
 func (r *CometNode) Info() (*CometNodeState, error) {
 	// Todo: figure out how to get the node state
 	client := &http.Client{
@@ -231,6 +281,9 @@ func (r *CometNode) Info() (*CometNodeState, error) {
 			DisableKeepAlives:     true,
 		},
 	}
+
+	// unconfirmedTxs := make(chan int, 1)
+	// go r.fetchUnconfirmedTxs(unconfirmedTxs)
 
 	resp, err := client.Get("http://" + r.config.RPCAddress + "/consensus_state")
 	if err != nil {
@@ -250,6 +303,7 @@ func (r *CometNode) Info() (*CometNodeState, error) {
 	}
 
 	newState := stateRaw.Result.RoundState.Copy()
+	// newState.UnconfirmedTransactions = <-unconfirmedTxs
 	hrs := strings.Split(newState.HeightRoundStep, "/")
 	if len(hrs) == 3 {
 		newState.Height, _ = strconv.Atoi(hrs[0])
