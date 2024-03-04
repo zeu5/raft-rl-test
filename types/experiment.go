@@ -354,6 +354,8 @@ type ComparisonConfig struct {
 	// last traces configuration
 	PrintLastTraces     int
 	PrintLastTracesFunc func(*Trace) string
+
+	EnvCtor func() PartitionedSystemEnvironment
 }
 
 // record the configuration of the comparison

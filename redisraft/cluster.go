@@ -354,6 +354,41 @@ func (r *RedisNode) Info() (*RedisNodeState, error) {
 	return pInfo, nil
 }
 
+type ClusterBaseConfig struct {
+	NumNodes              int    // number of nodes in the cluster
+	RaftModulePath        string // ???
+	RedisServerBinaryPath string // ???
+
+	BasePort            int
+	BaseInterceptPort   int
+	ID                  int
+	InterceptListenPort int
+
+	LogLevel        string
+	RequestTimeout  int // heartbeat timeout in milliseconds
+	ElectionTimeout int // new election timeout in milliseconds
+	NumRequests     int // number of client requests available
+	TickLength      int // length of a tick in milliseconds
+}
+
+func (c *ClusterBaseConfig) Instantiate(parallelIndex int) *ClusterConfig {
+	return &ClusterConfig{
+		NumNodes:              c.NumNodes,
+		RaftModulePath:        c.RaftModulePath,
+		RedisServerBinaryPath: c.RedisServerBinaryPath,
+		BasePort:              c.BasePort,
+		BaseInterceptPort:     c.BaseInterceptPort,
+		ID:                    c.ID,
+		InterceptListenAddr:   fmt.Sprintf("localhost:%d", c.InterceptListenPort+parallelIndex),
+		WorkingDir:            fmt.Sprintf("/tmp/redisraft_%d_%d", c.ID, parallelIndex),
+		LogLevel:              c.LogLevel,
+		RequestTimeout:        c.RequestTimeout,
+		ElectionTimeout:       c.ElectionTimeout,
+		NumRequests:           c.NumRequests,
+		TickLength:            c.TickLength,
+	}
+}
+
 type ClusterConfig struct {
 	NumNodes              int    // number of nodes in the cluster
 	RaftModulePath        string // ???

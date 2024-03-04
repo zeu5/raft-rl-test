@@ -358,6 +358,8 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 	// env.SetPrintStats(true) // to print the episode stats
 	defer env.Cleanup()
 
+	envF := redisraft.NewRedisRaftEnv
+
 	// abstraction for both plot and RL
 	availableColors := make(map[string]redisraft.RedisRaftColorFunc)
 	availableColors["state"] = redisraft.ColorState()   // replica internal state

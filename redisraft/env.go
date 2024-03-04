@@ -97,6 +97,13 @@ type RedisRaftEnv struct {
 
 var _ types.PartitionedSystemEnvironment = &RedisRaftEnv{}
 
+// RedisRaftEnvConstructor returns a constructor for the RedisRaftEnv
+func RedisRaftEnvConstructor(savePath ...string) func(ctx context.Context, clusterConfig *ClusterConfig) types.PartitionedSystemEnvironment {
+	return func(ctx context.Context, clusterConfig *ClusterConfig) types.PartitionedSystemEnvironment {
+		return NewRedisRaftEnv(ctx, clusterConfig, savePath...)
+	}
+}
+
 // For a given config, should only be instantiated once since it spins up a sever and binds the addr:port
 func NewRedisRaftEnv(ctx context.Context, clusterConfig *ClusterConfig, savePath ...string) *RedisRaftEnv {
 	e := &RedisRaftEnv{
