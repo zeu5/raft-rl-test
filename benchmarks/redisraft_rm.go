@@ -339,6 +339,7 @@ func getRedisPredicateHeirarchy(name string) (*policies.RewardMachine, bool, boo
 }
 
 func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx context.Context) {
+
 	clusterConfig := redisraft.ClusterConfig{
 		NumNodes:            3,
 		BasePort:            5000,
@@ -428,6 +429,10 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		// report config
 		ReportConfig: reportConfig,
 	})
+	// after this NewComparison call, the folder is not wiped anymore
+
+	// if flags are on, start profiling
+	startProfiling()
 
 	c.AddAnalysis("Plot", redisraft.NewCoverageAnalyzer(horizon, colors...), redisraft.CoverageComparator(saveFile, horizon))
 	c.AddAnalysis("Crashes", redisraft.NewBugCrashAnalyzer(path.Join(saveFile, "crash")), redisraft.BugComparator())

@@ -11,7 +11,9 @@ import (
 func main() {
 	// rootCommand defines a command line argument parser (some arguments and a subcommand to run)
 	rootCommand := benchmarks.GetRootCommand()
+
 	rootCommand.AddCommand(explorer.ExploreCommand())
+
 	if err := rootCommand.Execute(); err != nil {
 		fmt.Println(err)
 	}

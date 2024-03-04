@@ -11,6 +11,9 @@ var (
 	horizon  int
 	saveFile string
 	runs     int
+
+	cpuprofile string
+	memprofile string
 )
 
 func GetRootCommand() *cobra.Command {
@@ -19,6 +22,11 @@ func GetRootCommand() *cobra.Command {
 	rootCommand.PersistentFlags().IntVar(&horizon, "horizon", 100, "Horizon of each episode")
 	rootCommand.PersistentFlags().StringVarP(&saveFile, "save", "s", "results", "Save the result data in the specified folder")
 	rootCommand.PersistentFlags().IntVar(&runs, "runs", 1, "Number of experiment runs")
+
+	// profiling
+	rootCommand.PersistentFlags().StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to file")
+	rootCommand.PersistentFlags().StringVar(&memprofile, "memprofile", "", "write memory profile to this file")
+
 	// adding the subcommands here
 	rootCommand.AddCommand(RedisTestCommand())
 	rootCommand.AddCommand(RedisRaftCommand())

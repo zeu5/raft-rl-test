@@ -415,7 +415,8 @@ type Comparison struct {
 func NewComparison(config *ComparisonConfig) *Comparison {
 
 	if _, ok := os.Stat(config.RecordPath); ok == nil {
-		os.RemoveAll(config.RecordPath)
+		// os.RemoveAll(config.RecordPath)
+		RemoveContents(config.RecordPath)
 	}
 	os.MkdirAll(config.RecordPath, 0777)
 
@@ -538,4 +539,26 @@ func (c *Comparison) prepareRunConfig(ctx context.Context, longestExpNameLen int
 		rCfg.Analyzers = append(rCfg.Analyzers, a)
 	}
 	return rCfg
+}
+
+// Delete everything in the directory except the outtext.txt file
+func RemoveContents(dir string) error {
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	names, err := d.Readdirnames(-1)
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		if name != "outtext.txt" {
+			err = os.RemoveAll(path.Join(dir, name))
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
