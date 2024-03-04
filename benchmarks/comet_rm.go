@@ -19,7 +19,17 @@ func getCometPredicateHeirarchy(name string) (*policies.RewardMachine, bool, boo
 	switch name {
 	case "AnyRound1AfterCommit":
 		machine = policies.NewRewardMachine(cbft.AllAtLeastRound(1).And(cbft.AtLeastHeight(2)))
-		machine.AddState(cbft.AnyAtHeight(2), "Height2")
+		machine.AddState(cbft.AnyAtHeight(2), "AnyHeight2")
+		machine.AddState(cbft.AllAtLeastHeight(2), "AllHeight2")
+		machine.AddState(cbft.AnyReachedRound(1).And(cbft.AllAtLeastHeight(2)), "AllHeight2AnyRound1")
+	case "MaxRoundDifference":
+		machine = policies.NewRewardMachine(cbft.MinRoundDifference(2))
+		machine.AddState(cbft.MinRoundDifference(1), "1RoundDiff")
+	case "AnyRound2":
+		machine = policies.NewRewardMachine(cbft.AnyReachedRound(2))
+		// machine.AddState(cbft.MajorityNoProposal(), "NoProposal")
+		machine.AddState(cbft.AnyReachedRound(1), "Round1")
+		machine.AddState(cbft.AnyReachedRound(1).And(cbft.MajorityNoProposal()), "Round1MajNoProposal")
 	case "AnyRound1":
 		machine = policies.NewRewardMachine(cbft.AnyReachedRound(1))
 	case "AllRound1":
@@ -55,27 +65,59 @@ func getCometPredicateHeirarchy(name string) (*policies.RewardMachine, bool, boo
 		machine.AddState(cbft.AnyReachedStep("RoundStepPrecommit"), "Precommit")
 	case "Commit1WithRemainingRequests":
 		machine = policies.NewRewardMachine(cbft.AtLeastHeight(2).And(types.RemainingRequests(15))) // .And(types.Rema))
+	case "Round1Precommit":
+		machine = policies.NewRewardMachine(cbft.NodeHasProperty(cbft.NodeAtLeastRound(1).And(cbft.NodeHasLocked().Not())))
+	case "DifferentHeights":
+		machine = policies.NewRewardMachine(
+			cbft.NodeHasProperty(cbft.NodeAtMostHeight(1)).
+				And(cbft.NodeHasProperty(cbft.NodeAtLeastHeight(2))),
+		)
+		// TODO: needs a lot of guidance
 	}
 	return machine, onetime, machine != nil
 }
 
-func allPredicatesNames() []string {
-	return []string{
-		"AnyRound1AfterCommit",
-		"AnyRound1",
-		"AllRound1",
-		"AnyLocked",
-		"AllLocked",
-		"DifferentLocked",
-		"SameLocked",
-		"Round1NoLocked",
-		"Round1Locked",
-		"Commit1",
-		"StepPreCommit",
-		"StepPrevote",
-		"KeepQuorumCommit",
-		"CommitWithPreCommit",
-		"Commit1WithRemainingRequests",
+func getPredicateNames(machine string) []string {
+	switch machine {
+	case "all":
+		return []string{
+			"AnyRound1AfterCommit",
+			"AnyRound1",
+			"AllRound1",
+			"AnyLocked",
+			"AllLocked",
+			"DifferentLocked",
+			"SameLocked",
+			"Round1NoLocked",
+			"Round1Locked",
+			"Commit1",
+			"StepPreCommit",
+			"StepPrevote",
+			"KeepQuorumCommit",
+			"CommitWithPreCommit",
+			"Commit1WithRemainingRequests",
+		}
+	case "easy-set":
+		return []string{
+			"AnyRound1",
+			"AnyLocked",
+			"Commit1",
+			"Commit1WithRemainingRequests",
+			"CommitWithPreCommit",
+		}
+	case "medium-set":
+		return []string{
+			"AnyRound1AfterCommit",
+			"AllLocked",
+			"Round1Locked",
+			"AnyRound2",
+		}
+	case "hard-set":
+		return []string{
+			"MaxRoundDifference",
+		}
+	default:
+		return []string{machine}
 	}
 }
 
@@ -99,7 +141,7 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 		MaxMessagesPerTick:     100,
 		StaySameStateUpto:      2,
 		NumReplicas:            4,
-		WithCrashes:            false,
+		WithCrashes:            true,
 		CrashLimit:             10,
 		MaxInactive:            2,
 		WithByzantine:          false,
@@ -127,39 +169,23 @@ func CometRM(machine string, episodes, horizon int, saveFile string, ctx context
 	// Record the stats (time values) to the file
 	c.AddAnalysis("crashes", cbft.NewCrashesAnalyzer(saveFile), types.NoopComparator())
 
-	// bugs := []types.BugDesc{
-	// 	// {Name: "Round1", Check: cbft.ReachedRound1()},
-	// 	{Name: "DifferentProposers", Check: cbft.DifferentProposers()},
-	// }
-	// c.AddAnalysis("bugs", types.NewBugAnalyzer(saveFile, bugs...), types.BugComparator(saveFile))
-	// c.AddAnalysis("bugs_logs", cbft.NewBugLogRecorder(saveFile, bugs...), types.NoopComparator())
+	bugs := []types.BugDesc{
+		// {Name: "Round1", Check: cbft.ReachedRound1()},
+		{Name: "DifferentProposers", Check: cbft.DifferentProposers()},
+	}
+	c.AddAnalysis("bugs", types.NewBugAnalyzer(saveFile, bugs...), types.BugComparator(saveFile))
+	c.AddAnalysis("bugs_logs", cbft.NewBugLogRecorder(saveFile, bugs...), types.NoopComparator())
 	// c.AddAnalysis("logs", cbft.RecordLogsAnalyzer(saveFile), types.NoopComparator())
 	// c.AddAnalysis("states", cbft.RecordStateTraceAnalyzer(saveFile), types.NoopComparator())
 
-	if machine == "all" {
-		for _, heirarchyName := range allPredicatesNames() {
-			machine, onetime, ok := getCometPredicateHeirarchy(heirarchyName)
-			if !ok {
-				continue
-			}
-			policy := policies.NewRewardMachinePolicy(machine, onetime)
-			c.AddExperiment(types.NewExperiment(heirarchyName, policy, types.NewPartitionEnv(partitionEnvConfig)))
-			c.AddAnalysis(heirarchyName, policies.NewRewardMachineAnalyzer(policy), policies.RewardMachineCoverageComparator(saveFile, heirarchyName))
-		}
-	} else {
-		rm, onetime, ok := getCometPredicateHeirarchy(machine)
+	for _, heirarchyName := range getPredicateNames(machine) {
+		rMachine, onetime, ok := getCometPredicateHeirarchy(heirarchyName)
 		if !ok {
-			env.Cleanup()
-			return
+			continue
 		}
-		RMPolicy := policies.NewRewardMachinePolicy(rm, onetime)
-
-		c.AddAnalysis("rm", policies.NewRewardMachineAnalyzer(RMPolicy), policies.RewardMachineCoverageComparator(saveFile, machine))
-		c.AddExperiment(types.NewExperiment(
-			"RM",
-			RMPolicy,
-			types.NewPartitionEnv(partitionEnvConfig),
-		))
+		policy := policies.NewRewardMachinePolicy(rMachine, onetime)
+		c.AddExperiment(types.NewExperiment(heirarchyName, policy, types.NewPartitionEnv(partitionEnvConfig)))
+		c.AddAnalysis(heirarchyName, policies.NewRewardMachineAnalyzer(policy), policies.RewardMachineCoverageComparator(saveFile, heirarchyName))
 	}
 
 	c.AddExperiment(types.NewExperiment(
