@@ -38,6 +38,9 @@ type experimentRunConfig struct {
 	// reports configuration
 	ReportsPrintConfig *ReportsPrintConfig
 	ReportSavePath     string
+
+	//misc
+	LongestExpNameLen int
 }
 
 // Experiment encapsulates the different parameters to configure an agent and analyze the traces
@@ -108,10 +111,11 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 	// paddings
 	TSPadding := len(strconv.Itoa(availableTimesteps))
 	EPPadding := len(strconv.Itoa(rConfig.Episodes))
+	NamePadding := rConfig.LongestExpNameLen
 
 	// terminal execution display
-	fmt.Printf("\rExp:%25s, TSteps:%*d/%d, Valid:%*d [%5.1f%%] || Eps:%*d, Valid:%*d [%5.1f%%], TOut:%*d, Err:%*d || Horizon:%*d, Bound:%*d",
-		e.Name, TSPadding, executedTimesteps, availableTimesteps, TSPadding, totalValidTimesteps, (float32(totalValidTimesteps)/float32((executedTimesteps)))*100,
+	fmt.Printf("\rExp:%*s, TSteps:%*d/%d, Valid:%*d [%5.1f%%] || Eps:%*d, Valid:%*d [%5.1f%%], TOut:%*d, Err:%*d || Horizon:%*d, Bound:%*d",
+		NamePadding, e.Name, TSPadding, executedTimesteps, availableTimesteps, TSPadding, totalValidTimesteps, (float32(totalValidTimesteps)/float32((executedTimesteps)))*100,
 		EPPadding, totalEpisodes, EPPadding, totalValidEpisodes, float32(totalValidEpisodes)/float32(totalEpisodes)*100, EPPadding, totalTimeout, EPPadding, totalWithError,
 		EPPadding, totalHorizon, EPPadding, totalOutOfSpaceBounds)
 
@@ -201,8 +205,8 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 		}
 
 		// terminal execution display
-		fmt.Printf("\rExp:%25s, TSteps:%*d/%d, Valid:%*d [%5.1f%%] || Eps:%*d, Valid:%*d [%5.1f%%], TOut:%*d, Err:%*d || Horizon:%*d, Bound:%*d",
-			e.Name, TSPadding, executedTimesteps, availableTimesteps, TSPadding, totalValidTimesteps, (float32(totalValidTimesteps)/float32((executedTimesteps)))*100,
+		fmt.Printf("\rExp:%*s, TSteps:%*d/%d, Valid:%*d [%5.1f%%] || Eps:%*d, Valid:%*d [%5.1f%%], TOut:%*d, Err:%*d || Horizon:%*d, Bound:%*d",
+			NamePadding, e.Name, TSPadding, executedTimesteps, availableTimesteps, TSPadding, totalValidTimesteps, (float32(totalValidTimesteps)/float32((executedTimesteps)))*100,
 			EPPadding, totalEpisodes, EPPadding, totalValidEpisodes, float32(totalValidEpisodes)/float32(totalEpisodes)*100, EPPadding, totalTimeout, EPPadding, totalWithError,
 			EPPadding, totalHorizon, EPPadding, totalOutOfSpaceBounds)
 	}
@@ -468,6 +472,13 @@ func (c *Comparison) AddExperiment(e *Experiment) {
 func (c *Comparison) Run(ctx context.Context) {
 	c.recordConfig() // store configuration details to a file
 
+	longestNameLen := 0
+	for _, e := range c.Experiments {
+		if len(e.Name) > longestNameLen {
+			longestNameLen = len(e.Name)
+		}
+	}
+
 	for run := 0; run < c.cConfig.Runs; run++ { // number of runs
 		fmt.Printf("Run %d\n", run+1)
 		datasets := make(map[string][]DataSet) // array with initial capacity - arrayList
@@ -483,7 +494,7 @@ func (c *Comparison) Run(ctx context.Context) {
 				return
 			default:
 			}
-			e.Run(c.prepareRunConfig(ctx)) // running the algorithm, stores the results
+			e.Run(c.prepareRunConfig(ctx, longestNameLen)) // running the algorithm, stores the results
 			for name, a := range c.analyzers {
 				datasets[name][i] = a.DataSet() // call the analyzer on the experiment results
 				a.Reset()                       // reset the analyzer
@@ -498,7 +509,7 @@ func (c *Comparison) Run(ctx context.Context) {
 }
 
 // prepare the run configuration for the experiment
-func (c *Comparison) prepareRunConfig(ctx context.Context) *experimentRunConfig {
+func (c *Comparison) prepareRunConfig(ctx context.Context, longestExpNameLen int) *experimentRunConfig {
 	rCfg := &experimentRunConfig{
 		Episodes:            c.cConfig.Episodes,
 		Horizon:             c.cConfig.Horizon,
@@ -512,6 +523,8 @@ func (c *Comparison) prepareRunConfig(ctx context.Context) *experimentRunConfig 
 		ReportSavePath:      c.cConfig.RecordPath,
 		Timeout:             c.cConfig.Timeout,
 		Context:             ctx,
+
+		LongestExpNameLen: longestExpNameLen,
 	}
 
 	if rCfg.ConsecutiveErrorsAbort == 0 {

@@ -91,7 +91,7 @@ func (rma *RewardMachineAnalyzer) Analyze(run int, episode int, startingTimestep
 		}
 
 		// update the visited rm states in the episode (after updating the rm state with the nextState)
-		rmState := rm.states[curRmStatePos]
+		rmState = rm.states[curRmStatePos]
 		if _, ok := traceRMStatesVisited[rmState]; !ok { // count unique rm states visited in the episode
 			traceRMStatesVisited[rmState] = true
 		}
