@@ -203,26 +203,51 @@ func (r *RedisNode) Start() error {
 
 // cleanup the working directory of the RedisNode, ignores the NFS files that cannot be removed
 func (r *RedisNode) Cleanup() error {
-	// return os.RemoveAll(r.config.WorkingDir)
+	// err := os.RemoveAll(r.config.WorkingDir)
+	// if err != nil {
+	// 	if strings.Contains(err.Error(), ".nfs") {
+	// 		return nil
+	// 	}
+	// 	return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Cleanup (redisraft:cluster.go:RedisNode:Cleanup:1): Error while removing %s \n%s", r.ID, r.config.WorkingDir, err))
+	// }
+	// return nil
 
-	d, err := os.Open(r.config.WorkingDir)
+	entries, err := os.ReadDir(r.config.WorkingDir)
 	if err != nil {
-		return err
+		return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Cleanup (redisraft:cluster.go:RedisNode:Cleanup:1): Error while reading %s \n%s", r.ID, r.config.WorkingDir, err))
 	}
-	defer d.Close()
-	names, err := d.Readdirnames(-1)
-	if err != nil {
-		return err
-	}
-	for _, name := range names {
-		if !(strings.Contains(name, ".nfs")) {
-			err = os.RemoveAll(path.Join(r.config.WorkingDir, name))
-			if err != nil {
-				return err
-			}
+	for _, entry := range entries {
+		if strings.Contains(entry.Name(), ".nfs") {
+			continue
+		}
+		err = os.RemoveAll(path.Join(r.config.WorkingDir, entry.Name()))
+		if err != nil {
+			return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Cleanup (redisraft:cluster.go:RedisNode:Cleanup:2): Error while removing %s \n%s", r.ID, entry.Name(), err))
 		}
 	}
 	return nil
+
+	// d, err := os.Open(r.config.WorkingDir)
+	// if err != nil {
+	// 	// return err
+	// 	return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Cleanup (redisraft:cluster.go:RedisNode:Cleanup:1): Error while opening %s \n%s", r.ID, r.config.WorkingDir, err))
+	// }
+	// defer d.Close()
+	// names, err := d.Readdirnames(-1)
+	// if err != nil {
+	// 	// return err
+	// 	return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Cleanup (redisraft:cluster.go:RedisNode:Cleanup:2): Error while reading \n%s", r.ID, err))
+	// }
+	// for _, name := range names {
+	// 	if !(strings.Contains(name, ".nfs")) {
+	// 		err = os.RemoveAll(path.Join(r.config.WorkingDir, name))
+	// 		if err != nil {
+	// 			return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Cleanup (redisraft:cluster.go:RedisNode:Cleanup:3): Error while removing %s \n%s", r.ID, name, err))
+	// 			// return err
+	// 		}
+	// 	}
+	// }
+	// return nil
 }
 
 func (r *RedisNode) Stop() error {
