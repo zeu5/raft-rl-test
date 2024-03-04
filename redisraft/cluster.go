@@ -201,8 +201,28 @@ func (r *RedisNode) Start() error {
 	return r.process.Start()
 }
 
+// cleanup the working directory of the RedisNode, ignores the NFS files that cannot be removed
 func (r *RedisNode) Cleanup() error {
-	return os.RemoveAll(r.config.WorkingDir)
+	// return os.RemoveAll(r.config.WorkingDir)
+
+	d, err := os.Open(r.config.WorkingDir)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	names, err := d.Readdirnames(-1)
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		if !(strings.Contains(name, ".nfs")) {
+			err = os.RemoveAll(path.Join(r.config.WorkingDir, name))
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (r *RedisNode) Stop() error {
