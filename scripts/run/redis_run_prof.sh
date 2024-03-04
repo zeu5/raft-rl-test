@@ -9,6 +9,9 @@
 #   4 machine name - ex. p19
 #   5 experiment number - ex. 02
 
+parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
+cd "$parent_path"
+
 rm -rf /RSE/RLDS/work/aborgare/data/results_redis_${4}_${5}
 mkdir -m 777 /RSE/RLDS/work/aborgare/data/results_redis_${4}_${5}
 # mkdir ./results_redis_${4}_${5}
