@@ -202,7 +202,20 @@ func (r *RedisNode) Start() error {
 }
 
 func (r *RedisNode) Cleanup() error {
-	return os.RemoveAll(r.config.WorkingDir)
+	entries, err := os.ReadDir(r.config.WorkingDir)
+	if err != nil {
+		return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Cleanup (redisraft:cluster.go:RedisNode:Cleanup:1): Error while reading %s \n%s", r.ID, r.config.WorkingDir, err))
+	}
+	for _, entry := range entries {
+		if strings.Contains(entry.Name(), ".nfs") {
+			continue
+		}
+		err = os.RemoveAll(path.Join(r.config.WorkingDir, entry.Name()))
+		if err != nil {
+			return fmt.Errorf(fmt.Sprintf("RedisNode[%d].Cleanup (redisraft:cluster.go:RedisNode:Cleanup:2): Error while removing %s \n%s", r.ID, entry.Name(), err))
+		}
+	}
+	return nil
 }
 
 func (r *RedisNode) Stop() error {
@@ -358,6 +371,7 @@ type ClusterBaseConfig struct {
 	NumNodes              int    // number of nodes in the cluster
 	RaftModulePath        string // ???
 	RedisServerBinaryPath string // ???
+	SavePath              string // experiment save path
 
 	BasePort            int
 	BaseInterceptPort   int
@@ -371,16 +385,19 @@ type ClusterBaseConfig struct {
 	TickLength      int // length of a tick in milliseconds
 }
 
-func (c *ClusterBaseConfig) Instantiate(parallelIndex int) *ClusterConfig {
+var _ types.PartitionedSystemEnvironmentBaseConfig = &ClusterBaseConfig{}
+
+func (c *ClusterBaseConfig) Instantiate(parallelIndex int) types.PartitionedSystemEnvironmentConfig {
+	workingDir := path.Join(c.SavePath, fmt.Sprintf("tmp-%d", c.ID+parallelIndex))
 	return &ClusterConfig{
 		NumNodes:              c.NumNodes,
 		RaftModulePath:        c.RaftModulePath,
 		RedisServerBinaryPath: c.RedisServerBinaryPath,
-		BasePort:              c.BasePort,
-		BaseInterceptPort:     c.BaseInterceptPort,
-		ID:                    c.ID,
-		InterceptListenAddr:   fmt.Sprintf("localhost:%d", c.InterceptListenPort+parallelIndex),
-		WorkingDir:            fmt.Sprintf("/tmp/redisraft_%d_%d", c.ID, parallelIndex),
+		BasePort:              c.BasePort + (parallelIndex * 1000),
+		BaseInterceptPort:     c.BaseInterceptPort + (parallelIndex * 1000),
+		ID:                    c.ID + parallelIndex,
+		InterceptListenAddr:   fmt.Sprintf("localhost:%d", c.InterceptListenPort+(parallelIndex*1000)),
+		WorkingDir:            workingDir, // fmt.Sprintf("/tmp/redisraft_%d_%d", c.ID, parallelIndex),
 		LogLevel:              c.LogLevel,
 		RequestTimeout:        c.RequestTimeout,
 		ElectionTimeout:       c.ElectionTimeout,
@@ -388,6 +405,18 @@ func (c *ClusterBaseConfig) Instantiate(parallelIndex int) *ClusterConfig {
 		TickLength:            c.TickLength,
 	}
 }
+
+func (c *ClusterBaseConfig) Printable() string {
+	result := "RedisClusterBaseConfig: \n"
+	result = fmt.Sprintf("%s Replicas: %d\n", result, c.NumNodes)
+	result = fmt.Sprintf("%s ElectionTick: %d ms\n", result, c.ElectionTimeout)
+	result = fmt.Sprintf("%s HeartbeatTick: %d ms\n", result, c.RequestTimeout)
+	result = fmt.Sprintf("%s TickLength: %d ms\n", result, c.TickLength)
+	result = fmt.Sprintf("%s Requests: %d\n", result, c.NumRequests)
+	return result
+}
+
+var _ types.PartitionedSystemEnvironmentConfig = &ClusterConfig{}
 
 type ClusterConfig struct {
 	NumNodes              int    // number of nodes in the cluster

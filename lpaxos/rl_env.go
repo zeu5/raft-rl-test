@@ -145,7 +145,7 @@ type LPaxosEnv struct {
 	curState *LPaxosState
 }
 
-var _ types.Environment = &LPaxosEnv{}
+// var _ types.Environment = &LPaxosEnv{}
 
 func NewLPaxosEnv(c LPaxosEnvConfig) *LPaxosEnv {
 	e := &LPaxosEnv{

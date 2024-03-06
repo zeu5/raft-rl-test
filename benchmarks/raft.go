@@ -39,7 +39,7 @@ func Raft(episodes, horizon int, saveFile string, ctx context.Context) {
 		// report config
 		ReportConfig: types.RepConfigOff(),
 	})
-	c.AddAnalysis("Plot", raft.NewRaftAnalyzer(saveFile), raft.RaftPlotComparator(saveFile))
+	c.AddAnalysis("Plot", raft.RaftAnalyzerCtor(saveFile), raft.RaftPlotComparator(saveFile))
 	c.AddExperiment(types.NewExperiment("RL", types.NewSoftMaxNegPolicy(0.3, 0.7, 1), getRaftEnv(raftConfig, abstracter)))
 	c.AddExperiment(types.NewExperiment("Random", types.NewRandomPolicy(), getRaftEnv(raftConfig, abstracter)))
 	c.AddExperiment(types.NewExperiment("BonusMaxRL", policies.NewBonusPolicyGreedy(0.1, 0.99, 0), getRaftEnv(raftConfig, abstracter)))

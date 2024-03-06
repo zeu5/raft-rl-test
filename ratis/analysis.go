@@ -63,6 +63,12 @@ func NewCoverageAnalyzer(colors ...RatisColorFunc) *CoverageAnalyzer {
 	}
 }
 
+func CoverageAnalyzerCtor(colors ...RatisColorFunc) func() types.Analyzer {
+	return func() types.Analyzer {
+		return NewCoverageAnalyzer(colors...)
+	}
+}
+
 func (ca *CoverageAnalyzer) Analyze(run int, episode int, startingTimestep int, s string, trace *types.Trace) {
 	for j := 0; j < trace.Len(); j++ {
 		s, _, _, _ := trace.Get(j)
@@ -176,6 +182,12 @@ type LogAnalyzer struct {
 
 func NewLogAnalyzer(savePath string) *LogAnalyzer {
 	return &LogAnalyzer{savePath: savePath}
+}
+
+func LogAnalyzerCtor(savePath string) func() types.Analyzer {
+	return func() types.Analyzer {
+		return NewLogAnalyzer(savePath)
+	}
 }
 
 func (la *LogAnalyzer) Analyze(run int, episode int, startingTimestep int, s string, trace *types.Trace) {

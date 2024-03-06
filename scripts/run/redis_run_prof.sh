@@ -18,7 +18,10 @@ mkdir -m 777 /RSE/RLDS/work/aborgare/data/results_redis_${4}_${5}
 
 # exec > >( tee ~/../../local/aborgare/results_redis_${4}_${5}/outtext.txt) 2>&1
 
-go build ./../..
+cd ./../../
+go build .
+
+cd ./scripts/run/
 
 pgrep redis-server
 pgrep raft-rl-test

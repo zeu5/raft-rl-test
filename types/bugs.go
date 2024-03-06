@@ -31,6 +31,12 @@ func NewBugAnalyzer(savePath string, bugs ...BugDesc) *BugAnalyzer {
 	}
 }
 
+func BugAnalyzerCtor(savePath string, bugs ...BugDesc) func() Analyzer {
+	return func() Analyzer {
+		return NewBugAnalyzer(savePath, bugs...)
+	}
+}
+
 func (ba *BugAnalyzer) Analyze(run int, episode int, startingTimestep int, s string, trace *Trace) {
 	for _, b := range ba.Bugs {
 		_, ok := ba.occurrences[b.Name]

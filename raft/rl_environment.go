@@ -251,6 +251,10 @@ type RaftEnvironment struct {
 
 var _ types.Environment = &RaftEnvironment{}
 
+func (r *RaftEnvironment) SetUp(int) {
+	// Do nothing
+}
+
 func NewRaftEnvironment(config RaftEnvironmentConfig) *RaftEnvironment {
 	r := &RaftEnvironment{
 		config:   config,

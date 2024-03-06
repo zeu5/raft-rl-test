@@ -6,6 +6,8 @@ type Environment interface {
 	Reset(*EpisodeContext) (State, error)
 	// Step function with context to cancel it
 	Step(Action, *StepContext) (State, error)
+	// Set the underlying env based on the parallel index
+	SetUp(int)
 }
 
 // State of the system that RL policies observe

@@ -46,7 +46,7 @@ func RaftRM(episodes, horizon int, savePath string, ctx context.Context) {
 	})
 
 	// here you add different traces analysis and comparators -- to process traces into a dataset (analyzer) and output the results (comparator)
-	c.AddAnalysis("Plot", raft.NewRaftAnalyzer(saveFile, colors...), raft.RaftPlotComparator(saveFile))
+	c.AddAnalysis("Plot", raft.RaftAnalyzerCtor(saveFile, colors...), raft.RaftPlotComparator(saveFile))
 
 	// here you add different policies with their parameters
 	c.AddExperiment(types.NewExperiment("RL", policies.NewSoftMaxNegFreqPolicy(0.3, 0.7, 1), getRaftPartEnv(raftConfig, colors)))

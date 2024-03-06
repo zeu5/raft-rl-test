@@ -1,6 +1,7 @@
 package types
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -390,6 +391,8 @@ func copyPartition(p *Partition) *Partition {
 // An environment that encodes ways to partition the replicas
 // Implements the "Environment" interface
 type PartitionEnv struct {
+	ctx context.Context
+
 	NumReplicas   int
 	UnderlyingEnv PartitionedSystemEnvironment
 	painter       Painter
@@ -399,13 +402,26 @@ type PartitionEnv struct {
 	rand          *rand.Rand
 
 	TerminalPredicate func(*Partition) bool
+	UEnvCtor          func(context.Context, PartitionedSystemEnvironmentConfig) PartitionedSystemEnvironment
+	UEnvBaseConfig    PartitionedSystemEnvironmentBaseConfig
+}
+
+// interfaces for the underlying environment configuration
+type PartitionedSystemEnvironmentConfig interface{}     // generic interface for the final config
+type PartitionedSystemEnvironmentBaseConfig interface { // base configuration for the underlying environment
+	// instantiate into a config using the parallel index given during execution
+	Instantiate(int) PartitionedSystemEnvironmentConfig
 }
 
 var _ Environment = &PartitionEnv{}
 
 type PartitionEnvConfig struct {
+	Ctx context.Context
+
 	Painter                Painter
 	Env                    PartitionedSystemEnvironment
+	EnvCtor                func(context.Context, PartitionedSystemEnvironmentConfig) PartitionedSystemEnvironment // function to create the underlying environment
+	EnvBaseConfig          PartitionedSystemEnvironmentBaseConfig                                                 // base configuration for the underlying environment, instantiate into a config using the parallel index given by the tool
 	TicketBetweenPartition int
 	NumReplicas            int
 	MaxMessagesPerTick     int
@@ -439,6 +455,7 @@ func (r *PartitionEnvConfig) Printable() string {
 
 func NewPartitionEnv(c PartitionEnvConfig) *PartitionEnv {
 	p := &PartitionEnv{
+		ctx:           c.Ctx,
 		NumReplicas:   c.NumReplicas,
 		painter:       c.Painter,
 		UnderlyingEnv: c.Env,
@@ -448,9 +465,15 @@ func NewPartitionEnv(c PartitionEnvConfig) *PartitionEnv {
 		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
 
 		TerminalPredicate: c.TerminalPredicate,
+		UEnvCtor:          c.EnvCtor,
+		UEnvBaseConfig:    c.EnvBaseConfig,
 	}
 	// p.reset()
 	return p
+}
+
+func (p *PartitionEnv) SetUp(parallelIndex int) {
+	p.UnderlyingEnv = p.UEnvCtor(p.ctx, p.UEnvBaseConfig.Instantiate(parallelIndex))
 }
 
 func (p *PartitionEnv) Step(a Action, sCtx *StepContext) (State, error) {

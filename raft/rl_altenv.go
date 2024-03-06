@@ -11,7 +11,7 @@ type AbsRaftEnvironment struct {
 	abstracter StateAbstracter
 }
 
-var _ types.Environment = (*AbsRaftEnvironment)(nil)
+// var _ types.Environment = (*AbsRaftEnvironment)(nil)
 
 func NewAbsRaftEnvironment(config RaftEnvironmentConfig, abstracter StateAbstracter) *AbsRaftEnvironment {
 	r := &AbsRaftEnvironment{

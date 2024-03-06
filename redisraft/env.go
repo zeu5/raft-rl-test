@@ -98,8 +98,12 @@ type RedisRaftEnv struct {
 var _ types.PartitionedSystemEnvironment = &RedisRaftEnv{}
 
 // RedisRaftEnvConstructor returns a constructor for the RedisRaftEnv
-func RedisRaftEnvConstructor(savePath ...string) func(ctx context.Context, clusterConfig *ClusterConfig) types.PartitionedSystemEnvironment {
-	return func(ctx context.Context, clusterConfig *ClusterConfig) types.PartitionedSystemEnvironment {
+func RedisRaftEnvConstructor(savePath ...string) func(ctx context.Context, config types.PartitionedSystemEnvironmentConfig) types.PartitionedSystemEnvironment {
+	return func(ctx context.Context, config types.PartitionedSystemEnvironmentConfig) types.PartitionedSystemEnvironment {
+		clusterConfig, ok := config.(*ClusterConfig)
+		if !ok {
+			panic("RedisRaftEnvConstructor : invalid config type")
+		}
 		return NewRedisRaftEnv(ctx, clusterConfig, savePath...)
 	}
 }
@@ -118,6 +122,7 @@ func NewRedisRaftEnv(ctx context.Context, clusterConfig *ClusterConfig, savePath
 		printStats:        false, // change calling SetPrintStats()
 		ctx:               ctx,
 	}
+
 	e.network.Start()
 
 	// for duration analysis

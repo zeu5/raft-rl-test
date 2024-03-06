@@ -1,3 +1,5 @@
+//go:build exclude
+
 package benchmarks
 
 import (
@@ -100,8 +102,8 @@ func RSLRewardMachine(rewardMachine string, ctx context.Context) error {
 		// report config
 		ReportConfig: types.RepConfigOff(),
 	})
-	c.AddAnalysis("rm", policies.NewRewardMachineAnalyzer(RMPolicy), policies.RewardMachineCoverageComparator(saveFile, rewardMachine))
-	c.AddAnalysis("bugs", types.NewBugAnalyzer(
+	c.AddAnalysis("rm", policies.RewardMachineAnalyzerCtor(RMPolicy), policies.RewardMachineCoverageComparator(saveFile, rewardMachine))
+	c.AddAnalysis("bugs", types.BugAnalyzerCtor(
 		path.Join(saveFile, "bugs"),
 		types.BugDesc{Name: "InconsistentLogs", Check: rsl.InconsistentLogs()},
 		types.BugDesc{Name: "MultiplePrimaries", Check: rsl.MultiplePrimaries()},

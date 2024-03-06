@@ -1,8 +1,9 @@
+//go:build exclude
+
 package benchmarks
 
 import (
 	"context"
-	"path"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -49,14 +50,14 @@ func RSLExploration(ctx context.Context) {
 		// report config
 		ReportConfig: types.RepConfigOff(),
 	})
-	c.AddAnalysis("Plot", rsl.NewCoverageAnalyzer(colors...), rsl.CoverageComparator(saveFile))
-	c.AddAnalysis("Bugs", types.NewBugAnalyzer(
-		path.Join(saveFile, "bugs"),
-		types.BugDesc{Name: "InconsistentLogs", Check: rsl.InconsistentLogs()},
-		types.BugDesc{Name: "MultiplePrimaries", Check: rsl.MultiplePrimaries()},
-	), types.BugComparator(saveFile))
-	c.AddAnalysis("Crashes", types.NewCrashAnalyzer(), types.CrashComparator(saveFile))
-	c.AddAnalysis("PureCoverage", types.NewPureCoverageAnalyzer(), types.PureCoveragePlotter(saveFile))
+	// c.AddAnalysis("Plot", rsl.NewCoverageAnalyzer(colors...), rsl.CoverageComparator(saveFile))
+	// c.AddAnalysis("Bugs", types.NewBugAnalyzer(
+	// 	path.Join(saveFile, "bugs"),
+	// 	types.BugDesc{Name: "InconsistentLogs", Check: rsl.InconsistentLogs()},
+	// 	types.BugDesc{Name: "MultiplePrimaries", Check: rsl.MultiplePrimaries()},
+	// ), types.BugComparator(saveFile))
+	// c.AddAnalysis("Crashes", types.NewCrashAnalyzer(), types.CrashComparator(saveFile))
+	// c.AddAnalysis("PureCoverage", types.NewPureCoverageAnalyzer(), types.PureCoveragePlotter(saveFile))
 	// Random exploration
 	c.AddExperiment(types.NewExperiment(
 		"Random",

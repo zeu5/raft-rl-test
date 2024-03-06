@@ -165,8 +165,8 @@ func EtcdRaftBugs(episodes, horizon int, savePath string, ctx context.Context) {
 	})
 
 	// here you add different traces analysis and comparators -- to process traces into a dataset (analyzer) and output the results (comparator)
-	c.AddAnalysis("Plot", raft.NewRaftAnalyzer(saveFile, colors...), raft.RaftPlotComparator(saveFile))
-	c.AddAnalysis("Bugs", types.NewBugAnalyzer(
+	c.AddAnalysis("Plot", raft.RaftAnalyzerCtor(saveFile, colors...), raft.RaftPlotComparator(saveFile))
+	c.AddAnalysis("Bugs", types.BugAnalyzerCtor(
 		path.Join(saveFile, "bugs"),
 		types.BugDesc{Name: "MultipleLeaders", Check: raft.MultipleLeaders()},
 		types.BugDesc{Name: "ReducedLog", Check: raft.ReducedLog()},
@@ -176,7 +176,7 @@ func EtcdRaftBugs(episodes, horizon int, savePath string, ctx context.Context) {
 	), types.BugComparator(saveFile))
 
 	// c.AddAnalysis("CommitOnlyOneEntry", policies.RewardMachineAnalyzer(PredHierarchy_3), policies.RewardMachineCoverageComparator(saveFile))
-	c.AddAnalysis(PredHierName, policies.NewRewardMachineAnalyzer(PHPolicy), policies.RewardMachineCoverageComparator(saveFile, PredHierName))
+	c.AddAnalysis(PredHierName, policies.RewardMachineAnalyzerCtor(PHPolicy), policies.RewardMachineCoverageComparator(saveFile, PredHierName))
 	// c.AddAnalysis("PrintReadable", raft.RaftReadableAnalyzer(savePath), raft.RaftEmptyComparator())
 
 	// here you add different policies with their parameters

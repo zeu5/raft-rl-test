@@ -18,7 +18,7 @@ type experimentRunConfig struct {
 	CurrentRun int
 	Episodes   int
 	Horizon    int
-	Analyzers  []Analyzer
+	Analyzers  *map[string]*Analyzer
 	Timeout    time.Duration
 	Context    context.Context
 
@@ -39,8 +39,8 @@ type experimentRunConfig struct {
 	ReportsPrintConfig *ReportsPrintConfig
 	ReportSavePath     string
 
-	//misc
-	LongestExpNameLen int
+	// experiment context
+	ExperimentContext *ExperimentContext
 }
 
 // Experiment encapsulates the different parameters to configure an agent and analyze the traces
@@ -85,6 +85,11 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 		}
 	}
 
+	//fmt.Printf("Running experiment %s, index %d, parallel index %d - before env SetUp\n", e.Name, rConfig.CurrentRun, rConfig.ExperimentContext.ParallelIndex)
+	//time.Sleep(3 * time.Second)
+	e.environment.SetUp(rConfig.ExperimentContext.ParallelIndex) // set up the underlying environment based on the parallel index
+	//fmt.Printf("Running experiment %s, index %d, parallel index %d - after env SetUp\n", e.Name, rConfig.CurrentRun, rConfig.ExperimentContext.ParallelIndex)
+
 	totalTimeout := 0   // episodes ended with a timeout
 	totalWithError := 0 // episodes ended with an error
 	consecutiveTimeouts := 0
@@ -104,6 +109,8 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 		Environment: e.environment,
 	})
 
+	//fmt.Printf("Running experiment %s, index %d, parallel index %d - after agent creation\n", e.Name, rConfig.CurrentRun, rConfig.ExperimentContext.ParallelIndex)
+
 	printTracesIndex := (rConfig.Episodes - rConfig.PrintLastTraces) * rConfig.Horizon // compute the index to print the last N timesteps
 	executedTimesteps := 0
 	availableTimesteps := rConfig.Episodes * rConfig.Horizon
@@ -111,13 +118,17 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 	// paddings
 	TSPadding := len(strconv.Itoa(availableTimesteps))
 	EPPadding := len(strconv.Itoa(rConfig.Episodes))
-	NamePadding := rConfig.LongestExpNameLen
+	NamePadding := rConfig.ExperimentContext.LongestNameLen
 
 	// terminal execution display
-	fmt.Printf("\rExp:%*s, TSteps:%*d/%d, Valid:%*d [%5.1f%%] || Eps:%*d, Valid:%*d [%5.1f%%], TOut:%*d, Err:%*d || Horizon:%*d, Bound:%*d",
+	outPrintable := fmt.Sprintf("Exp:%*s, TSteps:%*d/%d, Valid:%*d [%5.1f%%] || Eps:%*d, Valid:%*d [%5.1f%%], TOut:%*d, Err:%*d || Horizon:%*d, Bound:%*d",
 		NamePadding, e.Name, TSPadding, executedTimesteps, availableTimesteps, TSPadding, totalValidTimesteps, (float32(totalValidTimesteps)/float32((executedTimesteps)))*100,
 		EPPadding, totalEpisodes, EPPadding, totalValidEpisodes, float32(totalValidEpisodes)/float32(totalEpisodes)*100, EPPadding, totalTimeout, EPPadding, totalWithError,
 		EPPadding, totalHorizon, EPPadding, totalOutOfSpaceBounds)
+
+	//fmt.Printf("Running experiment %s, index %d, parallel index %d - before trySet on parallel output\n", e.Name, rConfig.CurrentRun, rConfig.ExperimentContext.ParallelIndex)
+	rConfig.ExperimentContext.ParallelOutput.TrySet(outPrintable)
+	//fmt.Printf("Running experiment %s, index %d, parallel index %d - after trySet on parallel output\n", e.Name, rConfig.CurrentRun, rConfig.ExperimentContext.ParallelIndex)
 
 	for executedTimesteps < availableTimesteps {
 		select {
@@ -125,14 +136,19 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 			return
 		default:
 		}
+		//fmt.Printf("Running experiment %s, index %d, parallel index %d - before creating episode context\n", e.Name, rConfig.CurrentRun, rConfig.ExperimentContext.ParallelIndex)
 
 		eCtx := NewEpisodeContext(executedTimesteps, totalEpisodes, e.Name, rConfig) // create a new episode context to store the info used and returned by the episode
 		if executedTimesteps >= printTracesIndex {                                   // print the report for the last N episodes (or timestep-wise)
 			eCtx.SetToPrintReport(true)
 		}
 
+		//fmt.Printf("Running experiment %s, index %d, parallel index %d - created episode context\n", e.Name, rConfig.CurrentRun, rConfig.ExperimentContext.ParallelIndex)
+
 		e.runEpisode(eCtx, agent)                             // run the episode
 		episodeTimes = append(episodeTimes, eCtx.RunDuration) // store the episode time for the statistics
+
+		//fmt.Printf("Running experiment %s, index %d, parallel index %d - after running one episode\n", e.Name, rConfig.CurrentRun, rConfig.ExperimentContext.ParallelIndex)
 
 		startingTimesteps := executedTimesteps // store the number of timesteps executed before the episode, used for the analysis
 		executedTimesteps += eCtx.Timesteps    // increment the number of valid timesteps executed
@@ -160,7 +176,9 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 		}
 
 		// analyze the trace, even if the episode timed out or ended with an error
-		for _, a := range rConfig.Analyzers {
+		AnalyzerMap := *rConfig.Analyzers
+		for _, a := range AnalyzerMap {
+			a := *a
 			a.Analyze(rConfig.CurrentRun, totalEpisodes, startingTimesteps, e.Name, eCtx.Trace)
 		}
 
@@ -196,19 +214,28 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 		// check to eventually abort the experiment
 		if consecutiveTimeouts >= rConfig.ConsecutiveTimeoutsAbort {
 			fmt.Printf("\n Aborting experiment %s : %d consecutive timeouts\n", e.Name, consecutiveTimeouts)
+			*rConfig.ExperimentContext.FailedChannel <- ExperimentResult{
+				ExperimentIndex:  rConfig.ExperimentContext.ExperimentIndex,
+				ParallelRunIndex: rConfig.ExperimentContext.ParallelIndex,
+			}
 			break
 		}
 
 		if consecutiveErrors >= rConfig.ConsecutiveErrorsAbort {
 			fmt.Printf("\n Aborting experiment %s : %d consecutive errors\n", e.Name, consecutiveErrors)
+			*rConfig.ExperimentContext.FailedChannel <- ExperimentResult{
+				ExperimentIndex:  rConfig.ExperimentContext.ExperimentIndex,
+				ParallelRunIndex: rConfig.ExperimentContext.ParallelIndex,
+			}
 			break
 		}
 
 		// terminal execution display
-		fmt.Printf("\rExp:%*s, TSteps:%*d/%d, Valid:%*d [%5.1f%%] || Eps:%*d, Valid:%*d [%5.1f%%], TOut:%*d, Err:%*d || Horizon:%*d, Bound:%*d",
+		outPrintable = fmt.Sprintf("Exp:%*s, TSteps:%*d/%d, Valid:%*d [%5.1f%%] || Eps:%*d, Valid:%*d [%5.1f%%], TOut:%*d, Err:%*d || Horizon:%*d, Bound:%*d",
 			NamePadding, e.Name, TSPadding, executedTimesteps, availableTimesteps, TSPadding, totalValidTimesteps, (float32(totalValidTimesteps)/float32((executedTimesteps)))*100,
 			EPPadding, totalEpisodes, EPPadding, totalValidEpisodes, float32(totalValidEpisodes)/float32(totalEpisodes)*100, EPPadding, totalTimeout, EPPadding, totalWithError,
 			EPPadding, totalHorizon, EPPadding, totalOutOfSpaceBounds)
+		rConfig.ExperimentContext.ParallelOutput.TrySet(outPrintable)
 	}
 
 	select {
@@ -221,7 +248,11 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 		e.policy.Record(path.Join(rConfig.ReportSavePath, "policies", e.Name+"_"+strconv.Itoa(rConfig.CurrentRun)))
 	}
 
-	fmt.Println("")
+	// fmt.Println("")
+	*rConfig.ExperimentContext.CompletedChannel <- ExperimentResult{
+		ExperimentIndex:  rConfig.ExperimentContext.ExperimentIndex,
+		ParallelRunIndex: rConfig.ExperimentContext.ParallelIndex,
+	}
 }
 
 func (e *Experiment) runEpisode(eCtx *EpisodeContext, agent *Agent) {
@@ -355,7 +386,8 @@ type ComparisonConfig struct {
 	PrintLastTraces     int
 	PrintLastTracesFunc func(*Trace) string
 
-	EnvCtor func() PartitionedSystemEnvironment
+	EnvCtor             func() PartitionedSystemEnvironment
+	ParallelExperiments int
 }
 
 // record the configuration of the comparison
@@ -392,7 +424,7 @@ func (c *Comparison) recordConfig() {
 	out["experiments"] = experiments
 
 	out["analyzers"] = make([]string, 0)
-	for name := range c.analyzers {
+	for name := range c.analyzerCtors {
 		out["analyzers"] = append(out["analyzers"].([]string), name)
 	}
 
@@ -407,10 +439,11 @@ func (c *Comparison) recordConfig() {
 // The traces obtained from the experiments are analyzed
 // The analyzed datasets are then compared
 type Comparison struct {
-	Experiments []*Experiment
-	analyzers   map[string]Analyzer
-	comparators map[string]Comparator
-	cConfig     *ComparisonConfig
+	Experiments   []*Experiment
+	analyzers     map[int]*map[string]*Analyzer // map of analyzers for each experiment: experiment index -> analyzer name -> analyzer
+	analyzerCtors map[string]func() Analyzer    // map of analyzer constructors: analyzer name -> constructor
+	comparators   map[string]Comparator
+	cConfig       *ComparisonConfig
 }
 
 // NewComparison creates a comparison instance
@@ -453,16 +486,17 @@ func NewComparison(config *ComparisonConfig) *Comparison {
 	}
 
 	return &Comparison{
-		Experiments: make([]*Experiment, 0),
-		analyzers:   make(map[string]Analyzer),
-		comparators: make(map[string]Comparator),
-		cConfig:     config,
+		Experiments:   make([]*Experiment, 0),
+		analyzers:     make(map[int]*map[string]*Analyzer),
+		analyzerCtors: make(map[string]func() Analyzer),
+		comparators:   make(map[string]Comparator),
+		cConfig:       config,
 	}
 }
 
 // AddAnalysis adds an analyzer and comparator to the comparison
-func (c *Comparison) AddAnalysis(name string, analyzer Analyzer, comparator Comparator) {
-	c.analyzers[name] = analyzer
+func (c *Comparison) AddAnalysis(name string, analyzerCtor func() Analyzer, comparator Comparator) {
+	c.analyzerCtors[name] = analyzerCtor
 	c.comparators[name] = comparator
 }
 
@@ -473,6 +507,7 @@ func (c *Comparison) AddExperiment(e *Experiment) {
 
 // Run the comparison
 func (c *Comparison) Run(ctx context.Context) {
+	// fmt.Println("Comparison.Run Start")
 	c.recordConfig() // store configuration details to a file
 
 	longestNameLen := 0
@@ -486,37 +521,130 @@ func (c *Comparison) Run(ctx context.Context) {
 		fmt.Printf("Run %d\n", run+1)
 		datasets := make(map[string][]DataSet) // array with initial capacity - arrayList
 
-		for name := range c.analyzers {
+		for name := range c.analyzerCtors {
 			datasets[name] = make([]DataSet, len(c.Experiments))
 		}
 
-		names := make([]string, len(c.Experiments))
-		for i, e := range c.Experiments { // index - experiment  in the list of experiments
+		names := make([]string, 0)
+
+		completedExp := make([]int, 0) // index of the completed experiments
+		nextExpIndex := 0              // index of the next experiment to run
+		runningExp := 0                // number of experiments running
+		totalRunExp := 0               // total number of experiments run
+
+		completedChannel := make(chan ExperimentResult, c.cConfig.ParallelExperiments) // channel to use by completed exps
+		failedChannel := make(chan ExperimentResult, c.cConfig.ParallelExperiments)    // channel to use by failed exps
+		endChannel := make(chan struct{})                                              // channel to signal the end of the comparison
+
+		// list of free parallel indexes, to give to an experiment when it starts (output slot, ...)
+		freeParallelIndexes := make([]int, c.cConfig.ParallelExperiments)
+		for i := 0; i < c.cConfig.ParallelExperiments; i++ {
+			freeParallelIndexes[i] = i
+		}
+
+		// output
+		expOutputs := make([]*ParallelOutput, c.cConfig.ParallelExperiments)
+		for i := 0; i < c.cConfig.ParallelExperiments; i++ {
+			expOutputs[i] = NewParallelOutput()
+		}
+		printer := NewTerminalPrinter(ctx, &expOutputs, 3)
+		printer.Start()
+
+		// fmt.Println("Printer started")
+		// time.Sleep(3 * time.Second)
+
+	ExpsLoop:
+		for totalRunExp < len(c.Experiments) {
+			for runningExp < c.cConfig.ParallelExperiments && nextExpIndex < len(c.Experiments) {
+				pIndex := freeParallelIndexes[0]              // get the first free parallel index
+				freeParallelIndexes = freeParallelIndexes[1:] // remove the first free parallel index
+
+				// prepare analyzers
+				aMap := make(map[string]*Analyzer)
+				c.analyzers[nextExpIndex] = &aMap // create the analyzers
+				for name, analyzerConstructor := range c.analyzerCtors {
+					analyzer := analyzerConstructor()  // create the analyzer
+					aMap := *c.analyzers[nextExpIndex] // get the map of analyzers for the experiment
+					aMap[name] = &analyzer             // add the analyzer to the map
+				}
+
+				// create the context for the experiment
+				expContext := &ExperimentContext{
+					Context:          ctx,                              // context to cancel the experiment
+					ExperimentName:   c.Experiments[nextExpIndex].Name, // name of the experiment
+					ExperimentIndex:  nextExpIndex,                     // index of the experiment in the list of experiments
+					ParallelIndex:    pIndex,                           // index of the experiment in the parallel slot (for printing and instantiating environment)
+					LongestNameLen:   longestNameLen,                   // length of the longest experiment name, used for padding when printing
+					ParallelOutput:   expOutputs[pIndex],               // where to store the current output of the experiment
+					Analyzers:        c.analyzers[nextExpIndex],        // analyzers to be run on the experiment
+					CompletedChannel: &completedChannel,                // channel to signal that the experiment has completed
+					FailedChannel:    &failedChannel,                   // channel to signal that the experiment has failed
+				}
+				expOutputs[pIndex].Running = true // set the parallel output to running
+
+				c.startExperiment(c.Experiments[nextExpIndex], expContext)
+				runningExp++   // increment the counter of running experiments
+				nextExpIndex++ // increment the index of the next experiment to run
+				// fmt.Printf("Experiment %d started, running experiments: %d, next experiment index: %d, completed experiments: %v, free parallel indexes: %v\n", nextExpIndex-1, runningExp, nextExpIndex, completedExp, freeParallelIndexes)
+			}
 			select {
 			case <-ctx.Done():
 				return
-			default:
+			case completedResult := <-completedChannel:
+				runningExp--
+				totalRunExp++
+				completedExp = append(completedExp, completedResult.ExperimentIndex)
+				freeParallelIndexes = append(freeParallelIndexes, completedResult.ParallelRunIndex)
+				expOutputs[completedResult.ParallelRunIndex].Running = false // set the parallel output to running
+
+				// store the analyzers results in the datasets
+				aMap := *c.analyzers[completedResult.ExperimentIndex]
+				names = append(names, c.Experiments[completedResult.ExperimentIndex].Name)
+				for name, a := range aMap {
+					a := *a
+					datasets[name][completedResult.ExperimentIndex] = a.DataSet() // call the analyzer on the experiment results
+				}
+				if totalRunExp == len(c.Experiments) {
+					close(endChannel)
+				}
+
+			case failedResult := <-failedChannel:
+				runningExp--
+				totalRunExp++
+
+				freeParallelIndexes = append(freeParallelIndexes, failedResult.ParallelRunIndex)
+				expOutputs[failedResult.ParallelRunIndex].Running = false // set the parallel output to running
+				if totalRunExp == len(c.Experiments) {
+					close(endChannel)
+				}
+
+			case <-endChannel:
+				fmt.Printf("EndChannel\n")
+				break ExpsLoop
 			}
-			e.Run(c.prepareRunConfig(ctx, longestNameLen)) // running the algorithm, stores the results
-			for name, a := range c.analyzers {
-				datasets[name][i] = a.DataSet() // call the analyzer on the experiment results
-				a.Reset()                       // reset the analyzer
-			}
-			names[i] = e.Name // name of the experiment
-			e.Reset()         // reset the experiment
 		}
+
+		printer.Stop()
+
 		for name, comp := range c.comparators {
 			comp(run, c.cConfig.Episodes, names, datasets[name]) // make the plots
 		}
 	}
 }
 
+func (c *Comparison) startExperiment(e *Experiment, eCtx *ExperimentContext) {
+	expConfig := c.prepareRunConfig(eCtx)
+	go func() {
+		e.Run(expConfig) // running the algorithm, stores the results
+	}()
+}
+
 // prepare the run configuration for the experiment
-func (c *Comparison) prepareRunConfig(ctx context.Context, longestExpNameLen int) *experimentRunConfig {
+func (c *Comparison) prepareRunConfig(eCtx *ExperimentContext) *experimentRunConfig {
 	rCfg := &experimentRunConfig{
 		Episodes:            c.cConfig.Episodes,
 		Horizon:             c.cConfig.Horizon,
-		Analyzers:           make([]Analyzer, 0),
+		Analyzers:           eCtx.Analyzers,
 		RecordTraces:        c.cConfig.RecordTraces,
 		RecordTimes:         c.cConfig.RecordTimes,
 		RecordPolicy:        c.cConfig.RecordPolicy,
@@ -525,9 +653,9 @@ func (c *Comparison) prepareRunConfig(ctx context.Context, longestExpNameLen int
 		ReportsPrintConfig:  c.cConfig.ReportConfig,
 		ReportSavePath:      c.cConfig.RecordPath,
 		Timeout:             c.cConfig.Timeout,
-		Context:             ctx,
+		Context:             eCtx.Context,
 
-		LongestExpNameLen: longestExpNameLen,
+		ExperimentContext: eCtx,
 	}
 
 	if rCfg.ConsecutiveErrorsAbort == 0 {
@@ -537,9 +665,6 @@ func (c *Comparison) prepareRunConfig(ctx context.Context, longestExpNameLen int
 		rCfg.ConsecutiveTimeoutsAbort = 10
 	}
 
-	for _, a := range c.analyzers {
-		rCfg.Analyzers = append(rCfg.Analyzers, a)
-	}
 	return rCfg
 }
 

@@ -33,7 +33,7 @@ type Door struct {
 	To   Position
 }
 
-var _ types.Environment = &GridEnvironment{}
+// var _ types.Environment = &GridEnvironment{}
 
 func NewGridEnvironment(height, width, grids int, doors ...Door) *GridEnvironment {
 	return &GridEnvironment{

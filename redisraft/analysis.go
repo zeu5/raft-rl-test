@@ -62,6 +62,12 @@ type CoverageAnalyzer struct {
 	NextIndexOfFirstTrace int            // the first unanalyzed step in the first trace of the buffer
 }
 
+func CoverageAnalyzerCtor(horizon int, colors ...RedisRaftColorFunc) func() types.Analyzer {
+	return func() types.Analyzer {
+		return NewCoverageAnalyzer(horizon, colors...)
+	}
+}
+
 func NewCoverageAnalyzer(horizon int, colors ...RedisRaftColorFunc) *CoverageAnalyzer {
 	return &CoverageAnalyzer{
 		colors:          colors,
@@ -187,6 +193,12 @@ type BugCrashAnalyzer struct {
 	occurrences []int
 }
 
+func BugCrashAnalyzerCtor(savePath string) func() types.Analyzer {
+	return func() types.Analyzer {
+		return NewBugCrashAnalyzer(savePath)
+	}
+}
+
 func NewBugCrashAnalyzer(savePath string) *BugCrashAnalyzer {
 	if _, ok := os.Stat(savePath); ok != nil {
 		os.MkdirAll(savePath, 0777)
@@ -250,6 +262,12 @@ type BugAnalyzer struct {
 	Bugs        []types.BugDesc
 	occurrences map[string][]int
 	savePath    string
+}
+
+func BugAnalyzerCtor(savePath string, bugs ...types.BugDesc) func() types.Analyzer {
+	return func() types.Analyzer {
+		return NewBugAnalyzer(savePath, bugs...)
+	}
 }
 
 func NewBugAnalyzer(savePath string, bugs ...types.BugDesc) *BugAnalyzer {

@@ -34,6 +34,12 @@ type RewardMachineAnalyzer struct {
 	ds  *RewardMachineDataset
 }
 
+func RewardMachineAnalyzerCtor(rmp *RewardMachinePolicy) func() types.Analyzer {
+	return func() types.Analyzer {
+		return NewRewardMachineAnalyzer(rmp)
+	}
+}
+
 func NewRewardMachineAnalyzer(rmp *RewardMachinePolicy) *RewardMachineAnalyzer {
 	return &RewardMachineAnalyzer{
 		rmp: rmp,

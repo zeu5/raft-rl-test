@@ -27,6 +27,12 @@ func NewPureCoverageAnalyzer() *PureCoverageAnalyzer {
 	}
 }
 
+func PureCoverageAnalyzerCtor() func() Analyzer {
+	return func() Analyzer {
+		return NewPureCoverageAnalyzer()
+	}
+}
+
 func (pca *PureCoverageAnalyzer) Analyze(run int, episode int, startingTimestep int, s string, trace *Trace) {
 	for j := 0; j < trace.Len(); j++ {
 		s, _, _, _ := trace.Get(j)
@@ -181,6 +187,12 @@ type CrashAnalyzer struct {
 func NewCrashAnalyzer() *CrashAnalyzer {
 	return &CrashAnalyzer{
 		numCrashes: make([]int, 0),
+	}
+}
+
+func CrashAnalyzerCtor() func() Analyzer {
+	return func() Analyzer {
+		return NewCrashAnalyzer()
 	}
 }
 

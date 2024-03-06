@@ -49,9 +49,9 @@ func RaftPart(episodes, horizon int, saveFile string, ctx context.Context) {
 	})
 
 	// here you add different traces analysis and comparators -- to process traces into a dataset (analyzer) and output the results (comparator)
-	c.AddAnalysis("Plot", raft.NewRaftAnalyzer(saveFile, colors...), raft.RaftPlotComparator(saveFile))
-	c.AddAnalysis("Crashes", types.NewCrashAnalyzer(), types.CrashComparator(saveFile))
-	c.AddAnalysis("PureCoverage", types.NewPureCoverageAnalyzer(), types.PureCoveragePlotter(saveFile))
+	c.AddAnalysis("Plot", raft.RaftAnalyzerCtor(saveFile, colors...), raft.RaftPlotComparator(saveFile))
+	c.AddAnalysis("Crashes", types.CrashAnalyzerCtor(), types.CrashComparator(saveFile))
+	c.AddAnalysis("PureCoverage", types.PureCoverageAnalyzerCtor(), types.PureCoveragePlotter(saveFile))
 	// c.AddAnalysis("PartitionCoverage", types.PartitionCoverage(), types.PartitionCoveragePlotter(saveFile))
 
 	// here you add different policies with their parameters

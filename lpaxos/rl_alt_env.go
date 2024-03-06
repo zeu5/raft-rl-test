@@ -7,7 +7,7 @@ type LPaxosAbsEnv struct {
 	abstracter Abstracter
 }
 
-var _ types.Environment = (*LPaxosAbsEnv)(nil)
+// var _ types.Environment = (*LPaxosAbsEnv)(nil)
 
 type Abstracter func(LNodeState) LNodeState
 

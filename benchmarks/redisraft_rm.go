@@ -339,26 +339,39 @@ func getRedisPredicateHeirarchy(name string) (*policies.RewardMachine, bool, boo
 }
 
 func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx context.Context) {
+	clusterBaseConfig := &redisraft.ClusterBaseConfig{
+		NumNodes: 3,
+		SavePath: saveFile,
 
-	clusterConfig := redisraft.ClusterConfig{
-		NumNodes:            3,
 		BasePort:            5000,
 		BaseInterceptPort:   2023,
 		ID:                  1,
-		InterceptListenAddr: "localhost:7074",
-		WorkingDir:          path.Join(saveFile, "tmp"),
-		NumRequests:         5,
+		InterceptListenPort: 7074,
 
-		RequestTimeout:  100, // heartbeat in milliseconds (fixed or variable?)
-		ElectionTimeout: 400, // election timeout in milliseconds (from specified value to its double)
-
-		TickLength: 25,
+		RequestTimeout:  100,
+		ElectionTimeout: 400, // new election timeout in milliseconds
+		NumRequests:     5,
+		TickLength:      25,
 	}
-	env := redisraft.NewRedisRaftEnv(ctx, &clusterConfig, path.Join(saveFile, "tickLength"))
-	// env.SetPrintStats(true) // to print the episode stats
-	defer env.Cleanup()
+	envConstructor := redisraft.RedisRaftEnvConstructor(path.Join(saveFile, "tickLength"))
 
-	envF := redisraft.NewRedisRaftEnv
+	// clusterConfig := redisraft.ClusterConfig{
+	// 	NumNodes:            3,
+	// 	BasePort:            5000,
+	// 	BaseInterceptPort:   2023,
+	// 	ID:                  1,
+	// 	InterceptListenAddr: "localhost:7074",
+	// 	WorkingDir:          path.Join(saveFile, "tmp"),
+	// 	NumRequests:         5,
+
+	// 	RequestTimeout:  100, // heartbeat in milliseconds (fixed or variable?)
+	// 	ElectionTimeout: 400, // election timeout in milliseconds (from specified value to its double)
+
+	// 	TickLength: 25,
+	// }
+	// env := redisraft.NewRedisRaftEnv(ctx, &clusterConfig, path.Join(saveFile, "tickLength"))
+	// env.SetPrintStats(true) // to print the episode stats
+	// defer env.Cleanup()
 
 	// abstraction for both plot and RL
 	availableColors := make(map[string]redisraft.RedisRaftColorFunc)
@@ -397,8 +410,11 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 	// colors := []redisraft.RedisRaftColorFunc{redisraft.ColorState(), redisraft.ColorCommit(), redisraft.ColorLeader(), redisraft.ColorVote(), redisraft.ColorBoundedTerm(5), redisraft.ColorIndex(), redisraft.ColorSnapshot()}
 
 	partitionEnvConfig := types.PartitionEnvConfig{
+		Ctx:                    ctx,
 		Painter:                redisraft.NewRedisRaftStatePainter(colors...),
-		Env:                    env,
+		Env:                    nil,
+		EnvCtor:                envConstructor,
+		EnvBaseConfig:          clusterBaseConfig,
 		TicketBetweenPartition: 4,
 		MaxMessagesPerTick:     100,
 		StaySameStateUpto:      5,
@@ -430,15 +446,18 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		PrintLastTracesFunc: redisraft.ReadableTracePrintable,
 		// report config
 		ReportConfig: reportConfig,
+
+		ParallelExperiments: 20,
 	})
 	// after this NewComparison call, the folder is not wiped anymore
 
 	// if flags are on, start profiling
 	startProfiling()
 
-	c.AddAnalysis("Plot", redisraft.NewCoverageAnalyzer(horizon, colors...), redisraft.CoverageComparator(saveFile, horizon))
-	c.AddAnalysis("Crashes", redisraft.NewBugCrashAnalyzer(path.Join(saveFile, "crash")), redisraft.BugComparator())
-	c.AddAnalysis("Bugs", redisraft.NewBugAnalyzer(
+	// c.AddAnalysis("Plot", redisraft.NewCoverageAnalyzer(horizon, colors...), redisraft.CoverageComparator(saveFile, horizon))
+	c.AddAnalysis("Plot", redisraft.CoverageAnalyzerCtor(horizon, colors...), redisraft.CoverageComparator(saveFile, horizon))
+	c.AddAnalysis("Crashes", redisraft.BugCrashAnalyzerCtor(path.Join(saveFile, "crash")), redisraft.BugComparator())
+	c.AddAnalysis("Bugs", redisraft.BugAnalyzerCtor(
 		path.Join(saveFile, "bugs"),
 		types.BugDesc{Name: "ReducedLog", Check: redisraft.ReducedLog()},
 		types.BugDesc{Name: "ModifiedLog", Check: redisraft.ModifiedLog()},
@@ -458,7 +477,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		pHierarchiesPolicies[pHierName] = RMPolicy
 
 		// c.AddAnalysis("plot", redisraft.CoverageAnalyzer(colors...), redisraft.CoverageComparator(saveFile))
-		c.AddAnalysis(pHierName, policies.NewRewardMachineAnalyzer(RMPolicy), policies.RewardMachineCoverageComparator(saveFile, pHierName))
+		c.AddAnalysis(pHierName, policies.RewardMachineAnalyzerCtor(RMPolicy), policies.RewardMachineCoverageComparator(saveFile, pHierName))
 	}
 
 	for pHierName, policy := range pHierarchiesPolicies {
@@ -496,7 +515,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 
 	// print config file
 	configPath := path.Join(saveFile, "config.txt")
-	util.WriteToFile(configPath, ExperimentParametersPrintable(), clusterConfig.Printable(), partitionEnvConfig.Printable(), PrintColors(chosenColors))
+	util.WriteToFile(configPath, ExperimentParametersPrintable(), clusterBaseConfig.Printable(), partitionEnvConfig.Printable(), PrintColors(chosenColors))
 
 	c.Run(ctx)
 }

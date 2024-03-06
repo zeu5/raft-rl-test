@@ -77,7 +77,7 @@ type LinkRaftEnvironment struct {
 	curState *LinkRaftState
 }
 
-var _ types.Environment = &LinkRaftEnvironment{}
+// var _ types.Environment = &LinkRaftEnvironment{}
 
 func NewLinkRaftEnvironment(config RaftEnvironmentConfig) *LinkRaftEnvironment {
 	r := &LinkRaftEnvironment{

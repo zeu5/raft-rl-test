@@ -91,6 +91,12 @@ func NewRaftAnalyzer(savePath string, colors ...RaftColorFunc) *RaftAnalyzer {
 	}
 }
 
+func RaftAnalyzerCtor(savePath string, colors ...RaftColorFunc) func() types.Analyzer {
+	return func() types.Analyzer {
+		return NewRaftAnalyzer(savePath, colors...)
+	}
+}
+
 func (pc *RaftAnalyzer) Analyze(run int, episode int, startingTimestep int, s string, trace *types.Trace) {
 	if pc.curExperiment == "" {
 		pc.curExperiment = s

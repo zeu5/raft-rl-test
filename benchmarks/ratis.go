@@ -50,8 +50,8 @@ func RatisExploration(episodes, horizon int, saveFile string, ctx context.Contex
 		ReportConfig: types.RepConfigOff(),
 	})
 
-	c.AddAnalysis("plot", ratis.NewCoverageAnalyzer(colors...), ratis.CoverageComparator(saveFile))
-	c.AddAnalysis("logs", ratis.NewLogAnalyzer(saveFile), types.NoopComparator())
+	c.AddAnalysis("plot", ratis.CoverageAnalyzerCtor(colors...), ratis.CoverageComparator(saveFile))
+	c.AddAnalysis("logs", ratis.LogAnalyzerCtor(saveFile), types.NoopComparator())
 
 	// c.AddExperiment(types.NewExperiment("NegReward", &types.AgentConfig{
 	// 	Episodes:    episodes,
