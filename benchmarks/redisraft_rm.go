@@ -276,6 +276,9 @@ func getRedisPredicateHeirarchy(name string) (*policies.RewardMachine, bool, boo
 		oneTime = true
 
 	case "2CommT1X":
+		// Requires a commit in term 1 (NORMAL entry, apparently it is only achievable by sending a request), and another commit in a term > 1.
+		// It includes several intermediate steps: request commit in term1, processes in higher terms, all processes in a single term > 1, a leader elected in a term > 1.
+		// (after initial sync to 5 entries)
 		machine = policies.NewRewardMachine(redisraft.AllNodesEntries(6, true, 1, 1, "").
 			And(redisraft.AllNodesEntries(1, true, 1, 1, "NORMAL")).
 			And(redisraft.AllNodesTerms(2, 5)).
@@ -291,6 +294,8 @@ func getRedisPredicateHeirarchy(name string) (*policies.RewardMachine, bool, boo
 		oneTime = true
 
 	case "LogDiff3":
+		// Reach a difference of at least 3 entries in the length of two processes' committed logs.
+		// (after initial sync to 5 entries)
 		machine = policies.NewRewardMachine(redisraft.AllNodesEntries(5, true, 1, 1, "").
 			And(redisraft.DiffInCommittedEntries(3)))
 		RedisPredHierAddBuildBlocks(machine, "SyncA5_MT1_NoNormal")
@@ -303,6 +308,9 @@ func getRedisPredicateHeirarchy(name string) (*policies.RewardMachine, bool, boo
 		oneTime = true
 
 	case "LogDiff3_Steps":
+		// Reach a difference of at least 3 entries in the length of two processes' committed logs.
+		// It includes intermediate steps: difference 1, difference 2, difference 3 in the logs (does not require committed entries)
+		// (after initial sync to 5 entries)
 		machine = policies.NewRewardMachine(redisraft.AllNodesEntries(5, true, 1, 1, "").
 			And(redisraft.DiffInCommittedEntries(3)))
 		RedisPredHierAddBuildBlocks(machine, "SyncA5_MT1_NoNormal")
@@ -322,6 +330,9 @@ func getRedisPredicateHeirarchy(name string) (*policies.RewardMachine, bool, boo
 		oneTime = true
 
 	case "CommT1_LeadT25_LogDiff3":
+		// Reach a difference of at least 3 entries in the length of two processes' committed logs after a commit in Term 1 and a leader election in a term > 1.
+		// It includes several intermediate steps
+		// (after initial sync to 5 entries)
 		machine = policies.NewRewardMachine(redisraft.AllNodesEntries(6, true, 1, 1, "").
 			And(redisraft.AllNodesEntries(1, true, 1, 1, "NORMAL")).
 			And(redisraft.AllNodesTerms(2, 5)).
@@ -336,19 +347,23 @@ func getRedisPredicateHeirarchy(name string) (*policies.RewardMachine, bool, boo
 		oneTime = true
 
 	case "OneTerm2":
+		// At least one node in term 2
 		machine = policies.NewRewardMachine(redisraft.AtLeastOneNodeTerm(2, 2))
 		oneTime = true
 
 	case "AllInTerm2":
+		// all nodes in term 2
 		machine = policies.NewRewardMachine(redisraft.AllNodesTerms(2, 2))
 		oneTime = true
 
 	case "AllInTerm3":
+		// all nodes in term 3
 		machine = policies.NewRewardMachine(redisraft.AllNodesTerms(3, 3))
 		oneTime = true
 
 	case "LeaderInTerm2":
-		machine = policies.NewRewardMachine(redisraft.AtLeastOneNodeStates([]string{"leader"}).And(redisraft.AtLeastOneNodeTerm(2, 2)))
+		// all nodes in term 2 and one leader elected
+		machine = policies.NewRewardMachine(redisraft.AtLeastOneNodeStates([]string{"leader"}).And(redisraft.AllNodesTerms(2, 2)))
 		oneTime = true
 	}
 
