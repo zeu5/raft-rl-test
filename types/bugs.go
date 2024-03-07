@@ -68,10 +68,10 @@ func (ba *BugAnalyzer) Reset() {
 var _ Analyzer = (*BugAnalyzer)(nil)
 
 func BugComparator(savePath string) Comparator {
-	return func(run, _ int, s []string, ds []DataSet) {
+	return func(run, _ int, expNames []string, ds map[string]DataSet) {
 		data := make(map[string]map[string][]int)
-		for i, exp := range s {
-			bugOccurrences := ds[i].(map[string][]int)
+		for _, exp := range expNames {
+			bugOccurrences := ds[exp].(map[string][]int)
 			fmt.Printf("For run:%d, experiment: %s\n", run, exp)
 			for b, i := range bugOccurrences {
 				fmt.Printf("\tBug: %s, First iteration: %d\n", b, i)

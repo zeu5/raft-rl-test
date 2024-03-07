@@ -150,14 +150,15 @@ func LPaxosComparator(figPath string) types.Comparator {
 	if _, err := os.Stat(figPath); err != nil {
 		os.Mkdir(figPath, os.ModePerm)
 	}
-	return func(run, _ int, names []string, ds []types.DataSet) {
+	return func(run, _ int, names []string, ds map[string]types.DataSet) {
 		p := plot.New()
 		p.Title.Text = "Comparison"
 		p.X.Label.Text = "Iteration"
 		p.Y.Label.Text = "States covered"
 
 		for i := 0; i < len(names); i++ {
-			dataset := ds[i].(*LPaxosDataSet)
+			name := names[i]
+			dataset := ds[name].(*LPaxosDataSet)
 			points := make(plotter.XYs, len(dataset.UniqueStates))
 			for i, v := range dataset.UniqueStates {
 				points[i] = plotter.XY{
@@ -238,10 +239,11 @@ func (ra *RewardStatesVisitedAnalyzer) Reset() {
 var _ types.Analyzer = (*RewardStatesVisitedAnalyzer)(nil)
 
 func RewardStateComparator() types.Comparator {
-	return func(run, _ int, s []string, ds []types.DataSet) {
+	return func(run, _ int, s []string, ds map[string]types.DataSet) {
 		for i := 0; i < len(s); i++ {
+			name := s[i]
 			fmt.Printf("For experiment: %s\n", s[i])
-			rewardvisits := ds[i].(RewardStatesVisited)
+			rewardvisits := ds[name].(RewardStatesVisited)
 			for r, v := range rewardvisits.visits {
 				fmt.Printf("Reward visits of state %s: %d\n", r, v)
 			}

@@ -154,9 +154,10 @@ func (pc *RaftAnalyzer) Reset() {
 var _ types.Analyzer = (*RaftAnalyzer)(nil)
 
 // Print the coverage of the different experiments
-func RaftComparator(run, _ int, names []string, datasets []types.DataSet) {
+func RaftComparator(run, _ int, names []string, datasets map[string]types.DataSet) {
 	for i := 0; i < len(names); i++ {
-		raftDataSet := datasets[i].(*RaftDataSet)
+		name := names[i]
+		raftDataSet := datasets[name].(*RaftDataSet)
 		fmt.Printf("Coverage for run: %d, experiment: %s, states: %d\n", run, names[i], len(raftDataSet.states))
 	}
 }
@@ -208,14 +209,15 @@ func RaftPlotComparator(figPath string) types.Comparator {
 	if _, err := os.Stat(figPath); err != nil {
 		os.Mkdir(figPath, os.ModePerm)
 	}
-	return func(run, _ int, names []string, datasets []types.DataSet) {
+	return func(run, _ int, names []string, datasets map[string]types.DataSet) {
 		p := plot.New()
 		p.Title.Text = "Comparison"
 		p.X.Label.Text = "Iteration"
 		p.Y.Label.Text = "States covered"
 
 		for i := 0; i < len(names); i++ {
-			raftDataSet := datasets[i].(*RaftDataSet)
+			name := names[i]
+			raftDataSet := datasets[name].(*RaftDataSet)
 			points := make(plotter.XYs, len(raftDataSet.UniqueStates))
 			for i, v := range raftDataSet.UniqueStates {
 				points[i] = plotter.XY{
@@ -238,7 +240,7 @@ func RaftPlotComparator(figPath string) types.Comparator {
 // Plot coverage of different experiments
 func RaftEmptyComparator() types.Comparator {
 
-	return func(run, _ int, names []string, datasets []types.DataSet) {
+	return func(run, _ int, names []string, datasets map[string]types.DataSet) {
 
 	}
 }

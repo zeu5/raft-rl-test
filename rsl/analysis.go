@@ -89,7 +89,7 @@ func CoverageComparator(plotPath string) types.Comparator {
 	if _, err := os.Stat(plotPath); err != nil {
 		os.Mkdir(plotPath, os.ModePerm)
 	}
-	return func(run, _ int, s []string, ds []types.DataSet) {
+	return func(run, _ int, s []string, ds map[string]types.DataSet) {
 		p := plot.New()
 
 		p.Title.Text = "Comparison"
@@ -99,7 +99,8 @@ func CoverageComparator(plotPath string) types.Comparator {
 		coverageData := make(map[string][]int)
 
 		for i := 0; i < len(s); i++ {
-			dataset := ds[i].([]int)
+			name := s[i]
+			dataset := ds[name].([]int)
 			coverageData[s[i]] = make([]int, len(dataset))
 			copy(coverageData[s[i]], dataset)
 			points := make(plotter.XYs, len(dataset))

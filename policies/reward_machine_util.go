@@ -170,12 +170,13 @@ func RewardMachineCoverageComparator(savePath string, hierachyName string) types
 	if _, err := os.Stat(savePath); err != nil {
 		os.Mkdir(savePath, os.ModePerm)
 	}
-	return func(run, _ int, policies []string, ds []types.DataSet) {
+	return func(run, _ int, policies []string, ds map[string]types.DataSet) {
 		// readable text file
 		printable := ""
-		for i := 0; i < len(ds); i++ {
+		for i := 0; i < len(policies); i++ {
+			name := policies[i]
 			printable = printable + fmt.Sprintf("For run: %d, experiment: %s\n", run, policies[i])
-			rmDS := ds[i].(*RewardMachineDataset)
+			rmDS := ds[name].(*RewardMachineDataset)
 			episodes := rmDS.totalEpisodes
 			for state, count := range rmDS.RMStateEpisodes {
 				printable = printable + fmt.Sprintf("\tRM State %s, Visits: %d, Timesteps spent: %d\n", state, count, rmDS.RMStateTimesteps[state])
@@ -192,8 +193,8 @@ func RewardMachineCoverageComparator(savePath string, hierachyName string) types
 
 		// json file
 		data := make(map[string]interface{})
-		for i, policyName := range policies {
-			rmDS := ds[i].(*RewardMachineDataset)
+		for _, policyName := range policies {
+			rmDS := ds[policyName].(*RewardMachineDataset)
 			episodes := rmDS.totalEpisodes
 			d := make(map[string]interface{})
 			d["rmStateVisits"] = rmDS.RMStateEpisodes
@@ -256,10 +257,11 @@ func (pa *PredicatesAnalyzer) Reset() {
 var _ types.Analyzer = (*PredicatesAnalyzer)(nil)
 
 func PredicatesComparator() types.Comparator {
-	return func(run, _ int, s []string, ds []types.DataSet) {
+	return func(run, _ int, s []string, ds map[string]types.DataSet) {
 		for i := 0; i < len(s); i++ {
+			name := s[i]
 			fmt.Printf("For run: %d, experiment: %s\n", run, s[i])
-			pDS := ds[i].(*predicatesDataset)
+			pDS := ds[name].(*predicatesDataset)
 			for s, count := range pDS.predicates {
 				fmt.Printf("\tPredicate: %d, num of times satisfied: %d\n", s, count)
 			}

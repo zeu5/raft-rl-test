@@ -61,13 +61,14 @@ func PureCoveragePlotter(plotPath string) Comparator {
 	if _, err := os.Stat(plotPath); err != nil {
 		os.Mkdir(plotPath, os.ModePerm)
 	}
-	return func(i, _ int, s []string, ds []DataSet) {
+	return func(i, _ int, s []string, ds map[string]DataSet) {
 		p := plot.New()
 		p.Title.Text = "Comparison"
 		p.X.Label.Text = "Iteration"
 		p.Y.Label.Text = "States covered"
 		for i := 0; i < len(s); i++ {
-			uniqueStates := ds[i].([]int)
+			expName := s[i]
+			uniqueStates := ds[expName].([]int)
 			points := make(plotter.XYs, len(uniqueStates))
 			for i, v := range uniqueStates {
 				points[i] = plotter.XY{
@@ -153,13 +154,14 @@ func PartitionCoveragePlotter(plotPath string) Comparator {
 	if _, err := os.Stat(plotPath); err != nil {
 		os.Mkdir(plotPath, os.ModePerm)
 	}
-	return func(i, _ int, s []string, ds []DataSet) {
+	return func(i, _ int, s []string, ds map[string]DataSet) {
 		p := plot.New()
 		p.Title.Text = "Comparison"
 		p.X.Label.Text = "Iteration"
 		p.Y.Label.Text = "States covered"
 		for i := 0; i < len(s); i++ {
-			uniqueStates := ds[i].([]int)
+			expName := s[i]
+			uniqueStates := ds[expName].([]int)
 			points := make(plotter.XYs, len(uniqueStates))
 			for i, v := range uniqueStates {
 				points[i] = plotter.XY{
@@ -223,13 +225,14 @@ func CrashComparator(saveFile string) Comparator {
 	if _, err := os.Stat(saveFile); err != nil {
 		os.Mkdir(saveFile, os.ModePerm)
 	}
-	return func(run, _ int, names []string, datasets []DataSet) {
+	return func(run, _ int, names []string, datasets map[string]DataSet) {
 		for i := 0; i < len(names); i++ {
+			name := names[i]
 			p := plot.New()
 			p.Title.Text = "Comparison"
 			p.X.Label.Text = "Iteration"
 			p.Y.Label.Text = "States covered"
-			crashDataSet := datasets[i].([]int)
+			crashDataSet := datasets[name].([]int)
 			points := make(plotter.XYs, len(crashDataSet))
 			for i, v := range crashDataSet {
 				points[i] = plotter.XY{

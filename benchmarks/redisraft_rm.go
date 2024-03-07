@@ -48,7 +48,9 @@ func getSetOfMachines(command string) []string {
 	case "Set5":
 		return []string{"2CommT1X", "LogDiff3_Steps", "CommT1_LeadT25_LogDiff3", "baselines"}
 	case "Set6":
-		return []string{"2CommT1X"}
+		return []string{"OneTerm2", "LeaderInTerm2", "AllInTerm2", "AllInTerm3", "baselines"}
+	case "Set7":
+		return []string{"2CommT1X", "LogDiff3_Steps", "CommT1_LeadT25_LogDiff3", "OneTerm2", "LeaderInTerm2", "AllInTerm2", "AllInTerm3", "baselines"}
 	default:
 		return []string{}
 	}
@@ -333,6 +335,21 @@ func getRedisPredicateHeirarchy(name string) (*policies.RewardMachine, bool, boo
 		machine.AddState(Sync_C1T1_LeaderX.And(redisraft.DiffInEntries(2)), "C1T1_AllInT2X_Leader_Diff2")
 		oneTime = true
 
+	case "OneTerm2":
+		machine = policies.NewRewardMachine(redisraft.AtLeastOneNodeTerm(2, 2))
+		oneTime = true
+
+	case "AllInTerm2":
+		machine = policies.NewRewardMachine(redisraft.AllNodesTerms(2, 2))
+		oneTime = true
+
+	case "AllInTerm3":
+		machine = policies.NewRewardMachine(redisraft.AllNodesTerms(3, 3))
+		oneTime = true
+
+	case "LeaderInTerm2":
+		machine = policies.NewRewardMachine(redisraft.AtLeastOneNodeStates([]string{"leader"}).And(redisraft.AtLeastOneNodeTerm(2, 2)))
+		oneTime = true
 	}
 
 	return machine, oneTime, machine != nil

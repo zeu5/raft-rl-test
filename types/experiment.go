@@ -357,10 +357,10 @@ type Analyzer interface {
 
 // Comparator differentiates between different datasets with associated names
 // run, total episodes, experiment names, datasets
-type Comparator func(int, int, []string, []DataSet)
+type Comparator func(int, int, []string, map[string]DataSet)
 
 func NoopComparator() Comparator {
-	return func(i, _ int, s []string, ds []DataSet) {}
+	return func(i, _ int, s []string, ds map[string]DataSet) {}
 }
 
 // ComparisonConfig contains the configuration for the comparison
@@ -519,13 +519,13 @@ func (c *Comparison) Run(ctx context.Context) {
 
 	for run := 0; run < c.cConfig.Runs; run++ { // number of runs
 		fmt.Printf("Run %d\n", run+1)
-		datasets := make(map[string][]DataSet) // array with initial capacity - arrayList
+		datasets := make(map[string]map[string]DataSet) // map of datasets for each analyzer: analyzer name -> datasets
 
 		for name := range c.analyzerCtors {
-			datasets[name] = make([]DataSet, len(c.Experiments))
+			datasets[name] = make(map[string]DataSet, len(c.Experiments))
 		}
 
-		names := make([]string, 0)
+		expNames := make([]string, 0)
 
 		completedExp := make([]int, 0) // index of the completed experiments
 		nextExpIndex := 0              // index of the next experiment to run
@@ -599,10 +599,10 @@ func (c *Comparison) Run(ctx context.Context) {
 
 				// store the analyzers results in the datasets
 				aMap := *c.analyzers[completedResult.ExperimentIndex]
-				names = append(names, c.Experiments[completedResult.ExperimentIndex].Name)
+				expNames = append(expNames, c.Experiments[completedResult.ExperimentIndex].Name)
 				for name, a := range aMap {
 					a := *a
-					datasets[name][completedResult.ExperimentIndex] = a.DataSet() // call the analyzer on the experiment results
+					datasets[name][c.Experiments[completedResult.ExperimentIndex].Name] = a.DataSet() // store the analyzer results in the datasets
 				}
 				if totalRunExp == len(c.Experiments) {
 					close(endChannel)
@@ -627,7 +627,7 @@ func (c *Comparison) Run(ctx context.Context) {
 		printer.Stop()
 
 		for name, comp := range c.comparators {
-			comp(run, c.cConfig.Episodes, names, datasets[name]) // make the plots
+			comp(run, c.cConfig.Episodes, expNames, datasets[name]) // make the plots
 		}
 	}
 }

@@ -89,10 +89,10 @@ func (gca *GridCoverageAnalyzer) Reset() {
 }
 
 func GridCoverageComparator() types.Comparator {
-	return func(i, _ int, s []string, ds []types.DataSet) {
+	return func(i, _ int, s []string, ds map[string]types.DataSet) {
 		for i := 0; i < len(s); i++ {
 			name := s[i]
-			dataSet := ds[i].(map[int]map[int]map[int]bool)
+			dataSet := ds[name].(map[int]map[int]map[int]bool)
 			positions := 0
 			for _, g := range dataSet {
 				for _, p := range g {
@@ -168,10 +168,10 @@ func (ga *GridAnalyzer) Reset() {
 var _ types.Analyzer = (*GridAnalyzer)(nil)
 
 func GridPlotComparator(figPath string) types.Comparator {
-	return func(run, _ int, s []string, ds []types.DataSet) {
+	return func(run, _ int, s []string, ds map[string]types.DataSet) {
 		for i := 0; i < len(s); i++ {
 			name := s[i]
-			dataSet := ds[i].(*GridDataSet)
+			dataSet := ds[name].(*GridDataSet)
 
 			bs, _ := json.Marshal(dataSet)
 			os.WriteFile(strconv.Itoa(run)+"_"+name+".json", bs, 0400)
@@ -185,10 +185,10 @@ func GridPlotComparator(figPath string) types.Comparator {
 }
 
 func GridPositionComparator(iPos, jPos, kPos int) types.Comparator {
-	return func(run, _ int, s []string, ds []types.DataSet) {
+	return func(run, _ int, s []string, ds map[string]types.DataSet) {
 		for i := 0; i < len(s); i++ {
 			name := s[i]
-			dataSet := ds[i].(*GridDataSet)
+			dataSet := ds[name].(*GridDataSet)
 
 			visits := 0
 			_, ok := dataSet.Visits[iPos]
@@ -205,10 +205,10 @@ func GridPositionComparator(iPos, jPos, kPos int) types.Comparator {
 }
 
 func GridDepthComparator() types.Comparator {
-	return func(run, _ int, s []string, ds []types.DataSet) {
+	return func(run, _ int, s []string, ds map[string]types.DataSet) {
 		for i := 0; i < len(s); i++ {
 			name := s[i]
-			dataSet := ds[i].(*GridDataSet)
+			dataSet := ds[name].(*GridDataSet)
 
 			gridVisits := make(map[int]int)
 
