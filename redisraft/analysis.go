@@ -31,7 +31,7 @@ func (r *redisRaftState) Hash() string {
 	return hex.EncodeToString(hash[:])
 }
 
-func newRedisPartState(s types.State, colors ...RedisRaftColorFunc) *redisRaftState {
+func NewRedisPartState(s types.State, colors ...RedisRaftColorFunc) *redisRaftState {
 	p, ok := s.(*types.Partition)
 	if ok {
 		r := &redisRaftState{nodeStates: make(map[uint64]*redisRaftColoredState)}
@@ -102,7 +102,7 @@ func (ca *CoverageAnalyzer) Analyze(run int, episode int, startingTimestep int, 
 			for analyzed < ca.EpisodeHorizon && index < trace.Len() { // until the end of trace or completed the chunk
 				// analyze one step
 				s, _, _, _ := trace.Get(index)
-				sHash := newRedisPartState(s.(*types.Partition), ca.colors...).Hash()
+				sHash := NewRedisPartState(s.(*types.Partition), ca.colors...).Hash()
 				if _, ok := ca.uniqueStates[sHash]; !ok {
 					ca.uniqueStates[sHash] = true
 				}
@@ -241,7 +241,7 @@ func (b *BugCrashAnalyzer) Analyze(run int, episode int, startingTimestep int, s
 					logs += string(bs) + "\n\n"
 				}
 			}
-			logFilePath := path.Join(b.savePath, strconv.Itoa(run)+"_"+s+"_"+strconv.Itoa(i)+"_bug.log")
+			logFilePath := path.Join(b.savePath, strconv.Itoa(run)+"_"+s+"_ep"+strconv.Itoa(episode)+"_ts"+strconv.Itoa(startingTimestep+i)+"_epStep"+strconv.Itoa(i)+"_bug.log")
 			os.WriteFile(logFilePath, []byte(logs), 0644)
 		}
 	}

@@ -176,7 +176,7 @@ func EtcdRaftBugs(episodes, horizon int, savePath string, ctx context.Context) {
 	), types.BugComparator(saveFile))
 
 	// c.AddAnalysis("CommitOnlyOneEntry", policies.RewardMachineAnalyzer(PredHierarchy_3), policies.RewardMachineCoverageComparator(saveFile))
-	c.AddAnalysis(PredHierName, policies.RewardMachineAnalyzerCtor(PHPolicy), policies.RewardMachineCoverageComparator(saveFile, PredHierName))
+	c.AddAnalysis(PredHierName, policies.RewardMachineAnalyzerCtor(PHPolicy, horizon), policies.RewardMachineCoverageComparator(saveFile, PredHierName))
 	// c.AddAnalysis("PrintReadable", raft.RaftReadableAnalyzer(savePath), raft.RaftEmptyComparator())
 
 	// here you add different policies with their parameters

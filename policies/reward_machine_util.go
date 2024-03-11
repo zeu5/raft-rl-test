@@ -7,7 +7,12 @@ import (
 	"path"
 	"strconv"
 
+	"github.com/zeu5/raft-rl-test/redisraft"
 	"github.com/zeu5/raft-rl-test/types"
+	"gonum.org/v1/plot"
+	"gonum.org/v1/plot/plotter"
+	"gonum.org/v1/plot/plotutil"
+	"gonum.org/v1/plot/vg"
 )
 
 type RewardMachineDataset struct {
@@ -16,13 +21,19 @@ type RewardMachineDataset struct {
 	RMStateTimesteps map[string]int // number of timesteps spent in each state
 
 	FinalPredicateStates map[string]bool // final state coverage
+	TargetCoverage       []int           // number of unique states in the target space
+
+	// abstracted
+	AbsFinalPredicateStates map[string]bool // final state coverage
+	AbsTargetCoverage       []int           // number of unique states in the target space
 
 	// values of the first time the final state is reached
 	FirstEpisodeToFinalPredicate  int
 	FirstTimestepToFinalPredicate int
 
 	// total counters
-	totalEpisodes int
+	totalEpisodes  int
+	EpisodeHorizon int
 }
 
 // Takes in a sequence of predicates to analyze performance over
@@ -32,15 +43,31 @@ type RewardMachineDataset struct {
 type RewardMachineAnalyzer struct {
 	rmp *RewardMachinePolicy
 	ds  *RewardMachineDataset
+
+	reachedFinalPredicateOverall bool // true when the experiment has reached the final predicate at least once
+
+	// for timesteps-based analysis
+	EpisodeHorizon     int
+	TracesToAnalyze    []*types.Trace
+	TimestepsToAnalyze int
+
+	// values for resuming halted episode analysis
+	NextIndexOfFirstTrace  int
+	LastRmStatePos         int
+	FinalPredicateReached  bool
+	EpisodeVisitedRMStates map[string]bool
+
+	// abstraction
+	Colors []redisraft.RedisRaftColorFunc
 }
 
-func RewardMachineAnalyzerCtor(rmp *RewardMachinePolicy) func() types.Analyzer {
+func RewardMachineAnalyzerCtor(rmp *RewardMachinePolicy, epHorizon int, colors ...redisraft.RedisRaftColorFunc) func() types.Analyzer {
 	return func() types.Analyzer {
-		return NewRewardMachineAnalyzer(rmp)
+		return NewRewardMachineAnalyzer(rmp, epHorizon)
 	}
 }
 
-func NewRewardMachineAnalyzer(rmp *RewardMachinePolicy) *RewardMachineAnalyzer {
+func NewRewardMachineAnalyzer(rmp *RewardMachinePolicy, epHorizon int, colors ...redisraft.RedisRaftColorFunc) *RewardMachineAnalyzer {
 	return &RewardMachineAnalyzer{
 		rmp: rmp,
 		ds: &RewardMachineDataset{
@@ -48,82 +75,143 @@ func NewRewardMachineAnalyzer(rmp *RewardMachinePolicy) *RewardMachineAnalyzer {
 			RMStateTimesteps: make(map[string]int),
 
 			FinalPredicateStates: make(map[string]bool),
+			TargetCoverage:       make([]int, 0),
+
+			AbsFinalPredicateStates: make(map[string]bool),
+			AbsTargetCoverage:       make([]int, 0),
 
 			FirstEpisodeToFinalPredicate:  -1,
 			FirstTimestepToFinalPredicate: -1,
 
-			totalEpisodes: 0,
+			totalEpisodes:  0,
+			EpisodeHorizon: epHorizon,
 		},
+		reachedFinalPredicateOverall: false,
+		EpisodeHorizon:               epHorizon,
+		TracesToAnalyze:              make([]*types.Trace, 0),
+		TimestepsToAnalyze:           0,
+		NextIndexOfFirstTrace:        0,
+		LastRmStatePos:               0,
+		FinalPredicateReached:        false,
+		EpisodeVisitedRMStates:       make(map[string]bool),
+
+		Colors: colors,
 	}
 }
 
 func (rma *RewardMachineAnalyzer) Analyze(run int, episode int, startingTimestep int, s string, trace *types.Trace) {
-	rmp := rma.rmp // reward machine policy
-	rm := rmp.rm   // reward machine
-	ds := rma.ds   // dataset
-	finalPredicateReached := false
-	traceRMStatesVisited := make(map[string]bool)
-	curRmStatePos := 0
+	// fmt.Print("RM Analyze\n")
+	// append to traces to analyze
+	rma.TracesToAnalyze = append(rma.TracesToAnalyze, trace)
+	rma.TimestepsToAnalyze += trace.Len()
 
-	finalPredicate := rm.GetFinalPredicate()
-	final := false
+	// fmt.Printf("RM to Analyze: %d\n", rma.TimestepsToAnalyze)
 
-	// first step of the trace
-	startState, _, _, _ := trace.Get(0)
-	curRmStatePos, final = CheckRmCurrentState(rm, startState)
-	rmState := rm.states[curRmStatePos]
-	if _, ok := traceRMStatesVisited[rmState]; !ok { // count unique rm states visited in the episode
-		traceRMStatesVisited[rmState] = true
-	}
-	if final && !finalPredicateReached {
-		ds.FirstTimestepToFinalPredicate = startingTimestep
-		finalPredicateReached = true
-	}
+	// analyze a chunk of size horizon
+	if rma.TimestepsToAnalyze >= rma.EpisodeHorizon {
+		// fmt.Printf("RM Analyzing chunk\n")
+		analyzed := 0                      // count of analyzed steps
+		index := rma.NextIndexOfFirstTrace // index of the first unanalyzed step in the first trace of the buffer
+		trace := rma.TracesToAnalyze[0]    // the first trace of the buffer
 
-	for i := 0; i < trace.Len(); i++ { // iterate through the trace, all states except the first one
-		_, _, nextState, _ := trace.Get(i) // at each timestep, take the nextState
+		curRmStatePos := rma.LastRmStatePos
+		rmState := rma.rmp.rm.states[curRmStatePos]
+		traceRMStatesVisited := rma.EpisodeVisitedRMStates
+		finalPredicateReachedEpisode := rma.FinalPredicateReached
 
-		// update the spent timestep count for the current rm state (before updating the rm state)
-		if _, ok := ds.RMStateTimesteps[rmState]; !ok {
-			ds.RMStateTimesteps[rmState] = 0
-		}
-		ds.RMStateTimesteps[rmState] += 1
+		for analyzed < rma.EpisodeHorizon { // until completing the chunk
+			for analyzed < rma.EpisodeHorizon && index < trace.Len() { // until the end of trace or completed the chunk
+				final := false                         // whether the current state is final or not
+				_, _, nextState, _ := trace.Get(index) // at each timestep, take the nextState
 
-		// update the rm state
-		curRmStatePos, final = CheckRmCurrentState(rm, nextState)
-		if final && !finalPredicateReached {
-			ds.FirstTimestepToFinalPredicate = startingTimestep + i
-			finalPredicateReached = true
-		}
+				// update the spent timestep count for the current rm state (before updating the rm state)
+				if _, ok := rma.ds.RMStateTimesteps[rmState]; !ok {
+					rma.ds.RMStateTimesteps[rmState] = 0
+				}
+				// fmt.Printf("Adding a timestep to %s\n", rmState)
+				rma.ds.RMStateTimesteps[rmState] += 1
 
-		// update the visited rm states in the episode (after updating the rm state with the nextState)
-		rmState = rm.states[curRmStatePos]
-		if _, ok := traceRMStatesVisited[rmState]; !ok { // count unique rm states visited in the episode
-			traceRMStatesVisited[rmState] = true
-		}
+				// update the rm state
+				curRmStatePos, final = CheckRmCurrentState(rma.rmp.rm, nextState)
 
-		if finalPredicateReached && (rmp.oneTime || finalPredicate(nextState)) { // count unique final states explored, either still in predicate or oneTime machine
-			nextStateHash := nextState.Hash()
-			if _, ok := ds.FinalPredicateStates[nextStateHash]; !ok { // count number of unique state explored in the target space (after reaching final state)
-				ds.FinalPredicateStates[nextStateHash] = true
+				// update the first time the final state is reached in the experiment
+				if final && !rma.reachedFinalPredicateOverall {
+					rma.ds.FirstTimestepToFinalPredicate = startingTimestep + index
+					rma.reachedFinalPredicateOverall = true
+				}
+
+				// update if the final state is reached in the episode
+				finalPredicateReachedEpisode = finalPredicateReachedEpisode || final
+
+				// update the visited rm states in the episode (after updating the rm state with the nextState)
+				rmState = rma.rmp.rm.states[curRmStatePos]
+				if _, ok := traceRMStatesVisited[rmState]; !ok { // count unique rm states visited in the episode
+					// fmt.Printf("RM State: %s visited\n", rmState)
+					traceRMStatesVisited[rmState] = true
+				}
+
+				if final || (rma.rmp.oneTime && finalPredicateReachedEpisode) { // count unique final states explored, either still in predicate or oneTime machine
+					nextStateHash := nextState.Hash()
+					if _, ok := rma.ds.FinalPredicateStates[nextStateHash]; !ok { // count number of unique state explored in the target space (after reaching final state)
+						rma.ds.FinalPredicateStates[nextStateHash] = true
+					}
+
+					// abstraction
+					absState := redisraft.NewRedisPartState(nextState.(*types.Partition), rma.Colors...)
+					absStateHash := absState.Hash()
+					if _, ok := rma.ds.AbsFinalPredicateStates[absStateHash]; !ok { // count number of unique state explored in the target space (after reaching final state)
+						rma.ds.AbsFinalPredicateStates[absStateHash] = true
+					}
+
+				}
+				analyzed += 1 // update the analyzed steps count
+				index += 1    // move to the next step
+			}
+			if index == trace.Len() { // episode ended, remove it from buffer and move to the next one
+				// fmt.Printf("RM Analyzing episode ended\n")
+				// fmt.Printf("RM States visited: %v\n", traceRMStatesVisited)
+				// update counters for the number of episodes each rm state is visited
+				for state := range traceRMStatesVisited {
+					if _, ok := rma.ds.RMStateEpisodes[state]; !ok {
+						rma.ds.RMStateEpisodes[state] = 0
+					}
+					// fmt.Printf("Adding an episode to %s\n", state)
+					rma.ds.RMStateEpisodes[state] += 1
+				}
+				// eventually store the first episode reaching the final state
+				if rma.ds.FirstEpisodeToFinalPredicate == -1 && rma.reachedFinalPredicateOverall {
+					rma.ds.FirstEpisodeToFinalPredicate = episode
+					// ds.TracesAfterFirstReached += 1
+				}
+				// update total episode count
+				rma.ds.totalEpisodes += 1
+
+				// move to next trace and reset analysis variables
+				if len(rma.TracesToAnalyze) > 1 {
+					rma.TracesToAnalyze = rma.TracesToAnalyze[1:]
+					trace = rma.TracesToAnalyze[0]
+					index = 0
+					curRmStatePos = 0
+					rmState = rma.rmp.rm.states[curRmStatePos]
+					traceRMStatesVisited = make(map[string]bool)
+					finalPredicateReachedEpisode = false
+				}
+			}
+			if analyzed == rma.EpisodeHorizon { // analyzed all the steps of the chunk, stop here
+				// fmt.Printf("RM chunk ended\n")
+
+				// store the values to start from in the next chunk
+				rma.NextIndexOfFirstTrace = index
+				rma.LastRmStatePos = curRmStatePos
+				rma.EpisodeVisitedRMStates = traceRMStatesVisited
+				rma.FinalPredicateReached = finalPredicateReachedEpisode
 			}
 		}
+		rma.TimestepsToAnalyze -= analyzed
+		// fmt.Printf("RM Appending to coverage: %d\n", len(rma.ds.FinalPredicateStates))          // update the total number of timesteps in the buffer
+		rma.ds.TargetCoverage = append(rma.ds.TargetCoverage, len(rma.ds.FinalPredicateStates)) // append the number of unique states in the overall list
+		rma.ds.AbsTargetCoverage = append(rma.ds.AbsTargetCoverage, len(rma.ds.AbsFinalPredicateStates))
 	}
-	// update counters for the number of episodes each rm state is visited
-	for state := range traceRMStatesVisited {
-		if _, ok := ds.RMStateEpisodes[state]; !ok {
-			ds.RMStateEpisodes[state] = 0
-		}
-		ds.RMStateEpisodes[state] += 1
-	}
-
-	// eventually store the first episode reaching the final state
-	if ds.FirstEpisodeToFinalPredicate == -1 && finalPredicateReached {
-		ds.FirstEpisodeToFinalPredicate = episode
-		// ds.TracesAfterFirstReached += 1
-	}
-	// update total episode count
-	ds.totalEpisodes += 1
 }
 
 // takes a reward machine and a state and returns the position of the current state of the reward machine and whether that is the final state or not
@@ -206,6 +294,83 @@ func RewardMachineCoverageComparator(savePath string, hierachyName string) types
 		bs, err := json.Marshal(data)
 		if err == nil {
 			os.WriteFile(path.Join(savePath, hierachyName+"_"+strconv.Itoa(run)+".json"), bs, 0644)
+		}
+
+		// target coverage
+		// general
+		p := plot.New()
+
+		p.Title.Text = "Target Coverage: " + hierachyName
+		p.X.Label.Text = "Timesteps"
+		p.Y.Label.Text = "States covered"
+
+		coverageData := make(map[string][]int)
+
+		for i := 0; i < len(policies); i++ {
+			name := policies[i]
+			rmDS := ds[name].(*RewardMachineDataset)
+			dataset := rmDS.TargetCoverage
+			coverageData[policies[i]] = make([]int, len(dataset))
+			copy(coverageData[policies[i]], dataset)
+			points := make(plotter.XYs, len(dataset))
+			for j, v := range dataset {
+				points[j] = plotter.XY{
+					X: float64(j) * float64(rmDS.EpisodeHorizon),
+					Y: float64(v),
+				}
+			}
+			line, err := plotter.NewLine(points)
+			if err != nil {
+				continue
+			}
+			line.Color = plotutil.Color(i)
+			p.Add(line)
+			p.Legend.Add(policies[i], line)
+		}
+
+		p.Save(8*vg.Inch, 8*vg.Inch, path.Join(savePath, hierachyName+strconv.Itoa(run)+"_coverage.png"))
+
+		bs, err = json.Marshal(coverageData)
+		if err == nil {
+			os.WriteFile(path.Join(savePath, hierachyName+strconv.Itoa(run)+"_data.json"), bs, 0644)
+		}
+
+		// abstraction
+		p = plot.New()
+
+		p.Title.Text = "Target Coverage (Colors): " + hierachyName
+		p.X.Label.Text = "Timesteps"
+		p.Y.Label.Text = "States covered"
+
+		coverageData = make(map[string][]int)
+
+		for i := 0; i < len(policies); i++ {
+			name := policies[i]
+			rmDS := ds[name].(*RewardMachineDataset)
+			dataset := rmDS.AbsTargetCoverage
+			coverageData[policies[i]] = make([]int, len(dataset))
+			copy(coverageData[policies[i]], dataset)
+			points := make(plotter.XYs, len(dataset))
+			for j, v := range dataset {
+				points[j] = plotter.XY{
+					X: float64(j) * float64(rmDS.EpisodeHorizon),
+					Y: float64(v),
+				}
+			}
+			line, err := plotter.NewLine(points)
+			if err != nil {
+				continue
+			}
+			line.Color = plotutil.Color(i)
+			p.Add(line)
+			p.Legend.Add(policies[i], line)
+		}
+
+		p.Save(8*vg.Inch, 8*vg.Inch, path.Join(savePath, hierachyName+strconv.Itoa(run)+"_abstractionCoverage.png"))
+
+		bs, err = json.Marshal(coverageData)
+		if err == nil {
+			os.WriteFile(path.Join(savePath, hierachyName+strconv.Itoa(run)+"_abstraction_data.json"), bs, 0644)
 		}
 	}
 }

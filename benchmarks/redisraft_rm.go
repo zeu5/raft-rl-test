@@ -33,8 +33,8 @@ func getSetOfMachines(command string) []string {
 		return []string{"AllInSync"}
 	case "MinTerm":
 		return []string{"MinTerm"}
-	case "OutOfSync":
-		return []string{"OutOfSync"}
+	case "OneTerm2":
+		return []string{"OneTerm2"}
 	case "EntriesDifferentTerms":
 		return []string{"EntriesDifferentTerms"}
 	case "Set1":
@@ -382,7 +382,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 
 		RequestTimeout:  100,
 		ElectionTimeout: 400, // new election timeout in milliseconds
-		NumRequests:     5,
+		NumRequests:     3,
 		TickLength:      25,
 	}
 	envConstructor := redisraft.RedisRaftEnvConstructor(path.Join(saveFile, "tickLength"))
@@ -427,11 +427,11 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		"commit",
 		"leader",
 		"vote",
-		"boundedTerm5",
+		"boundedTerm3",
 		"index",
 		// "snapshot",
 		// "log",
-		"boundedLog5",
+		// "boundedLog3",
 	}
 
 	colors := make([]redisraft.RedisRaftColorFunc, 0)
@@ -455,7 +455,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		CrashLimit:             3,
 		MaxInactive:            1,
 
-		TerminalPredicate: redisraft.MaxTerm(3),
+		TerminalPredicate: redisraft.MaxTerm(2),
 	}
 
 	reportConfig := types.RepConfigStandard()
@@ -509,7 +509,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		pHierarchiesPolicies[pHierName] = RMPolicy
 
 		// c.AddAnalysis("plot", redisraft.CoverageAnalyzer(colors...), redisraft.CoverageComparator(saveFile))
-		c.AddAnalysis(pHierName, policies.RewardMachineAnalyzerCtor(RMPolicy), policies.RewardMachineCoverageComparator(saveFile, pHierName))
+		c.AddAnalysis(pHierName, policies.RewardMachineAnalyzerCtor(RMPolicy, horizon), policies.RewardMachineCoverageComparator(saveFile, pHierName))
 	}
 
 	for pHierName, policy := range pHierarchiesPolicies {

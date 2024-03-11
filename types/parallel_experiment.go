@@ -132,6 +132,15 @@ func (p *TerminalPrinter) print() {
 	// p.writer.Flush()
 }
 
+func (p *TerminalPrinter) printDebug() {
+	for i, output := range *p.parallelOutputs {
+		s := output.Get()
+		if s != "" {
+			fmt.Printf("output %d: %s\n", i, s)
+		}
+	}
+}
+
 // PARALLEL OUTPUT
 
 // used to update and print experiment outputs
