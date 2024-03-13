@@ -387,6 +387,24 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 	}
 	envConstructor := redisraft.RedisRaftEnvConstructor(path.Join(saveFile, "tickLength"))
 
+	// clusterConfig := redisraft.ClusterConfig{
+	// 	NumNodes:            3,
+	// 	BasePort:            5000,
+	// 	BaseInterceptPort:   2023,
+	// 	ID:                  1,
+	// 	InterceptListenAddr: "localhost:7074",
+	// 	WorkingDir:          path.Join(saveFile, "tmp"),
+	// 	NumRequests:         5,
+
+	// 	RequestTimeout:  100, // heartbeat in milliseconds (fixed or variable?)
+	// 	ElectionTimeout: 400, // election timeout in milliseconds (from specified value to its double)
+
+	// 	TickLength: 25,
+	// }
+	// env := redisraft.NewRedisRaftEnv(ctx, &clusterConfig, path.Join(saveFile, "tickLength"))
+	// env.SetPrintStats(true) // to print the episode stats
+	// defer env.Cleanup()
+
 	// abstraction for both plot and RL
 	availableColors := make(map[string]redisraft.RedisRaftColorFunc)
 	availableColors["state"] = redisraft.ColorState()   // replica internal state
@@ -404,7 +422,6 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 	availableColors["boundedLog5"] = redisraft.ColorBoundedLog(5)
 	availableColors["boundedLog10"] = redisraft.ColorBoundedLog(10)
 
-	// chosen abstraction
 	chosenColors := []string{
 		"state",
 		"commit",
@@ -417,11 +434,12 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		// "boundedLog3",
 	}
 
-	// create the color functions for the chosen abstraction
 	colors := make([]redisraft.RedisRaftColorFunc, 0)
 	for _, color := range chosenColors {
 		colors = append(colors, availableColors[color])
 	}
+
+	// colors := []redisraft.RedisRaftColorFunc{redisraft.ColorState(), redisraft.ColorCommit(), redisraft.ColorLeader(), redisraft.ColorVote(), redisraft.ColorBoundedTerm(5), redisraft.ColorIndex(), redisraft.ColorSnapshot()}
 
 	partitionEnvConfig := types.PartitionEnvConfig{
 		Ctx:                    ctx,
@@ -437,7 +455,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		CrashLimit:             3,
 		MaxInactive:            1,
 
-		TerminalPredicate: redisraft.MaxTerm(3),
+		TerminalPredicate: redisraft.MaxTerm(2),
 	}
 
 	reportConfig := types.RepConfigStandard()
@@ -491,7 +509,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		pHierarchiesPolicies[pHierName] = RMPolicy
 
 		// c.AddAnalysis("plot", redisraft.CoverageAnalyzer(colors...), redisraft.CoverageComparator(saveFile))
-		c.AddAnalysis(pHierName, policies.RewardMachineAnalyzerCtor(RMPolicy, horizon, colors...), policies.RewardMachineCoverageComparator(saveFile, pHierName))
+		c.AddAnalysis(pHierName, policies.RewardMachineAnalyzerCtor(RMPolicy, horizon), policies.RewardMachineCoverageComparator(saveFile, pHierName))
 	}
 
 	for pHierName, policy := range pHierarchiesPolicies {

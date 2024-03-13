@@ -236,13 +236,13 @@
             "program": "${workspaceFolder}",
             "args": [
                 "redisraft-rm",
-                "Set1",
+                "OneTerm2",
                 "-e",
-                "5",
+                "50",
                 "--save",
                 "result_debug",
                 "--horizon",
-                "100"
+                "30"
             ]
         },
         {
