@@ -90,12 +90,26 @@ def get_bug_class(trace):
     return bug_class
 
 def categorize_bugs(directory):
-    bug_occurrences = {}
+    bug_files = []
+    episode_occurs = {}
     for file in os.listdir(directory):
         parts = file.split("_")
-        algo_name = "_".join(parts[1:-2])
-        episode = parts[-2]
+        key = "_".join(parts[:-2])
+        if key not in episode_occurs:
+            episode_occurs[key] = 0
+        step = int(parts[-2][6:])
+        if step > episode_occurs[key]:
+            episode_occurs[key] = step
 
+    for k,v in episode_occurs.items():
+        bug_files.append("{}_epStep{}_bug.log".format(k,v))
+
+    bug_occurrences = {}
+    for file in bug_files:
+        parts = file.split("_")
+        episode = int(parts[-4][2:])
+        timeStep = int(parts[-3][2:])
+        algo_name = "_".join(parts[1:-4])
         with open(os.path.join(directory, file)) as log_file:
             traces = get_stack_trace(log_file.readlines())
             for t in traces:
@@ -109,7 +123,7 @@ def categorize_bugs(directory):
                 if algo_name not in bug_occurrences[bug_class]:
                     bug_occurrences[bug_class][algo_name] = []
 
-                bug_occurrences[bug_class][algo_name].append(episode)
+                bug_occurrences[bug_class][algo_name].append((episode, timeStep))
 
     return bug_occurrences 
 
