@@ -110,7 +110,7 @@ def categorize_bugs(directory):
         episode = int(parts[-4][2:])
         timeStep = int(parts[-3][2:])
         algo_name = "_".join(parts[1:-4])
-        with open(os.path.join(directory, file)) as log_file:
+        with open(os.path.join(directory, file), encoding = "ISO-8859-1") as log_file:
             traces = get_stack_trace(log_file.readlines())
             for t in traces:
                 bug_class = get_bug_class(t[1])
