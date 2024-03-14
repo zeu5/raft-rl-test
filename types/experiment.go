@@ -178,7 +178,7 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 		}
 
 		// print the last N traces
-		if executedTimesteps >= printTracesIndex {
+		if executedTimesteps >= printTracesIndex && rConfig.PrintLastTracesFunc != nil {
 			readableTrace := rConfig.PrintLastTracesFunc(eCtx.Trace)
 			filePath := path.Join(rConfig.ReportSavePath, "lastTraces", e.Name+"_run"+strconv.Itoa(rConfig.CurrentRun)+"_ep"+strconv.Itoa(totalEpisodes)+".txt")
 			util.WriteToFile(filePath, readableTrace)
