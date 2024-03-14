@@ -131,7 +131,7 @@ def print_bug_occurrences(occurs):
     for bug, v in occurs.items():
         print("Occurrences of {}".format(bug))        
         for algo, instances in v.items():
-            print("\t{}:{}".format(algo, instances))
+            print("\t{}:{}".format(algo, len(instances)))
         
 if __name__ == "__main__":
     if len(sys.argv) != 2:
