@@ -129,9 +129,7 @@ def categorize_bugs(directory):
 
 def print_bug_occurrences(occurs):
     for bug, v in occurs.items():
-        print("Occurrences of {}".format(bug))        
-        for algo, instances in v.items():
-            print("\t{}:{}".format(algo, instances))
+        print("Occurrences of {}:\n{}".format(bug, list(v.keys())))
         
 if __name__ == "__main__":
     if len(sys.argv) != 2:
