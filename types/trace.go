@@ -54,6 +54,7 @@ func (t *Trace) Len() int {
 	return len(t.states)
 }
 
+// Get returns the state, action, next state and a boolean indicating if the index is valid
 func (t *Trace) Get(i int) (State, Action, State, bool) {
 	if i >= len(t.states) {
 		return nil, nil, nil, false

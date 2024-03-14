@@ -63,7 +63,7 @@ type RewardMachineAnalyzer struct {
 
 func RewardMachineAnalyzerCtor(rmp *RewardMachinePolicy, epHorizon int, colors ...redisraft.RedisRaftColorFunc) func() types.Analyzer {
 	return func() types.Analyzer {
-		return NewRewardMachineAnalyzer(rmp, epHorizon)
+		return NewRewardMachineAnalyzer(rmp, epHorizon, colors...)
 	}
 }
 

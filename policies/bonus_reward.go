@@ -115,6 +115,11 @@ func (b *BonusPolicyGreedyReward) UpdateIterationRm(iteration int, trace *RMTrac
 
 	for i := lastIndex; i > -1; i-- { // going backwards in the segment
 		state, action, nextState, reward, outOfSpace, ok := trace.Get(i)
+		// if reached the horizon, set the bonus for next state to be 0
+		if i == lastIndex {
+			outOfSpace = true
+		}
+
 		if ok {
 			b.UpdateRm(0, state, action, nextState, reward, outOfSpace)
 		}

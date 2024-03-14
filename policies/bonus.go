@@ -60,17 +60,21 @@ func (b *BonusPolicyGreedy) NextAction(step int, state types.State, actions []ty
 }
 
 func (b *BonusPolicyGreedy) Update(sCtx *types.StepContext) {
-	state := sCtx.State
-	action := sCtx.Action
-	nextState := sCtx.NextState
 
+}
+
+func (b *BonusPolicyGreedy) UpdateInternal(state types.State, action types.Action, nextState types.State, outOfSpace bool) {
 	stateHash := state.Hash()
 	actionHash := action.Hash()
 	nextStateHash := nextState.Hash()
 	t := b.visits.Get(stateHash, actionHash, 0) + 1
 	b.visits.Set(stateHash, actionHash, t)
 
-	_, nextStateVal := b.qTable.Max(nextStateHash, 1)
+	nextStateVal := 0.0
+	// if not horizon reached, get the value of the next state
+	if !outOfSpace {
+		_, nextStateVal = b.qTable.Max(nextStateHash, 1)
+	}
 	curVal := b.qTable.Get(stateHash, actionHash, 1)
 
 	newVal := (1-b.alpha)*curVal + b.alpha*max(1/t, b.discount*nextStateVal)
@@ -92,6 +96,18 @@ func (b *BonusPolicyGreedy) UpdateRm(step int, state types.State, action types.A
 }
 
 func (b *BonusPolicyGreedy) UpdateIteration(iteration int, trace *types.Trace) {
+	lastIndex := trace.Len() - 1
+
+	for i := lastIndex; i > -1; i-- { // going backwards in the segment
+		outOfSpace := false
+		if i == lastIndex {
+			outOfSpace = true
+		}
+		state, action, nextState, ok := trace.Get(i)
+		if ok {
+			b.UpdateInternal(state, action, nextState, outOfSpace)
+		}
+	}
 
 }
 
