@@ -236,7 +236,7 @@
             "program": "${workspaceFolder}",
             "args": [
                 "redisraft-rm",
-                "OneTerm2",
+                "debug",
                 "-e",
                 "50",
                 "--save",

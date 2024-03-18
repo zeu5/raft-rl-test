@@ -129,7 +129,7 @@ func ColorLog() RedisRaftColorFunc {
 	return func(rns *RedisNodeState) (string, interface{}) {
 		result := make([]string, 0)
 		for _, entry := range rns.Logs {
-			entryVal := fmt.Sprintf("%d-%d", entry.Term, entry.Type) // the log is seen as a list of term-type elements
+			entryVal := fmt.Sprintf("[%d-%d]", entry.Term, entry.Type) // the log is seen as a list of term-type elements
 			result = append(result, entryVal)
 		}
 		return "log", result
@@ -145,7 +145,7 @@ func ColorBoundedLog(termLimit int) RedisRaftColorFunc {
 			if entry.Term > termLimit {
 				term = termLimit + 1
 			}
-			entryVal := fmt.Sprintf("%d-%d", term, entry.Type) // the log is seen as a list of term-type elements
+			entryVal := fmt.Sprintf("[%d-%d]", term, entry.Type) // the log is seen as a list of term-type elements
 			result = append(result, entryVal)
 		}
 		return "log", result

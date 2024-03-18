@@ -795,19 +795,22 @@ func (p *PartitionEnv) handleStartStop(a Action, epCtx *EpisodeContext) (*Partit
 	if ss.Action == "Stop" {
 		nextState.RemainingCrashes = nextState.RemainingCrashes - 1
 		// Stop random node of the color if active
+		// build the list of active nodes of that color
 		activeNodes := make([]uint64, 0)
 		for node, c := range p.CurPartition.ReplicaColors {
 			if c.Hash() == ss.Color {
 				activeNodes = append(activeNodes, node)
 			}
 		}
+		// if there are active nodes of that color
 		if len(activeNodes) > 0 {
+			// choose a random node
 			nodeI := p.rand.Intn(len(activeNodes))
 			epCtx.Report.AddIntEntry(nodeI, "stop_node_index", "partitionEnv.handleStartStopCtx")
 			node := activeNodes[nodeI]
 
 			start = time.Now()
-			err := p.UnderlyingEnv.Stop(node, epCtx)
+			err := p.UnderlyingEnv.Stop(node, epCtx) // stop the node
 			epCtx.Report.AddTimeEntry(time.Since(start), "node_stop_time", "partitionEnv.handleStartStopCtx")
 			if err != nil {
 				return nil, err

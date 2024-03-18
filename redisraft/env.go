@@ -185,7 +185,7 @@ func (r *RedisRaftEnv) Reset(epCtx *types.EpisodeContext) (types.PartitionedSyst
 			r.network.Reset()
 			r.cluster = NewCluster(r.clusterConfig)
 			trials++
-			time.Sleep(2 * time.Second)
+			time.Sleep(500 * time.Millisecond)
 		}
 	}
 

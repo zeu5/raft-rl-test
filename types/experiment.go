@@ -115,7 +115,7 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 	executedTimesteps := 0
 	availableTimesteps := rConfig.Episodes * rConfig.Horizon
 
-	// paddings
+	// output paddings
 	TSPadding := len(strconv.Itoa(availableTimesteps))
 	EPPadding := len(strconv.Itoa(rConfig.Episodes))
 	NamePadding := rConfig.ExperimentContext.LongestNameLen
@@ -458,6 +458,7 @@ func NewComparison(config *ComparisonConfig) *Comparison {
 	foldersToCreate := make([]string, 0)
 
 	foldersToCreate = append(foldersToCreate, "epReports")
+	foldersToCreate = append(foldersToCreate, "coverage")
 
 	if config.RecordTraces {
 		foldersToCreate = append(foldersToCreate, "traces")
@@ -527,10 +528,10 @@ func (c *Comparison) Run(ctx context.Context) {
 
 		expNames := make([]string, 0)
 
-		completedExp := make([]int, 0) // index of the completed experiments
-		nextExpIndex := 0              // index of the next experiment to run
-		runningExp := 0                // number of experiments running
-		totalRunExp := 0               // total number of experiments run
+		// completedExp := make([]int, 0) // index of the completed experiments
+		nextExpIndex := 0 // index of the next experiment to run
+		runningExp := 0   // number of experiments running
+		totalRunExp := 0  // total number of experiments run
 
 		completedChannel := make(chan ExperimentResult, c.cConfig.ParallelExperiments) // channel to use by completed exps
 		failedChannel := make(chan ExperimentResult, c.cConfig.ParallelExperiments)    // channel to use by failed exps
@@ -560,12 +561,15 @@ func (c *Comparison) Run(ctx context.Context) {
 				freeParallelIndexes = freeParallelIndexes[1:] // remove the first free parallel index
 
 				// prepare analyzers
+				// create the map of analyzers for the experiment
 				aMap := make(map[string]*Analyzer)
-				c.analyzers[nextExpIndex] = &aMap // create the analyzers
+				c.analyzers[nextExpIndex] = &aMap
+
+				// instantiate and add analyzers to the map
 				for name, analyzerConstructor := range c.analyzerCtors {
-					analyzer := analyzerConstructor()  // create the analyzer
-					aMap := *c.analyzers[nextExpIndex] // get the map of analyzers for the experiment
-					aMap[name] = &analyzer             // add the analyzer to the map
+					analyzer := analyzerConstructor() // create the analyzer
+					mp := *c.analyzers[nextExpIndex]  // get the map of analyzers for the experiment
+					mp[name] = &analyzer              // add the analyzer to the map
 				}
 
 				// create the context for the experiment
@@ -593,18 +597,20 @@ func (c *Comparison) Run(ctx context.Context) {
 			case completedResult := <-completedChannel:
 				runningExp--
 				totalRunExp++
-				completedExp = append(completedExp, completedResult.ExperimentIndex)
+				// completedExp = append(completedExp, completedResult.ExperimentIndex)
 				freeParallelIndexes = append(freeParallelIndexes, completedResult.ParallelRunIndex)
-				expOutputs[completedResult.ParallelRunIndex].Running = false // set the parallel output to running
+
+				// expOutputs[completedResult.ParallelRunIndex].Running = false // set the parallel output to running
+				expOutputs[completedResult.ParallelRunIndex].Set(fmt.Sprintf("Exp: %*s --Completed--", longestNameLen, c.Experiments[completedResult.ExperimentIndex].Name))
 
 				// store the analyzers results in the datasets
 				aMap := *c.analyzers[completedResult.ExperimentIndex]
 				expNames = append(expNames, c.Experiments[completedResult.ExperimentIndex].Name)
 				for name, a := range aMap {
 					a := *a
-					datasets[name][c.Experiments[completedResult.ExperimentIndex].Name] = a.DataSet() // store the analyzer results in the datasets
+					datasets[name][c.Experiments[completedResult.ExperimentIndex].Name] = a.DataSet() // store the analyzer results in the datasets - analyzer name -> experiment name -> dataset
 				}
-				if totalRunExp == len(c.Experiments) {
+				if totalRunExp == len(c.Experiments) { // if all the experiments have completed
 					close(endChannel)
 				}
 
@@ -613,8 +619,11 @@ func (c *Comparison) Run(ctx context.Context) {
 				totalRunExp++
 
 				freeParallelIndexes = append(freeParallelIndexes, failedResult.ParallelRunIndex)
-				expOutputs[failedResult.ParallelRunIndex].Running = false // set the parallel output to running
-				if totalRunExp == len(c.Experiments) {
+
+				// expOutputs[failedResult.ParallelRunIndex].Running = false // set the parallel output to running
+				expOutputs[failedResult.ParallelRunIndex].Set(fmt.Sprintf("Exp: %*s --Failed--", longestNameLen, c.Experiments[failedResult.ExperimentIndex].Name))
+
+				if totalRunExp == len(c.Experiments) { // if all the experiments have completed
 					close(endChannel)
 				}
 
