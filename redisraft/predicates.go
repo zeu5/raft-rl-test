@@ -335,6 +335,48 @@ func AllNodesStates(states []string) types.RewardFuncSingle {
 	}
 }
 
+func NNodesInState(n int, state string) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		ps, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+
+		count := 0
+		for _, state := range ps.ReplicaStates {
+			rState := state.(*RedisNodeState)
+			if rState.State == state {
+				count++
+			}
+		}
+		return count >= n
+	}
+}
+
+func NodesInDifferentTerms(diff int) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		ps, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+
+		maxTerm := math.MinInt
+		minTerm := math.MaxInt
+		terms := make(map[int]bool)
+		for _, state := range ps.ReplicaStates {
+			rState := state.(*RedisNodeState)
+			terms[rState.Term] = true
+			if rState.Term > maxTerm {
+				maxTerm = rState.Term
+			}
+			if rState.Term < minTerm {
+				minTerm = rState.Term
+			}
+		}
+		return len(terms) > 1 && (maxTerm-minTerm) >= diff
+	}
+}
+
 // returns true if there is at least one node having the specified entries in the log.
 //
 // - quantity: the required number of entries
