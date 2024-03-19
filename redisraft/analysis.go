@@ -11,10 +11,6 @@ import (
 	"strings"
 
 	"github.com/zeu5/raft-rl-test/types"
-	"gonum.org/v1/plot"
-	"gonum.org/v1/plot/plotter"
-	"gonum.org/v1/plot/plotutil"
-	"gonum.org/v1/plot/vg"
 )
 
 type redisRaftColoredState struct {
@@ -151,11 +147,11 @@ func CoverageComparator(plotPath string, episodeHorizon int) types.Comparator {
 		os.Mkdir(plotPath, os.ModePerm)
 	}
 	return func(run, _ int, s []string, ds map[string]types.DataSet) {
-		p := plot.New()
+		// p := plot.New()
 
-		p.Title.Text = "Comparison"
-		p.X.Label.Text = "Timesteps"
-		p.Y.Label.Text = "States covered"
+		// p.Title.Text = "Comparison"
+		// p.X.Label.Text = "Timesteps"
+		// p.Y.Label.Text = "States covered"
 
 		coverageData := make(map[string][]int)
 
@@ -164,23 +160,23 @@ func CoverageComparator(plotPath string, episodeHorizon int) types.Comparator {
 			dataset := ds[name].([]int)
 			coverageData[s[i]] = make([]int, len(dataset))
 			copy(coverageData[s[i]], dataset)
-			points := make(plotter.XYs, len(dataset))
-			for j, v := range dataset {
-				points[j] = plotter.XY{
-					X: float64(j) * float64(episodeHorizon),
-					Y: float64(v),
-				}
-			}
-			line, err := plotter.NewLine(points)
-			if err != nil {
-				continue
-			}
-			line.Color = plotutil.Color(i)
-			p.Add(line)
-			p.Legend.Add(s[i], line)
+			// points := make(plotter.XYs, len(dataset))
+			// for j, v := range dataset {
+			// 	points[j] = plotter.XY{
+			// 		X: float64(j) * float64(episodeHorizon),
+			// 		Y: float64(v),
+			// 	}
+			// }
+			// line, err := plotter.NewLine(points)
+			// if err != nil {
+			// 	continue
+			// }
+			// line.Color = plotutil.Color(i)
+			// p.Add(line)
+			// p.Legend.Add(s[i], line)
 		}
 
-		p.Save(8*vg.Inch, 8*vg.Inch, path.Join(plotPath, strconv.Itoa(run)+"_coverage.png"))
+		// p.Save(8*vg.Inch, 8*vg.Inch, path.Join(plotPath, strconv.Itoa(run)+"_coverage.png"))
 
 		bs, err := json.Marshal(coverageData)
 		if err == nil {

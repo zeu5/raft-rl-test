@@ -289,6 +289,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		ReportConfig: reportConfig,
 
 		ParallelExperiments: 20,
+		TimeBudget:          1 * time.Minute,
 	})
 	// after this NewComparison call, the folder is not wiped anymore
 
@@ -318,7 +319,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		pHierarchiesPolicies[pHierName] = RMPolicy
 
 		// c.AddAnalysis("plot", redisraft.CoverageAnalyzer(colors...), redisraft.CoverageComparator(saveFile))
-		c.AddAnalysis(pHierName, policies.RewardMachineAnalyzerCtor(RMPolicy, horizon, colors...), policies.RewardMachineCoverageComparator(saveFile, pHierName))
+		c.AddAnalysis(pHierName, policies.RewardMachineAnalyzerCtor(RMPolicy, horizon, colors...), policies.RewardMachineCoverageComparator(path.Join(saveFile, "coverage"), pHierName))
 	}
 
 	for pHierName, policy := range pHierarchiesPolicies {

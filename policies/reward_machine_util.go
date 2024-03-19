@@ -9,10 +9,6 @@ import (
 
 	"github.com/zeu5/raft-rl-test/redisraft"
 	"github.com/zeu5/raft-rl-test/types"
-	"gonum.org/v1/plot"
-	"gonum.org/v1/plot/plotter"
-	"gonum.org/v1/plot/plotutil"
-	"gonum.org/v1/plot/vg"
 )
 
 type RewardMachineDataset struct {
@@ -298,11 +294,11 @@ func RewardMachineCoverageComparator(savePath string, hierachyName string) types
 
 		// target coverage
 		// general
-		p := plot.New()
+		// p := plot.New()
 
-		p.Title.Text = "Target Coverage: " + hierachyName
-		p.X.Label.Text = "Timesteps"
-		p.Y.Label.Text = "States covered"
+		// p.Title.Text = "Target Coverage: " + hierachyName
+		// p.X.Label.Text = "Timesteps"
+		// p.Y.Label.Text = "States covered"
 
 		coverageData := make(map[string][]int)
 
@@ -312,23 +308,23 @@ func RewardMachineCoverageComparator(savePath string, hierachyName string) types
 			dataset := rmDS.TargetCoverage
 			coverageData[policies[i]] = make([]int, len(dataset))
 			copy(coverageData[policies[i]], dataset)
-			points := make(plotter.XYs, len(dataset))
-			for j, v := range dataset {
-				points[j] = plotter.XY{
-					X: float64(j) * float64(rmDS.EpisodeHorizon),
-					Y: float64(v),
-				}
-			}
-			line, err := plotter.NewLine(points)
-			if err != nil {
-				continue
-			}
-			line.Color = plotutil.Color(i)
-			p.Add(line)
-			p.Legend.Add(policies[i], line)
+			// points := make(plotter.XYs, len(dataset))
+			// for j, v := range dataset {
+			// 	points[j] = plotter.XY{
+			// 		X: float64(j) * float64(rmDS.EpisodeHorizon),
+			// 		Y: float64(v),
+			// 	}
+			// }
+			// line, err := plotter.NewLine(points)
+			// if err != nil {
+			// 	continue
+			// }
+			// line.Color = plotutil.Color(i)
+			// p.Add(line)
+			// p.Legend.Add(policies[i], line)
 		}
 
-		p.Save(8*vg.Inch, 8*vg.Inch, path.Join(savePath, hierachyName+strconv.Itoa(run)+"_coverage.png"))
+		// p.Save(8*vg.Inch, 8*vg.Inch, path.Join(savePath, hierachyName+strconv.Itoa(run)+"_coverage.png"))
 
 		bs, err = json.Marshal(coverageData)
 		if err == nil {
@@ -336,11 +332,11 @@ func RewardMachineCoverageComparator(savePath string, hierachyName string) types
 		}
 
 		// abstraction
-		p = plot.New()
+		// p = plot.New()
 
-		p.Title.Text = "Target Coverage (Colors): " + hierachyName
-		p.X.Label.Text = "Timesteps"
-		p.Y.Label.Text = "States covered"
+		// p.Title.Text = "Target Coverage (Colors): " + hierachyName
+		// p.X.Label.Text = "Timesteps"
+		// p.Y.Label.Text = "States covered"
 
 		coverageData = make(map[string][]int)
 
@@ -350,23 +346,23 @@ func RewardMachineCoverageComparator(savePath string, hierachyName string) types
 			dataset := rmDS.AbsTargetCoverage
 			coverageData[policies[i]] = make([]int, len(dataset))
 			copy(coverageData[policies[i]], dataset)
-			points := make(plotter.XYs, len(dataset))
-			for j, v := range dataset {
-				points[j] = plotter.XY{
-					X: float64(j) * float64(rmDS.EpisodeHorizon),
-					Y: float64(v),
-				}
-			}
-			line, err := plotter.NewLine(points)
-			if err != nil {
-				continue
-			}
-			line.Color = plotutil.Color(i)
-			p.Add(line)
-			p.Legend.Add(policies[i], line)
+			// points := make(plotter.XYs, len(dataset))
+			// for j, v := range dataset {
+			// 	points[j] = plotter.XY{
+			// 		X: float64(j) * float64(rmDS.EpisodeHorizon),
+			// 		Y: float64(v),
+			// 	}
+			// }
+			// line, err := plotter.NewLine(points)
+			// if err != nil {
+			// 	continue
+			// }
+			// line.Color = plotutil.Color(i)
+			// p.Add(line)
+			// p.Legend.Add(policies[i], line)
 		}
 
-		p.Save(8*vg.Inch, 8*vg.Inch, path.Join(savePath, hierachyName+strconv.Itoa(run)+"_abstractionCoverage.png"))
+		// p.Save(8*vg.Inch, 8*vg.Inch, path.Join(savePath, hierachyName+strconv.Itoa(run)+"_abstractionCoverage.png"))
 
 		bs, err = json.Marshal(coverageData)
 		if err == nil {

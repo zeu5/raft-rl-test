@@ -133,6 +133,10 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 	for executedTimesteps < availableTimesteps {
 		select {
 		case <-rConfig.Context.Done():
+			*rConfig.ExperimentContext.CompletedChannel <- ExperimentResult{
+				ExperimentIndex:  rConfig.ExperimentContext.ExperimentIndex,
+				ParallelRunIndex: rConfig.ExperimentContext.ParallelIndex,
+			}
 			return
 		default:
 		}
@@ -240,6 +244,10 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 
 	select {
 	case <-rConfig.Context.Done():
+		*rConfig.ExperimentContext.CompletedChannel <- ExperimentResult{
+			ExperimentIndex:  rConfig.ExperimentContext.ExperimentIndex,
+			ParallelRunIndex: rConfig.ExperimentContext.ParallelIndex,
+		}
 		return
 	default:
 	}
@@ -388,6 +396,8 @@ type ComparisonConfig struct {
 
 	EnvCtor             func() PartitionedSystemEnvironment
 	ParallelExperiments int
+
+	TimeBudget time.Duration
 }
 
 // record the configuration of the comparison
@@ -404,6 +414,7 @@ func (c *Comparison) recordConfig() {
 	defer f.Close()
 
 	out := make(map[string]interface{})
+	out["duration"] = cfg.TimeBudget.String()
 	out["runs"] = cfg.Runs
 	out["episodes"] = cfg.Episodes
 	out["horizon"] = cfg.Horizon
@@ -511,6 +522,10 @@ func (c *Comparison) Run(ctx context.Context) {
 	// fmt.Println("Comparison.Run Start")
 	c.recordConfig() // store configuration details to a file
 
+	startTime := time.Now()
+	timer := time.NewTimer(c.cConfig.TimeBudget)
+	ticker := time.NewTicker(1 * time.Second)
+
 	longestNameLen := 0
 	for _, e := range c.Experiments {
 		if len(e.Name) > longestNameLen {
@@ -537,17 +552,23 @@ func (c *Comparison) Run(ctx context.Context) {
 		failedChannel := make(chan ExperimentResult, c.cConfig.ParallelExperiments)    // channel to use by failed exps
 		endChannel := make(chan struct{})                                              // channel to signal the end of the comparison
 
+		parallelCtxCancels := make([]context.CancelFunc, 0)
+
 		// list of free parallel indexes, to give to an experiment when it starts (output slot, ...)
 		freeParallelIndexes := make([]int, c.cConfig.ParallelExperiments)
 		for i := 0; i < c.cConfig.ParallelExperiments; i++ {
 			freeParallelIndexes[i] = i
 		}
 
-		// output
-		expOutputs := make([]*ParallelOutput, c.cConfig.ParallelExperiments)
-		for i := 0; i < c.cConfig.ParallelExperiments; i++ {
+		// output, +1 first is for the time
+		expOutputs := make([]*ParallelOutput, c.cConfig.ParallelExperiments+1)
+		for i := 0; i < c.cConfig.ParallelExperiments+1; i++ {
 			expOutputs[i] = NewParallelOutput()
 		}
+
+		expOutputs[0].Running = true // set the first output to running
+		expOutputs[0].Set("[RUNNING] Time Limit: - --- Time: -")
+
 		printer := NewTerminalPrinter(ctx, &expOutputs, 3)
 		printer.Start()
 
@@ -573,18 +594,22 @@ func (c *Comparison) Run(ctx context.Context) {
 				}
 
 				// create the context for the experiment
+				parallelCtx, cancel := context.WithCancel(ctx)
+				parallelCtxCancels = append(parallelCtxCancels, cancel)
+
+				// create the context for the experiment
 				expContext := &ExperimentContext{
-					Context:          ctx,                              // context to cancel the experiment
+					Context:          parallelCtx,                      // context to cancel the experiment
 					ExperimentName:   c.Experiments[nextExpIndex].Name, // name of the experiment
 					ExperimentIndex:  nextExpIndex,                     // index of the experiment in the list of experiments
 					ParallelIndex:    pIndex,                           // index of the experiment in the parallel slot (for printing and instantiating environment)
 					LongestNameLen:   longestNameLen,                   // length of the longest experiment name, used for padding when printing
-					ParallelOutput:   expOutputs[pIndex],               // where to store the current output of the experiment
+					ParallelOutput:   expOutputs[pIndex+1],             // where to store the current output of the experiment, +1 because the first slot is for the time
 					Analyzers:        c.analyzers[nextExpIndex],        // analyzers to be run on the experiment
 					CompletedChannel: &completedChannel,                // channel to signal that the experiment has completed
 					FailedChannel:    &failedChannel,                   // channel to signal that the experiment has failed
 				}
-				expOutputs[pIndex].Running = true // set the parallel output to running
+				expOutputs[pIndex+1].Running = true // set the parallel output to running
 
 				c.startExperiment(c.Experiments[nextExpIndex], expContext)
 				runningExp++   // increment the counter of running experiments
@@ -627,9 +652,19 @@ func (c *Comparison) Run(ctx context.Context) {
 					close(endChannel)
 				}
 
+			case <-ticker.C:
+				expOutputs[0].Set(fmt.Sprintf("[RUNNING] Time Limit: %s --- Time: %s", c.cConfig.TimeBudget.String(), time.Since(startTime).Truncate(time.Second).String()))
+
 			case <-endChannel:
 				fmt.Printf("EndChannel\n")
 				break ExpsLoop
+
+			// time is up, cancel all the running experiments and proceed to comparators
+			case <-timer.C:
+				for _, cancel := range parallelCtxCancels {
+					cancel()
+				}
+
 			}
 		}
 

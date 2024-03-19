@@ -38,6 +38,6 @@ else:
 
     for file in listdir(coverageFolder):
         if file.endswith("data.json") and file != "comparison_config.json":
-            data = jm.load_json_file(folder + "/" + file)
-            plot = p.multilinePlot(data, file.split(".")[0], nEpisodes, horizon)
+            data = jm.load_json_file(coverageFolder + "/" + file)
+            plot = p.multilinePlotShortest(data, file.split(".")[0], nEpisodes, horizon)
             plot.savefig(coverageFolder + "/" + file.split(".")[0] + "-coveragePlot" + ".png", bbox_inches="tight")
