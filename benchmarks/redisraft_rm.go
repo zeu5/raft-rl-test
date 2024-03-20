@@ -225,7 +225,8 @@ func getRedisPredicateHeirarchy(name string) (*policies.RewardMachine, bool, boo
 
 	// two nodes in the state "candidate"
 	case "MoreThanOneCandidate":
-		machine = policies.NewRewardMachine(redisraft.NNodesInState(2, "candidate"))
+		// Having two different candidates to enable competing elections
+		machine = policies.NewRewardMachine(redisraft.NNodesInStateSameTerm(2, "candidate"))
 		oneTime = true
 
 	// two nodes in the state "leader"
