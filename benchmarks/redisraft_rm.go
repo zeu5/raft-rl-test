@@ -205,7 +205,8 @@ func getRedisPredicateHeirarchy(name string) (*policies.RewardMachine, bool, boo
 		oneTime = true
 
 	case "MoreThanOneCandidate":
-		machine = policies.NewRewardMachine(redisraft.NNodesInState(2, "candidate"))
+		// Having two different candidates to enable competing elections
+		machine = policies.NewRewardMachine(redisraft.NNodesInStateSameTerm(2, "candidate"))
 		oneTime = true
 
 	case "MoreThanOneLeader":
@@ -214,18 +215,23 @@ func getRedisPredicateHeirarchy(name string) (*policies.RewardMachine, bool, boo
 		oneTime = true
 
 	case "NodeInDifferentTerms":
+		// Don't care about the different but just need different terms
 		machine = policies.NewRewardMachine(redisraft.NodesInDifferentTerms(0))
 		oneTime = true
 
 	case "NodesInDifferentTermsWithLeader":
+		// Don't care about the different but just need different terms
+		// and at least one leader
 		machine = policies.NewRewardMachine(redisraft.NodesInDifferentTerms(0).And(redisraft.AtLeastOneNodeStates([]string{"leader"})))
 		oneTime = true
 
 	case "MinTermDiff3":
+		// At least 3 terms difference between nodes
 		machine = policies.NewRewardMachine(redisraft.NodesInDifferentTerms(3))
 		oneTime = true
 
 	case "MinTermDiff3WithLeader":
+		// At least 3 terms difference between nodes and at least one leader
 		machine = policies.NewRewardMachine(redisraft.NodesInDifferentTerms(3).And(redisraft.AtLeastOneNodeStates([]string{"leader"})))
 		oneTime = true
 
