@@ -310,6 +310,26 @@ func AtLeastOneNodeStates(states []string) types.RewardFuncSingle {
 	}
 }
 
+// returns true if there is at least one node, in the specified term range, having the specified state
+func AtLeastOneNodeStatesInTerm(states []string, minTerm int, maxTerm int) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		ps, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+
+		for _, state := range ps.ReplicaStates {
+			rState := state.(*RedisNodeState)
+			for _, st := range states {
+				if rState.State == st && rState.Term >= minTerm && rState.Term <= maxTerm {
+					return true
+				}
+			}
+		}
+		return false
+	}
+}
+
 // returns true if all nodes are in of the specified states
 func AllNodesStates(states []string) types.RewardFuncSingle {
 	return func(s types.State) bool {
@@ -613,6 +633,38 @@ func DiffInEntries(val int) types.RewardFuncSingle {
 			}
 		}
 		return (maxLength-minLength) >= val && maxLength > 0 && minLength > 0
+	}
+}
+
+// returns true if two processes have inconsistent entries in their logs (uncommitted)
+func InconsistentLogsPredicate() types.RewardFuncSingle {
+	return func(s types.State) bool {
+		ps, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+
+		logsList := make([][]RedisEntry, 0, len(ps.ReplicaStates))
+		for _, value := range ps.ReplicaStates { // build all replicas committed logs, sorted by index
+			repState := value.(*RedisNodeState)
+			curLog := repState.Logs
+
+			sortedLog := sortLogIndex(curLog) // sort them by index (to compare them)
+			logsList = append(logsList, sortedLog)
+		}
+
+		for j1 := 0; j1 < len(logsList); j1++ { // for each replica
+			for j2 := j1; j2 < len(logsList); j2++ { // for each other replica
+				minSize := min(len(logsList[j1]), len(logsList[j2])) // take the minimum length among the two logs
+
+				for k := 0; k < minSize; k++ { // for each entry
+					if !eqEntryNoID(logsList[j1][k], logsList[j2][k]) { // check if they are equal
+						return true // found two inconsistent entries
+					}
+				}
+			}
+		}
+		return false // all logs are consistent
 	}
 }
 

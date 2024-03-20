@@ -40,7 +40,7 @@ func (g *GuidedPolicy) Reset() {
 func (g *GuidedPolicy) UpdateIteration(iteration int, trace *types.Trace) {
 }
 
-func (g *GuidedPolicy) UpdateIterationRm(iteration int, trace *RMTrace) {
+func (g *GuidedPolicy) UpdateIterationRm(iteration int, trace *RMTrace, reachedFinal bool, reachedFinalStep int) {
 }
 
 func (g *GuidedPolicy) NextAction(step int, state types.State, actions []types.Action) (types.Action, bool) {
@@ -88,7 +88,7 @@ func (g *GuidedPolicy) Update(sCtx *types.StepContext) {
 	g.qTable.Set(stateHash, actionKey, nextVal)
 }
 
-func (g *GuidedPolicy) UpdateRm(step int, state types.State, action types.Action, nextState types.State, rwd bool, oos bool) {
+func (g *GuidedPolicy) UpdateRm(step int, state types.State, action types.Action, nextState types.State, rwd bool, oos bool, reachedFinal bool, reachedFinalStep int) {
 	reward := 0
 	if rwd {
 		reward = 1

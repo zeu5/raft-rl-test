@@ -1,6 +1,7 @@
 package policies
 
 import (
+	"math"
 	"time"
 
 	"math/rand"
@@ -78,7 +79,7 @@ func (b *BonusPolicyGreedyReward) Update(sCtx *types.StepContext) {
 	b.qTable.Set(stateHash, actionHash, newVal)
 }
 
-func (b *BonusPolicyGreedyReward) UpdateRm(step int, state types.State, action types.Action, nextState types.State, rwd bool, out_of_space bool) {
+func (b *BonusPolicyGreedyReward) UpdateRm(step int, state types.State, action types.Action, nextState types.State, rwd bool, out_of_space bool, reachedFinal bool, reachedFinalStep int) {
 	stateHash := state.Hash()
 	actionHash := action.Hash()
 	nextStateHash := nextState.Hash()
@@ -96,6 +97,13 @@ func (b *BonusPolicyGreedyReward) UpdateRm(step int, state types.State, action t
 
 	if out_of_space { // if getting out of the policy space, set default value of next state to be 0, it will never be updated
 		_, nextStateVal = b.qTable.Max(nextStateHash, 0)
+
+		// if reached the final predicate in the episode, add a reward in the step getting out of the hierarchy state and discounted based on how far away it reached the final state
+		if reachedFinal {
+			if step <= reachedFinalStep {
+				r += 2 * math.Pow(b.discount, float64(reachedFinalStep-step+1))
+			}
+		}
 	} else { // else default is 1 in case it is a proper new state
 		_, nextStateVal = b.qTable.Max(nextStateHash, 1)
 	}
@@ -110,18 +118,18 @@ func (b *BonusPolicyGreedyReward) UpdateIteration(iteration int, trace *types.Tr
 
 }
 
-func (b *BonusPolicyGreedyReward) UpdateIterationRm(iteration int, trace *RMTrace) {
+func (b *BonusPolicyGreedyReward) UpdateIterationRm(iteration int, trace *RMTrace, reachedFinal bool, reachedFinalStep int) {
 	lastIndex := trace.Len() - 1
 
 	for i := lastIndex; i > -1; i-- { // going backwards in the segment
-		state, action, nextState, reward, outOfSpace, ok := trace.Get(i)
+		step, state, action, nextState, reward, outOfSpace, ok := trace.Get(i)
 		// if reached the horizon, set the bonus for next state to be 0
 		if i == lastIndex {
 			outOfSpace = true
 		}
 
 		if ok {
-			b.UpdateRm(0, state, action, nextState, reward, outOfSpace)
+			b.UpdateRm(step, state, action, nextState, reward, outOfSpace, reachedFinal, reachedFinalStep)
 		}
 	}
 }

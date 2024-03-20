@@ -19,9 +19,24 @@ func getSetOfMachines(command string) []string {
 	switch command {
 	case "debug":
 		return []string{"OneTerm2"}
+	case "expl":
+		return []string{"neg", "baselines"}
 	case "set1":
 		return []string{"OneTerm2", "AllInTerm2", "LeaderInTerm2[1]", "LeaderInTerm2[2]", "LeaderInTerm2[3]",
 			"LogDiff1[1]", "LogCommitDiff3[1]", "LogCommitDiff3[2]", "LogCommitDiff3[4]",
+			"baselines"}
+	case "set2":
+		return []string{"EntryInTerm2[1]", "EntryInTerm2[3]",
+			"MoreThanOneCandidate", "MoreThanOneLeader",
+			"InconsistentLogs[1]", "InconsistentLogs[2]",
+			"baselines"}
+	case "total":
+		return []string{"LeaderInTerm2[1]", "LeaderInTerm2[2]",
+			"LogDiff1[1]", "LogDiff1[1]WithLeader",
+			"LogCommitDiff3[1]", "LogCommitDiff3[2]", "LogCommitDiff3[4]",
+			"EntryInTerm2[1]", "EntryInTerm2[3]",
+			"MoreThanOneCandidate", "MoreThanOneLeader",
+			"InconsistentLogs[1]", "InconsistentLogs[2]",
 			"baselines"}
 	default:
 		return []string{}
@@ -147,20 +162,13 @@ func getRedisPredicateHeirarchy(name string) (*policies.RewardMachine, bool, boo
 
 	case "LeaderInTerm2[1]":
 		// all nodes in term 2 and one leader elected
-		machine = policies.NewRewardMachine(redisraft.AtLeastOneNodeStates([]string{"leader"}).And(redisraft.AllNodesTerms(2, 2)))
+		machine = policies.NewRewardMachine(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 2, 2))
 		oneTime = true
 
 	case "LeaderInTerm2[2]":
 		// all nodes in term 2 and one leader elected
-		machine = policies.NewRewardMachine(redisraft.AtLeastOneNodeStates([]string{"leader"}).And(redisraft.AllNodesTerms(2, 2)))
-		machine.AddState(redisraft.AllNodesTerms(2, 2), "AllInTerm2")
-		oneTime = true
-
-	case "LeaderInTerm2[3]":
-		// all nodes in term 2 and one leader elected
-		machine = policies.NewRewardMachine(redisraft.AtLeastOneNodeStates([]string{"leader"}).And(redisraft.AllNodesTerms(2, 2)))
+		machine = policies.NewRewardMachine(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 2, 2))
 		machine.AddState(redisraft.AtLeastOneNodeTerm(2, 2), "OneInTerm2")
-		machine.AddState(redisraft.AllNodesTerms(2, 2), "AllInTerm2")
 		oneTime = true
 
 	case "LogCommitDiff3[1]":
@@ -196,38 +204,59 @@ func getRedisPredicateHeirarchy(name string) (*policies.RewardMachine, bool, boo
 		machine = policies.NewRewardMachine(redisraft.AllNodesEntries(5, true, 1, 1, "").And(redisraft.DiffInEntries(1)).And(redisraft.AtLeastOneNodeStates([]string{"leader"})))
 		oneTime = true
 
-	case "NEntriesInAny":
-		machine = policies.NewRewardMachine(redisraft.AtLeastOneNodeEntries(5, false, 1, 2, ""))
+	// case "NEntriesInAny":
+	// 	machine = policies.NewRewardMachine(redisraft.AtLeastOneNodeEntries(5, false, 1, 2, ""))
+	// 	oneTime = true
+
+	// case "NEntriesInAll":
+	// 	machine = policies.NewRewardMachine(redisraft.AllNodesEntries(5, false, 1, 2, ""))
+	// 	oneTime = true
+
+	// at least one log with an entry in term 2
+	case "EntryInTerm2[1]":
+		machine = policies.NewRewardMachine(redisraft.AtLeastOneNodeEntries(1, false, 2, 2, ""))
 		oneTime = true
 
-	case "NEntriesInAll":
-		machine = policies.NewRewardMachine(redisraft.AllNodesEntries(5, false, 1, 2, ""))
+	case "EntryInTerm2[3]":
+		machine = policies.NewRewardMachine(redisraft.AtLeastOneNodeEntries(1, false, 2, 2, ""))
+		machine.AddState(redisraft.AtLeastOneNodeTerm(2, 2), "OneInTerm2")
+		machine.AddState(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 2, 2), "LeaderInTerm2")
 		oneTime = true
 
+	// two nodes in the state "candidate"
 	case "MoreThanOneCandidate":
 		machine = policies.NewRewardMachine(redisraft.NNodesInState(2, "candidate"))
 		oneTime = true
 
+	// two nodes in the state "leader"
 	case "MoreThanOneLeader":
 		// Possible if they are in different terms
 		machine = policies.NewRewardMachine(redisraft.NNodesInState(2, "leader"))
 		oneTime = true
 
-	case "NodeInDifferentTerms":
-		machine = policies.NewRewardMachine(redisraft.NodesInDifferentTerms(0))
-		oneTime = true
+	// two inconsistent logs
+	case "InconsistentLogs[1]":
+		machine = policies.NewRewardMachine(redisraft.InconsistentLogsPredicate())
 
-	case "NodesInDifferentTermsWithLeader":
-		machine = policies.NewRewardMachine(redisraft.NodesInDifferentTerms(0).And(redisraft.AtLeastOneNodeStates([]string{"leader"})))
-		oneTime = true
+	case "InconsistentLogs[2]":
+		machine = policies.NewRewardMachine(redisraft.InconsistentLogsPredicate())
+		machine.AddState(redisraft.AllNodesEntries(5, true, 1, 1, "").And(redisraft.DiffInEntries(1)), "Diff1")
 
-	case "MinTermDiff3":
-		machine = policies.NewRewardMachine(redisraft.NodesInDifferentTerms(3))
-		oneTime = true
+		// case "NodeInDifferentTerms":
+		// 	machine = policies.NewRewardMachine(redisraft.NodesInDifferentTerms(0))
+		// 	oneTime = true
 
-	case "MinTermDiff3WithLeader":
-		machine = policies.NewRewardMachine(redisraft.NodesInDifferentTerms(3).And(redisraft.AtLeastOneNodeStates([]string{"leader"})))
-		oneTime = true
+		// case "NodesInDifferentTermsWithLeader":
+		// 	machine = policies.NewRewardMachine(redisraft.NodesInDifferentTerms(0).And(redisraft.AtLeastOneNodeStates([]string{"leader"})))
+		// 	oneTime = true
+
+		// case "MinTermDiff3":
+		// 	machine = policies.NewRewardMachine(redisraft.NodesInDifferentTerms(3))
+		// 	oneTime = true
+
+		// case "MinTermDiff3WithLeader":
+		// 	machine = policies.NewRewardMachine(redisraft.NodesInDifferentTerms(3).And(redisraft.AtLeastOneNodeStates([]string{"leader"})))
+		// 	oneTime = true
 
 	}
 
@@ -244,10 +273,10 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		ID:                  1,
 		InterceptListenPort: 7074,
 
-		RequestTimeout:  50,
-		ElectionTimeout: 200, // new election timeout in milliseconds
+		RequestTimeout:  60,
+		ElectionTimeout: 240, // new election timeout in milliseconds
 		NumRequests:     3,
-		TickLength:      12,
+		TickLength:      15,
 	}
 	envConstructor := redisraft.RedisRaftEnvConstructor(path.Join(saveFile, "tickLength"))
 
@@ -313,8 +342,8 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		RecordPath: saveFile,
 		Timeout:    10 * time.Second,
 		// thresholds to abort the experiment
-		ConsecutiveTimeoutsAbort: 10,
-		ConsecutiveErrorsAbort:   10,
+		ConsecutiveTimeoutsAbort: 20,
+		ConsecutiveErrorsAbort:   20,
 		// record flags
 		RecordTraces: false,
 		RecordTimes:  true,
@@ -326,7 +355,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		ReportConfig: reportConfig,
 
 		ParallelExperiments: 20,
-		TimeBudget:          1 * time.Minute,
+		TimeBudget:          8 * time.Hour,
 	})
 	// after this NewComparison call, the folder is not wiped anymore
 
@@ -345,9 +374,17 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		// types.BugDesc{Name: "DifferentTermsEntries", Check: redisraft.EntriesInDifferentTermsDummy()},
 	), types.BugComparator(path.Join(saveFile, "bugs")))
 
+	neg := false
+
 	machines := getSetOfMachines(machine)
 	pHierarchiesPolicies := make(map[string]*policies.RewardMachinePolicy) // map of PH policies
 	for _, pHierName := range machines {                                   // for each of them create it and create an analyzer
+		// special name to add negative policy to pure exploration
+		if pHierName == "neg" {
+			neg = true
+			continue
+		}
+
 		rm, oneTime, ok := getRedisPredicateHeirarchy(pHierName)
 		if !ok { // if something goes wrong just skip it
 			continue
@@ -380,6 +417,24 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 			types.NewRandomPolicy(),
 			types.NewPartitionEnv(partitionEnvConfig),
 		))
+		if neg {
+			c.AddExperiment(types.NewExperiment(
+				"negVisits",
+				policies.NewSoftMaxNegFreqPolicy(0.3, 0.7, 1),
+				types.NewPartitionEnv(partitionEnvConfig),
+			))
+			c.AddExperiment(types.NewExperiment(
+				"neg",
+				types.NewSoftMaxNegPolicy(0.1, 0.99, 1),
+				types.NewPartitionEnv(partitionEnvConfig),
+			))
+			c.AddExperiment(types.NewExperiment(
+				"negHT",
+				types.NewSoftMaxNegPolicy(0.1, 0.99, 10),
+				types.NewPartitionEnv(partitionEnvConfig),
+			))
+		}
+
 	}
 
 	// strict := policies.NewStrictPolicy(types.NewRandomPolicy())

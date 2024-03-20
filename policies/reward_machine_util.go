@@ -434,27 +434,33 @@ func PredicatesComparator() types.Comparator {
 type RMPolicy interface {
 	types.Policy
 	// Update with explicit reward flag, called after each transition
-	UpdateRm(int, types.State, types.Action, types.State, bool, bool)
+	UpdateRm(int, types.State, types.Action, types.State, bool, bool, bool, int)
 	// Update iteration with explicit reward flag, called after each transition
-	UpdateIterationRm(int, *RMTrace)
+	UpdateIterationRm(int, *RMTrace, bool, int)
 }
 
 // To capture a trace segment
 type RMTrace struct {
+	steps      []int // step number in the episode
 	states     []types.State
 	actions    []types.Action
 	nextStates []types.State
 	rewards    []bool
 	outOfSpace []bool
+
+	AdditionalInfo map[string]interface{}
 }
 
 func NewRMTrace() *RMTrace {
 	return &RMTrace{
+		steps:      make([]int, 0),
 		states:     make([]types.State, 0),
 		actions:    make([]types.Action, 0),
 		nextStates: make([]types.State, 0),
 		rewards:    make([]bool, 0),
 		outOfSpace: make([]bool, 0),
+
+		AdditionalInfo: make(map[string]interface{}),
 	}
 }
 
@@ -467,6 +473,7 @@ func (t *RMTrace) Slice(from, to int) *RMTrace {
 }
 
 func (t *RMTrace) Append(step int, state types.State, action types.Action, nextState types.State, reward bool, outOfSpace bool) {
+	t.steps = append(t.steps, step)
 	t.states = append(t.states, state)
 	t.actions = append(t.actions, action)
 	t.nextStates = append(t.nextStates, nextState)
@@ -478,19 +485,19 @@ func (t *RMTrace) Len() int {
 	return len(t.states)
 }
 
-func (t *RMTrace) Get(i int) (types.State, types.Action, types.State, bool, bool, bool) {
+func (t *RMTrace) Get(i int) (int, types.State, types.Action, types.State, bool, bool, bool) {
 	if i >= len(t.states) {
-		return nil, nil, nil, false, false, false
+		return -1, nil, nil, nil, false, false, false
 	}
-	return t.states[i], t.actions[i], t.nextStates[i], t.rewards[i], t.outOfSpace[i], true
+	return t.steps[i], t.states[i], t.actions[i], t.nextStates[i], t.rewards[i], t.outOfSpace[i], true
 }
 
-func (t *RMTrace) Last() (types.State, types.Action, types.State, bool, bool, bool) {
+func (t *RMTrace) Last() (int, types.State, types.Action, types.State, bool, bool, bool) {
 	if len(t.states) < 1 {
-		return nil, nil, nil, false, false, false
+		return -1, nil, nil, nil, false, false, false
 	}
 	lastIndex := len(t.states) - 1
-	return t.states[lastIndex], t.actions[lastIndex], t.nextStates[lastIndex], t.rewards[lastIndex], t.outOfSpace[lastIndex], true
+	return t.steps[lastIndex], t.states[lastIndex], t.actions[lastIndex], t.nextStates[lastIndex], t.rewards[lastIndex], t.outOfSpace[lastIndex], true
 }
 
 func (t *RMTrace) GetPrefix(i int) (*RMTrace, bool) {
@@ -498,6 +505,7 @@ func (t *RMTrace) GetPrefix(i int) (*RMTrace, bool) {
 		return nil, false
 	}
 	return &RMTrace{
+		steps:      t.steps[0:i],
 		states:     t.states[0:i],
 		actions:    t.actions[0:i],
 		nextStates: t.nextStates[0:i],

@@ -41,3 +41,4 @@ else:
             data = jm.load_json_file(coverageFolder + "/" + file)
             plot = p.multilinePlotShortest(data, file.split(".")[0], nEpisodes, horizon)
             plot.savefig(coverageFolder + "/" + file.split(".")[0] + "-coveragePlot" + ".png", bbox_inches="tight")
+            plot.close()

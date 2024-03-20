@@ -81,7 +81,7 @@ func (b *BonusPolicyGreedy) UpdateInternal(state types.State, action types.Actio
 	b.qTable.Set(stateHash, actionHash, newVal)
 }
 
-func (b *BonusPolicyGreedy) UpdateRm(step int, state types.State, action types.Action, nextState types.State, rwd bool, oos bool) {
+func (b *BonusPolicyGreedy) UpdateRm(step int, state types.State, action types.Action, nextState types.State, rwd bool, oos bool, reachedFinal bool, reachedFinalStep int) {
 	stateHash := state.Hash()
 	actionHash := action.Hash()
 	nextStateHash := nextState.Hash()
@@ -111,13 +111,13 @@ func (b *BonusPolicyGreedy) UpdateIteration(iteration int, trace *types.Trace) {
 
 }
 
-func (b *BonusPolicyGreedy) UpdateIterationRm(iteration int, trace *RMTrace) {
+func (b *BonusPolicyGreedy) UpdateIterationRm(iteration int, trace *RMTrace, reachedFinal bool, reachedFinalStep int) {
 	lastIndex := trace.Len() - 1
 
 	for i := lastIndex; i > -1; i-- { // going backwards in the segment
-		state, action, nextState, reward, outOfSpace, ok := trace.Get(i)
+		step, state, action, nextState, reward, outOfSpace, ok := trace.Get(i)
 		if ok {
-			b.UpdateRm(0, state, action, nextState, reward, outOfSpace)
+			b.UpdateRm(step, state, action, nextState, reward, outOfSpace, reachedFinal, reachedFinalStep)
 		}
 	}
 
