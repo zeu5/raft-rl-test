@@ -77,8 +77,9 @@ type RewardMachinePolicy struct {
 	curRmStatePos int
 	rm            *RewardMachine
 
-	oneTime bool // if true, the last predicate needs to be satisfied only once throughout the episode
-	reached bool // flag for the last predicate to be reached within an episode
+	oneTime     bool // if true, the last predicate needs to be satisfied only once throughout the episode
+	reached     bool // flag for the last predicate to be reached within an episode
+	reachedStep int  // step at which the last predicate was reached
 
 	curTraceSegments map[string]*RMTrace
 }
@@ -100,7 +101,7 @@ var _ types.Policy = &RewardMachinePolicy{}
 func (rp *RewardMachinePolicy) UpdateIteration(iteration int, trace *types.Trace) {
 	for state, segment := range rp.curTraceSegments {
 		policy := rp.rm.policies[state]
-		policy.UpdateIterationRm(iteration, segment)
+		policy.UpdateIterationRm(iteration, segment, rp.reached, rp.reachedStep)
 	}
 
 	// Resetting values at the end of an iteration
@@ -108,6 +109,7 @@ func (rp *RewardMachinePolicy) UpdateIteration(iteration int, trace *types.Trace
 	rp.curRmStatePos = 0
 	rp.curTraceSegments = make(map[string]*RMTrace)
 	rp.reached = false
+	rp.reachedStep = -1
 }
 
 func (rp *RewardMachinePolicy) Record(recordPath string) {
@@ -169,8 +171,9 @@ func (rp *RewardMachinePolicy) Update(sCtx *types.StepContext) {
 				newRmPosition = i
 				newRmState = rp.rm.states[i]
 
-				if rp.oneTime && newRmPosition == len(rp.rm.states)-1 { // if it is a oneTime machine and it reached the last state
+				if !rp.reached && rp.oneTime && newRmPosition == len(rp.rm.states)-1 { // if it is a oneTime machine and it reached the last state
 					rp.reached = true // set the flag on
+					rp.reachedStep = step
 				}
 
 				break

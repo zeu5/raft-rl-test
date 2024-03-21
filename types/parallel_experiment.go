@@ -51,6 +51,29 @@ func NewExperimentContext(ctx context.Context, name string, expIndex int, parall
 type ExperimentResult struct {
 	ExperimentIndex  int // index of the experiment in the experiment list
 	ParallelRunIndex int // index of the experiment in the parallel slot (for printing)
+
+	TotalTimesteps  int
+	ValidTimesteps  int
+	TotalEpisodes   int
+	ValidEpisodes   int
+	ErrorEpisodes   int
+	TimeoutEpisodes int
+
+	FailureLog string
+}
+
+func (e ExperimentResult) Printable() string {
+	result := ""
+	result += fmt.Sprintf("Experiment Index: %d\n", e.ExperimentIndex)
+
+	result += fmt.Sprintf("Total Timesteps: %d\n", e.TotalTimesteps)
+	result += fmt.Sprintf("Valid Timesteps: %d [%5.1f%%]\n", e.ValidTimesteps, float64(e.ValidTimesteps)/float64(e.TotalTimesteps)*100)
+	result += fmt.Sprintf("Total Episodes: %d\n", e.TotalEpisodes)
+	result += fmt.Sprintf("Valid Episodes: %d [%5.1f%%]\n", e.ValidEpisodes, float64(e.ValidEpisodes)/float64(e.TotalEpisodes)*100)
+	result += fmt.Sprintf("Error Episodes: %d [%5.1f%%]\n", e.ErrorEpisodes, float64(e.ErrorEpisodes)/float64(e.TotalEpisodes)*100)
+	result += fmt.Sprintf("Timeout Episodes: %d [%5.1f%%]\n", e.TimeoutEpisodes, float64(e.TimeoutEpisodes)/float64(e.TotalEpisodes)*100)
+
+	return result
 }
 
 // TERMINAL PRINTER
