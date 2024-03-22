@@ -78,6 +78,8 @@ func (b *BonusPolicyGreedy) UpdateInternal(state types.State, action types.Actio
 	curVal := b.qTable.Get(stateHash, actionHash, 1)
 
 	newVal := (1-b.alpha)*curVal + b.alpha*max(1/t, b.discount*nextStateVal)
+	// newVal := (1-b.alpha)*curVal + b.alpha*(1/t+b.discount*nextStateVal)
+
 	b.qTable.Set(stateHash, actionHash, newVal)
 }
 

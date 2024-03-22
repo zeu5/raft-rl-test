@@ -26,9 +26,14 @@ type ExperimentContext struct {
 
 	CompletedChannel *chan ExperimentResult // channel to signal that the experiment has completed
 	FailedChannel    *chan ExperimentResult // channel to signal that the experiment has failed
+
+	StartTime time.Time
+	TimeLimit time.Duration
 }
 
-func NewExperimentContext(ctx context.Context, name string, expIndex int, parallelIndex int, longestNameLength int, output *ParallelOutput, analyzers *map[string]*Analyzer, completedChannel *chan ExperimentResult, failedChannel *chan ExperimentResult) *ExperimentContext {
+func NewExperimentContext(ctx context.Context, name string, expIndex int, parallelIndex int, longestNameLength int, output *ParallelOutput,
+	analyzers *map[string]*Analyzer, completedChannel *chan ExperimentResult, failedChannel *chan ExperimentResult,
+	startTime time.Time, timeLimit time.Duration) *ExperimentContext {
 	return &ExperimentContext{
 		Context: ctx,
 
@@ -45,6 +50,9 @@ func NewExperimentContext(ctx context.Context, name string, expIndex int, parall
 
 		CompletedChannel: completedChannel,
 		FailedChannel:    failedChannel,
+
+		StartTime: startTime,
+		TimeLimit: timeLimit,
 	}
 }
 

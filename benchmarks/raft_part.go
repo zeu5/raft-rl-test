@@ -66,7 +66,7 @@ func RaftPart(episodes, horizon int, saveFile string, ctx context.Context) {
 	// }))
 
 	c.AddExperiment(types.NewExperiment("BonusMaxRL", policies.NewBonusPolicyGreedyReward(0.1, 0.99, 0.05), getRaftPartEnv(raftConfig, colors)))
-	c.AddExperiment(types.NewExperiment("RL", policies.NewSoftMaxNegFreqPolicy(0.3, 0.7, 1), getRaftPartEnv(raftConfig, colors)))
+	c.AddExperiment(types.NewExperiment("RL", policies.NewSoftMaxNegFreqPolicy(0.3, 0.7, 1, false), getRaftPartEnv(raftConfig, colors)))
 	c.AddExperiment(types.NewExperiment("Random", types.NewRandomPolicy(), getRaftPartEnv(raftConfig, colors)))
 
 	c.Run(ctx)

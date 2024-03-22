@@ -26,7 +26,7 @@ def multilinePlotShortest(data, plotTitle, nEpisodes, horizon):
     Plots the data in a multiline plot plotting only up to the shortest data length.
     """
     plt.figure()
-    x = [i * horizon for i in range(nEpisodes)]
+
 
     plt.xlabel("Time steps")
     plt.ylabel("Unique states")
@@ -36,10 +36,9 @@ def multilinePlotShortest(data, plotTitle, nEpisodes, horizon):
 
     for expName, entries in data.items():
         entries = entries[:dataLen]
-        x_prime = x.copy()
-        x_prime = x[:len(entries)]
+        x = [i * horizon for i in range(dataLen)]
 
-        plt.plot(x_prime, entries, label=expName)
+        plt.plot(x, entries, label=expName)
 
     plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
     
