@@ -1,16 +1,46 @@
 package policies
 
 import (
+	"fmt"
+
 	"github.com/zeu5/raft-rl-test/types"
 )
 
 var InitState string = "Init"
 var FinalState string = "Final"
 
+type RMRLConfig struct {
+	LearningRate float64
+	Discount     float64
+	Epsilon      float64
+}
+
+func (rlc RMRLConfig) Printable() string {
+	result := ""
+	result += "Learning Rate: " + fmt.Sprintf("%1.3f", rlc.LearningRate) + "\n"
+	result += "Discount: " + fmt.Sprintf("%1.3f", rlc.Discount) + "\n"
+	result += "Epsilon: " + fmt.Sprintf("%1.3f", rlc.Epsilon) + "\n"
+
+	return result
+}
+
+func RMRLConfigsListPrintable(rlcs []RMRLConfig) string {
+	result := ""
+	for i, rlc := range rlcs {
+		result += fmt.Sprintf("Config %d\n", i)
+		result += rlc.Printable()
+		result += "\n"
+	}
+
+	return result
+}
+
 type RewardMachine struct {
 	predicates map[string]types.RewardFuncSingle
 	policies   map[string]RMPolicy
 	states     []string
+
+	rlConfig RMRLConfig
 }
 
 func TruePred() types.RewardFuncSingle {
@@ -19,14 +49,16 @@ func TruePred() types.RewardFuncSingle {
 	}
 }
 
-func NewRewardMachine(pred types.RewardFuncSingle) *RewardMachine {
+func NewRewardMachine(pred types.RewardFuncSingle, rlConfig RMRLConfig) *RewardMachine {
 	rm := &RewardMachine{
 		predicates: make(map[string]types.RewardFuncSingle),
 		policies:   make(map[string]RMPolicy),
 		states:     make([]string, 0),
+
+		rlConfig: rlConfig,
 	}
-	rm.policies[FinalState] = NewBonusPolicyGreedy(0.1, 0.99, 0.05)
-	rm.policies[InitState] = NewBonusPolicyGreedyReward(0.1, 0.99, 0.025)
+	rm.policies[FinalState] = NewBonusPolicyGreedy(rlConfig.LearningRate, rlConfig.Discount, rlConfig.Epsilon, true)
+	rm.policies[InitState] = NewBonusPolicyGreedyReward(rlConfig.LearningRate, rlConfig.Discount, rlConfig.Epsilon)
 	rm.states = append(rm.states, InitState)
 	rm.states = append(rm.states, FinalState)
 
@@ -45,7 +77,7 @@ func (rm *RewardMachine) AddState(pred types.RewardFuncSingle, name string) *Rew
 	// modify second-last element, insert the new state
 	rm.states[index] = name
 	rm.predicates[name] = pred
-	rm.policies[name] = NewBonusPolicyGreedyReward(0.1, 0.99, 0.025)
+	rm.policies[name] = NewBonusPolicyGreedyReward(rm.rlConfig.LearningRate, rm.rlConfig.Discount, rm.rlConfig.Epsilon)
 
 	return rm
 }

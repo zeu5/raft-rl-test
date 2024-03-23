@@ -434,7 +434,8 @@ type PartitionEnvConfig struct {
 	RecordStats            bool
 
 	// predicate to check if a state is terminal
-	TerminalPredicate func(*Partition) bool
+	TerminalPredicate            func(*Partition) bool
+	TerminalPredicateDescription string
 }
 
 func (r *PartitionEnvConfig) Printable() string {
@@ -449,6 +450,7 @@ func (r *PartitionEnvConfig) Printable() string {
 	result = fmt.Sprintf("%s WithByzantine: %t\n", result, r.WithByzantine)
 	result = fmt.Sprintf("%s MaxByzantine: %d\n", result, r.MaxByzantine)
 	result = fmt.Sprintf("%s RecordStats: %t\n", result, r.RecordStats)
+	result = fmt.Sprintf("%s TerminalPredicateDescription: %s\n", result, r.TerminalPredicateDescription)
 
 	return result
 }

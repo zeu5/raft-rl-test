@@ -13,32 +13,32 @@ import (
 	r "go.etcd.io/raft/v3"
 )
 
-func getPredHierEtcd(name string) (*policies.RewardMachine, bool, bool) {
+func getPredHierEtcd(name string, rlPolicyConfig policies.RMRLConfig) (*policies.RewardMachine, bool, bool) {
 	var machine *policies.RewardMachine = nil
 	oneTime := false
 
 	switch name {
 	case "MultipleLeaderElections3":
-		PredHierarchy_MultipleLeaderElections3 := policies.NewRewardMachine(raft.LeaderElectedPredicateNumber(3)) // final predicate - target space
-		PredHierarchy_MultipleLeaderElections3.AddState(raft.LeaderElectedPredicateNumber(1), "OneElection")      // 1st step
-		PredHierarchy_MultipleLeaderElections3.AddState(raft.LeaderElectedPredicateNumber(2), "TwoElections")     // 2nd ...
+		PredHierarchy_MultipleLeaderElections3 := policies.NewRewardMachine(raft.LeaderElectedPredicateNumber(3), rlPolicyConfig) // final predicate - target space
+		PredHierarchy_MultipleLeaderElections3.AddState(raft.LeaderElectedPredicateNumber(1), "OneElection")                      // 1st step
+		PredHierarchy_MultipleLeaderElections3.AddState(raft.LeaderElectedPredicateNumber(2), "TwoElections")                     // 2nd ...
 		machine = PredHierarchy_MultipleLeaderElections3
 		oneTime = true
 	case "OutdatedLog2":
-		PredHierarchy_OutdatedLog2 := policies.NewRewardMachine(raft.LeaderElectedPredicateNumber(2).And(raft.AtLeastOneLogEmpty().And(raft.AtLeastOneLogNotEmpty()).And(raft.StackSizeLowerBound(1)))) // final predicate - target space
-		PredHierarchy_OutdatedLog2.AddState(raft.LeaderElectedPredicateNumber(1).And(raft.AtLeastOneLogEmpty().And(raft.StackSizeLowerBound(1))), "OneElection")                                        // 1st step
-		PredHierarchy_OutdatedLog2.AddState(raft.LeaderElectedPredicateNumber(1).And(raft.AtLeastOneLogNotEmpty().And(raft.AtLeastOneLogEmpty()).And(raft.StackSizeLowerBound(1))), "TwoElections")     // 2nd ...
+		PredHierarchy_OutdatedLog2 := policies.NewRewardMachine(raft.LeaderElectedPredicateNumber(2).And(raft.AtLeastOneLogEmpty().And(raft.AtLeastOneLogNotEmpty()).And(raft.StackSizeLowerBound(1))), rlPolicyConfig) // final predicate - target space
+		PredHierarchy_OutdatedLog2.AddState(raft.LeaderElectedPredicateNumber(1).And(raft.AtLeastOneLogEmpty().And(raft.StackSizeLowerBound(1))), "OneElection")                                                        // 1st step
+		PredHierarchy_OutdatedLog2.AddState(raft.LeaderElectedPredicateNumber(1).And(raft.AtLeastOneLogNotEmpty().And(raft.AtLeastOneLogEmpty()).And(raft.StackSizeLowerBound(1))), "TwoElections")                     // 2nd ...
 		machine = PredHierarchy_OutdatedLog2
 		oneTime = true
 	case "OutdatedLogSpec":
-		PredHierarchy_OutdatedLogSpec := policies.NewRewardMachine(raft.LeaderElectedPredicateNumberWithTerms(2, []uint64{2, 4}).And(raft.AtLeastOneLogEmpty().And(raft.AtLeastOneLogNotEmptyTerm(2)).And(raft.StackSizeLowerBound(1)))) // final predicate - target space
+		PredHierarchy_OutdatedLogSpec := policies.NewRewardMachine(raft.LeaderElectedPredicateNumberWithTerms(2, []uint64{2, 4}).And(raft.AtLeastOneLogEmpty().And(raft.AtLeastOneLogNotEmptyTerm(2)).And(raft.StackSizeLowerBound(1))), rlPolicyConfig) // final predicate - target space
 		machine = PredHierarchy_OutdatedLogSpec
 		oneTime = true
 	case "Term1":
-		machine = policies.NewRewardMachine(raft.AllInTerm(3))
+		machine = policies.NewRewardMachine(raft.AllInTerm(3), rlPolicyConfig)
 		oneTime = false
 	case "Leader":
-		machine = policies.NewRewardMachine(raft.InState(r.StateLeader))
+		machine = policies.NewRewardMachine(raft.InState(r.StateLeader), rlPolicyConfig)
 	}
 
 	return machine, oneTime, machine != nil
@@ -103,43 +103,49 @@ func EtcdRaftBugs(episodes, horizon int, savePath string, ctx context.Context) {
 		colors = append(colors, availableColors[color])
 	}
 
+	rlPolicyConfig := policies.RMRLConfig{
+		LearningRate: 0.1,
+		Discount:     0.95,
+		Epsilon:      0.05,
+	}
+
 	// build a machine with sequence of predicates
 	// elect a leader, commit with one replica not updated, elect that replica as leader
 
-	PredHierarchy_MultipleLeaderElections := policies.NewRewardMachine(raft.LeaderElectedPredicateNumberWithTerms(3, []uint64{2, 3, 4})) // final predicate - target space
-	PredHierarchy_MultipleLeaderElections.AddState(raft.LeaderElectedPredicateStateWithTerm(2), "FirstElection")                         // 1st step
+	PredHierarchy_MultipleLeaderElections := policies.NewRewardMachine(raft.LeaderElectedPredicateNumberWithTerms(3, []uint64{2, 3, 4}), rlPolicyConfig) // final predicate - target space
+	PredHierarchy_MultipleLeaderElections.AddState(raft.LeaderElectedPredicateStateWithTerm(2), "FirstElection")                                         // 1st step
 	PredHierarchy_MultipleLeaderElections.AddState(raft.LeaderElectedPredicateNumberWithTerms(1, []uint64{2}), "FirstElectionCommit")
 	PredHierarchy_MultipleLeaderElections.AddState(raft.LeaderElectedPredicateStateWithTerm(3).And(raft.LeaderElectedPredicateNumberWithTerms(1, []uint64{2})), "SecondElection") // 1st step
 	PredHierarchy_MultipleLeaderElections.AddState(raft.LeaderElectedPredicateNumberWithTerms(2, []uint64{2, 3}), "SecondElectionCommit")
 	PredHierarchy_MultipleLeaderElections.AddState(raft.LeaderElectedPredicateStateWithTerm(4).And(raft.LeaderElectedPredicateNumberWithTerms(2, []uint64{2, 3})), "ThirdElection") // 1st step
 
 	// elect a leader, commit a request and then elect another leader
-	PredHierarchy_EntriesInDifferentTermsInLogNoStack := policies.NewRewardMachine(raft.EntriesInDifferentTermsInLog(2))
+	PredHierarchy_EntriesInDifferentTermsInLogNoStack := policies.NewRewardMachine(raft.EntriesInDifferentTermsInLog(2), rlPolicyConfig)
 	PredHierarchy_EntriesInDifferentTermsInLogNoStack.AddState(raft.LeaderElectedPredicateNumber(1), "LeaderElected")
 	PredHierarchy_EntriesInDifferentTermsInLogNoStack.AddState(raft.AtLeastOneLogOneEntry(), "OneEntryLog")
 	PredHierarchy_EntriesInDifferentTermsInLogNoStack.AddState(raft.AtLeastOneLogOneEntryPlusReplicaInHigherTerm(), "OneEntryLogAndReplicaInHigherTerm")
 	PredHierarchy_EntriesInDifferentTermsInLogNoStack.AddState(raft.AtLeastOneLogOneEntryPlusSubsequentLeaderElection(), "OneEntryLogAndSubsequentLeaderElection")
 
 	// elect a leader and commit a request
-	PredHierarchy_EntriesInDifferentTermsInLog := policies.NewRewardMachine(raft.EntriesInDifferentTermsInLog(2).And(raft.HighestTermForReplicas(6)))
+	PredHierarchy_EntriesInDifferentTermsInLog := policies.NewRewardMachine(raft.EntriesInDifferentTermsInLog(2).And(raft.HighestTermForReplicas(6)), rlPolicyConfig)
 	PredHierarchy_EntriesInDifferentTermsInLog.AddState(raft.LeaderElectedPredicateState().And(raft.HighestTermForReplicas(2)), "LeaderElected AND HTerm2")
 	PredHierarchy_EntriesInDifferentTermsInLog.AddState(raft.AtLeastOneLogNotEmpty().And(raft.StackSizeLowerBound(2)).And(raft.HighestTermForReplicas(2)), "EntryCommitted AND TwoAvailableRequests AND HTerm2")
 	PredHierarchy_EntriesInDifferentTermsInLog.AddState(raft.AtLeastOneEntryANDSubsequentLeaderElection().And(raft.StackSizeLowerBound(2)).And(raft.HighestTermForReplicas(4)), "OneEntryLogAndSubsequentLeaderElection AND TwoAvailableRequests AND HTerm2")
 
 	// elect a leader and commit a request
-	PredHierarchy_4 := policies.NewRewardMachine(raft.EntriesInDifferentTermsInLog(2))
+	PredHierarchy_4 := policies.NewRewardMachine(raft.EntriesInDifferentTermsInLog(2), rlPolicyConfig)
 	PredHierarchy_4.AddState(raft.LeaderElectedPredicateSpecific(1), "LeaderElected(1)")
 	PredHierarchy_4.AddState(raft.LeaderElectedPredicateSpecific(1).And(raft.ExactEntriesInLogSpecific(1, 1)), "CommitOneEntry(1)")
 	PredHierarchy_4.AddState(raft.LeaderElectedPredicateSpecific(2).And(raft.ExactEntriesInLogSpecific(1, 1)), "ChangeOfLeader(1->2)")
 
-	PredHierarchy_5 := policies.NewRewardMachine(raft.EntriesInDifferentTermsInLog(2))
+	PredHierarchy_5 := policies.NewRewardMachine(raft.EntriesInDifferentTermsInLog(2), rlPolicyConfig)
 	PredHierarchy_5.AddState(raft.ExactEntriesInLog(1), "OneEntryCommitted")
 	PredHierarchy_5.AddState(raft.InStateWithCommittedEntries(r.StateCandidate, 1), "CandidateWithCommittedEntry")
 	PredHierarchy_5.AddState(raft.InStateWithCommittedEntries(r.StateLeader, 1), "NoPartitionWithCandidate")
 
 	// PredHierarchy_6 := policies.NewRewardMachine(raft.EntriesInDifferentTermsInLog(2))
 
-	PredHier, oneTime, _ := getPredHierEtcd(hierarchy)
+	PredHier, oneTime, _ := getPredHierEtcd(hierarchy, rlPolicyConfig)
 	PredHierName := hierarchy
 	PHPolicy := policies.NewRewardMachinePolicy(PredHier, oneTime)
 
@@ -193,7 +199,7 @@ func EtcdRaftBugs(episodes, horizon int, savePath string, ctx context.Context) {
 	))
 	c.AddExperiment(types.NewExperiment(
 		"BonusMaxRL",
-		policies.NewBonusPolicyGreedy(0.1, 0.95, 0.05),
+		policies.NewBonusPolicyGreedy(0.1, 0.95, 0.05, true),
 		getRaftPartEnvCfg(raftConfig, colors, rlConfig),
 	))
 	// c.AddExperiment(types.NewExperiment("PredHierarchy_1", &types.AgentConfig{

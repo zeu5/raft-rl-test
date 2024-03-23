@@ -71,7 +71,7 @@ func RedisRaftExploration(episodes, horizon int, saveFile string, ctx context.Co
 
 	c.AddExperiment(types.NewExperiment(
 		"BonusMax",
-		policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2),
+		policies.NewBonusPolicyGreedy(0.1, 0.99, 0.2, true),
 		partitionEnv,
 	))
 
