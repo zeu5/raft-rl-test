@@ -29,8 +29,8 @@ func getSetOfMachines(command string) []string {
 			"baselines"}
 	case "set2":
 		return []string{"EntryInTerm2[1]", "EntryInTerm2[3]",
-			"MoreThanOneLeader[1]", "MoreThanOneLeader[4]", "OneLeaderAndOneCandidate[3]",
-			"InconsistentLogs[1]", "InconsistentLogs[2]", "InconsistentLogs[3]",
+			"MoreThanOneLeader[1]", "MoreThanOneCandidate[1]", "OneLeaderAndOneCandidate[1]", "OneLeaderAndOneCandidate[3]", "MoreThanOneLeader[4]",
+			"InconsistentLogs[1]", "InconsistentLogs[2]",
 			"baselines"}
 	case "set3":
 		return []string{"EntryInTerm2[3]", "MoreThanOneLeader[4]", "OneLeaderAndOneCandidate[3]", "InconsistentLogs[3]", "LogCommitDiff3[4]"}
@@ -233,7 +233,7 @@ func getRedisPredicateHeirarchy(name string, rmRlConfig policies.RMRLConfig) (*p
 		oneTime = true
 
 	// two nodes in the state "candidate"
-	case "MoreThanOneCandidate":
+	case "MoreThanOneCandidate[1]":
 		// Having two different candidates to enable competing elections
 		machine = policies.NewRewardMachine(redisraft.NNodesInStateSameTerm(2, "candidate"), rmRlConfig)
 		oneTime = true
@@ -241,17 +241,21 @@ func getRedisPredicateHeirarchy(name string, rmRlConfig policies.RMRLConfig) (*p
 	// two nodes in the state "leader"
 	case "MoreThanOneLeader[1]":
 		// Possible if they are in different terms
-		machine = policies.NewRewardMachine(redisraft.NNodesInState(2, "leader"), rmRlConfig)
+		machine = policies.NewRewardMachine(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 1, 1).And(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 2, 2)).And(redisraft.AllNodesTerms(1, 2)).And(redisraft.PendingRequestsAtLeast(2)), rmRlConfig)
 		oneTime = true
 
 	case "MoreThanOneLeader[4]":
-		machine = policies.NewRewardMachine(redisraft.NNodesInState(2, "leader"), rmRlConfig)
+		machine = policies.NewRewardMachine(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 1, 1).And(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 2, 2)).And(redisraft.AllNodesTerms(1, 2)).And(redisraft.PendingRequestsAtLeast(2)), rmRlConfig)
 		machine.AddState(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 1, 1).And(redisraft.AtLeastOneNodeTerm(2, 2)).And(redisraft.AllNodesTerms(1, 2)).And(redisraft.PendingRequestsAtLeast(2)), "LeaderInT1&OneInT2")
 		machine.AddState(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 1, 1).And(redisraft.AtLeastOneNodeStatesInTerm([]string{"pre-candidate"}, 2, 2)).And(redisraft.AllNodesTerms(1, 2)).And(redisraft.PendingRequestsAtLeast(2)), "LeaderInT1&PCandidateInT2")
 		machine.AddState(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 1, 1).And(redisraft.AtLeastOneNodeStatesInTerm([]string{"candidate"}, 2, 2)).And(redisraft.AllNodesTerms(1, 2)).And(redisraft.PendingRequestsAtLeast(2)), "LeaderInT1&CandidateInT2")
 		oneTime = true
 
 	// one node in state leader and one in state candidate
+	case "OneLeaderAndOneCandidate[1]":
+		machine = policies.NewRewardMachine(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 1, 3).And(redisraft.AtLeastOneNodeStatesInTerm([]string{"candidate"}, 1, 3)), rmRlConfig)
+		oneTime = true
+
 	case "OneLeaderAndOneCandidate[3]":
 		machine = policies.NewRewardMachine(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 1, 3).And(redisraft.AtLeastOneNodeStatesInTerm([]string{"candidate"}, 1, 3)), rmRlConfig)
 		machine.AddState(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 1, 1).And(redisraft.AtLeastOneNodeTerm(2, 2)).And(redisraft.AllNodesTerms(1, 2)).And(redisraft.PendingRequestsAtLeast(2)), "LeaderInT1&OneInT2")
@@ -264,7 +268,7 @@ func getRedisPredicateHeirarchy(name string, rmRlConfig policies.RMRLConfig) (*p
 
 	case "InconsistentLogs[2]":
 		machine = policies.NewRewardMachine(redisraft.InconsistentLogsPredicate(), rmRlConfig)
-		machine.AddState(redisraft.AllNodesEntries(5, true, 1, 1, "").And(redisraft.DiffInEntries(1)), "Diff1")
+		machine.AddState(redisraft.LongerUncommitedLogAndTermBehind(1, 1, 1).And(redisraft.AllNodesTerms(1, 2).And(redisraft.PendingRequestsAtLeast(1))), "LongerUncommitedLogAnd1TermBehind")
 
 	case "InconsistentLogs[3]":
 		machine = policies.NewRewardMachine(redisraft.InconsistentLogsPredicate(), rmRlConfig)
@@ -366,7 +370,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 	reportConfig := types.RepConfigStandard()
 	reportConfig.SetPrintLastEpisodes(20)
 
-	comparisonTimeBudget := 2 * time.Hour
+	comparisonTimeBudget := 8 * time.Hour
 	c := types.NewComparison(&types.ComparisonConfig{
 		Runs:       runs,
 		Episodes:   episodes,
@@ -411,15 +415,15 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 
 	RmRlConfigs := make([]policies.RMRLConfig, 0)
 	RmRlConfigs = append(RmRlConfigs, policies.RMRLConfig{
-		LearningRate: 0.1,
-		Discount:     0.99,
+		LearningRate: 0.2,
+		Discount:     0.95,
 		Epsilon:      0.05,
 	})
-	RmRlConfigs = append(RmRlConfigs, policies.RMRLConfig{
-		LearningRate: 0.3,
-		Discount:     0.90,
-		Epsilon:      0.05,
-	})
+	// RmRlConfigs = append(RmRlConfigs, policies.RMRLConfig{
+	// 	LearningRate: 0.3,
+	// 	Discount:     0.90,
+	// 	Epsilon:      0.05,
+	// })
 
 	machines := getSetOfMachines(machine)
 	pHierarchiesPolicies := make(map[string]*policies.RewardMachinePolicy) // map of PH policies
@@ -470,7 +474,7 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 	if baselines {
 		c.AddExperiment(types.NewExperiment(
 			"bonusRlMax",
-			policies.NewBonusPolicyGreedy(0.1, 0.99, 0.05, true),
+			policies.NewBonusPolicyGreedy(0.2, 0.95, 0.05, true),
 			types.NewPartitionEnv(partitionEnvConfig),
 		))
 		c.AddExperiment(types.NewExperiment(

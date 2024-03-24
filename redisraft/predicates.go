@@ -382,16 +382,24 @@ func NNodesInStateSameTerm(n int, state string) types.RewardFuncSingle {
 			return false
 		}
 
-		count := 0
-		terms := make(map[int]bool)
+		termsCount := make(map[int]int)
 		for _, state := range ps.ReplicaStates {
 			rState := state.(*RedisNodeState)
 			if rState.State == state {
-				terms[rState.Term] = true
-				count++
+				v, ok := termsCount[rState.Term]
+				if !ok {
+					termsCount[rState.Term] = 1
+				} else {
+					termsCount[rState.Term] = v + 1
+				}
 			}
 		}
-		return count >= n && len(terms) == 1
+		for _, count := range termsCount {
+			if count >= n {
+				return true
+			}
+		}
+		return false
 	}
 }
 
@@ -689,6 +697,32 @@ func InconsistentLogsPredicate() types.RewardFuncSingle {
 			}
 		}
 		return false // all logs are consistent
+	}
+}
+
+// returns true if there is at least one node with <uncommittedEntriesNumber> uncommitted entries and with <entriesDiff> more entries and <termDiff> behind in term than another node
+func LongerUncommitedLogAndTermBehind(uncommittedEntriesNumber int, entriesDiff int, termDiff int) types.RewardFuncSingle {
+	return func(s types.State) bool {
+		ps, ok := s.(*types.Partition)
+		if !ok {
+			return false
+		}
+
+		for i1, state := range ps.ReplicaStates { // for each replica
+			rState := state.(*RedisNodeState)
+			if rState.Index-rState.Commit < uncommittedEntriesNumber { // check if the log has at least the specified number of uncommitted entries
+				for i2, state2 := range ps.ReplicaStates { // for each other replica
+					if i1 == i2 {
+						continue
+					}
+					rState2 := state2.(*RedisNodeState)
+					if rState.Index-rState2.Index >= entriesDiff && rState2.Term-rState.Term >= termDiff { // if node 1 has more entries and is behind in term
+						return true
+					}
+				}
+			}
+		}
+		return false
 	}
 }
 
