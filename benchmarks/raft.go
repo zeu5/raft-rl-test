@@ -42,7 +42,7 @@ func Raft(episodes, horizon int, saveFile string, ctx context.Context) {
 	c.AddAnalysis("Plot", raft.RaftAnalyzerCtor(saveFile), raft.RaftPlotComparator(saveFile))
 	c.AddExperiment(types.NewExperiment("RL", types.NewSoftMaxNegPolicy(0.3, 0.7, 1), getRaftEnv(raftConfig, abstracter)))
 	c.AddExperiment(types.NewExperiment("Random", types.NewRandomPolicy(), getRaftEnv(raftConfig, abstracter)))
-	c.AddExperiment(types.NewExperiment("BonusMaxRL", policies.NewBonusPolicyGreedy(0.1, 0.99, 0), getRaftEnv(raftConfig, abstracter)))
+	c.AddExperiment(types.NewExperiment("BonusMaxRL", policies.NewBonusPolicyGreedy(0.1, 0.99, 0, true), getRaftEnv(raftConfig, abstracter)))
 
 	c.Run(ctx)
 }

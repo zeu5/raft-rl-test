@@ -33,6 +33,7 @@ type experimentRunConfig struct {
 
 	// last traces configuration
 	PrintLastTraces     int
+	PrintLastTracesTime time.Duration
 	PrintLastTracesFunc func(*Trace) string
 
 	// reports configuration
@@ -111,7 +112,8 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 
 	//fmt.Printf("Running experiment %s, index %d, parallel index %d - after agent creation\n", e.Name, rConfig.CurrentRun, rConfig.ExperimentContext.ParallelIndex)
 
-	printTracesIndex := (rConfig.Episodes - rConfig.PrintLastTraces) * rConfig.Horizon // compute the index to print the last N timesteps
+	printTracesIndex := (rConfig.Episodes - rConfig.PrintLastTraces) * rConfig.Horizon                                                           // compute the index to print the last N timesteps
+	printLastTracesTimeThreshold := rConfig.ExperimentContext.StartTime.Add((rConfig.ExperimentContext.TimeLimit - rConfig.PrintLastTracesTime)) // compute the time threshold to print the last traces
 	executedTimesteps := 0
 	availableTimesteps := rConfig.Episodes * rConfig.Horizon
 
@@ -207,7 +209,8 @@ func (e *Experiment) Run(rConfig *experimentRunConfig) {
 		}
 
 		// print the last N traces
-		if executedTimesteps >= printTracesIndex {
+		currentTime := time.Now()
+		if executedTimesteps >= printTracesIndex || currentTime.After(printLastTracesTimeThreshold) {
 			readableTrace := rConfig.PrintLastTracesFunc(eCtx.Trace)
 			filePath := path.Join(rConfig.ReportSavePath, "lastTraces", e.Name+"_run"+strconv.Itoa(rConfig.CurrentRun)+"_ep"+strconv.Itoa(totalEpisodes)+".txt")
 			util.WriteToFile(filePath, readableTrace)
@@ -431,6 +434,7 @@ type ComparisonConfig struct {
 
 	// last traces configuration
 	PrintLastTraces     int
+	PrintLastTracesTime time.Duration
 	PrintLastTracesFunc func(*Trace) string
 
 	EnvCtor             func() PartitionedSystemEnvironment
@@ -651,6 +655,8 @@ func (c *Comparison) Run(ctx context.Context) {
 					Analyzers:        c.analyzers[nextExpIndex],        // analyzers to be run on the experiment
 					CompletedChannel: &completedChannel,                // channel to signal that the experiment has completed
 					FailedChannel:    &failedChannel,                   // channel to signal that the experiment has failed
+					StartTime:        startTime,                        // start time of the comparison, to print last traces based on time
+					TimeLimit:        c.cConfig.TimeBudget,             // time limit for the experiment
 				}
 				expOutputs[pIndex+1].Running = true // set the parallel output to running
 
@@ -665,6 +671,8 @@ func (c *Comparison) Run(ctx context.Context) {
 			case completedResult := <-completedChannel:
 				runningExp--
 				totalRunExp++
+				completedExpsCount++
+
 				// completedExp = append(completedExp, completedResult.ExperimentIndex)
 				freeParallelIndexes = append(freeParallelIndexes, completedResult.ParallelRunIndex)
 
@@ -692,6 +700,7 @@ func (c *Comparison) Run(ctx context.Context) {
 			case failedResult := <-failedChannel:
 				runningExp--
 				totalRunExp++
+				failedExpsCount++
 
 				freeParallelIndexes = append(freeParallelIndexes, failedResult.ParallelRunIndex)
 
@@ -778,11 +787,15 @@ func (c *Comparison) prepareRunConfig(eCtx *ExperimentContext) *experimentRunCon
 		RecordTimes:         c.cConfig.RecordTimes,
 		RecordPolicy:        c.cConfig.RecordPolicy,
 		PrintLastTraces:     c.cConfig.PrintLastTraces,
+		PrintLastTracesTime: c.cConfig.PrintLastTracesTime,
 		PrintLastTracesFunc: c.cConfig.PrintLastTracesFunc,
 		ReportsPrintConfig:  c.cConfig.ReportConfig,
 		ReportSavePath:      c.cConfig.RecordPath,
 		Timeout:             c.cConfig.Timeout,
 		Context:             eCtx.Context,
+
+		ConsecutiveErrorsAbort:   c.cConfig.ConsecutiveErrorsAbort,
+		ConsecutiveTimeoutsAbort: c.cConfig.ConsecutiveTimeoutsAbort,
 
 		ExperimentContext: eCtx,
 	}

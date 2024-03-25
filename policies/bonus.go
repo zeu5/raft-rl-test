@@ -14,11 +14,13 @@ type BonusPolicyGreedy struct {
 	visits   *QTable
 	epsilon  float64
 	rand     rand.Rand
+
+	max bool
 }
 
 var _ RMPolicy = &BonusPolicyGreedy{}
 
-func NewBonusPolicyGreedy(alpha, discount, epsilon float64) *BonusPolicyGreedy {
+func NewBonusPolicyGreedy(alpha, discount, epsilon float64, max bool) *BonusPolicyGreedy {
 	return &BonusPolicyGreedy{
 		qTable:   NewQTable(),
 		alpha:    alpha,
@@ -26,6 +28,7 @@ func NewBonusPolicyGreedy(alpha, discount, epsilon float64) *BonusPolicyGreedy {
 		visits:   NewQTable(),
 		epsilon:  epsilon,
 		rand:     *rand.New(rand.NewSource(uint64(time.Now().UnixNano()))),
+		max:      max,
 	}
 }
 
@@ -77,7 +80,14 @@ func (b *BonusPolicyGreedy) UpdateInternal(state types.State, action types.Actio
 	}
 	curVal := b.qTable.Get(stateHash, actionHash, 1)
 
-	newVal := (1-b.alpha)*curVal + b.alpha*max(1/t, b.discount*nextStateVal)
+	newVal := 0.0
+
+	if b.max {
+		newVal = (1-b.alpha)*curVal + b.alpha*max(1/t, b.discount*nextStateVal)
+	} else {
+		newVal = (1-b.alpha)*curVal + b.alpha*(1/t+b.discount*nextStateVal)
+	}
+
 	b.qTable.Set(stateHash, actionHash, newVal)
 }
 
