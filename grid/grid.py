@@ -304,7 +304,7 @@ class Experiment:
         fig, axs = plt.subplots(rows, 3)
         for i in range(self.env.grids):
             x,y = int(i//3), i%3
-            axs[x,y].imshow(visits[:, :, i], cmap='hot', interpolation='nearest')
+            axs[x,y].imshow(visits[:, :, i], cmap='Oranges', interpolation='nearest')
             axs[x,y].set_title(f"Grid {i}")
         
         plt.savefig(f"results/{self.name}.png")
@@ -321,10 +321,10 @@ class Experiment:
         for i in range(self.env.depth):
             x,y = int(i//3), i%3
             if x > 1:
-                axs[x,y].imshow(visits[:, :, i], cmap='hot', interpolation='nearest')
+                axs[x,y].imshow(visits[:, :, i], cmap='Oranges', interpolation='nearest')
                 axs[x,y].set_title(f"Depth {i}")
             else:
-                axs[y].imshow(visits[:, :, i], cmap='hot', interpolation='nearest')
+                axs[y].imshow(visits[:, :, i], cmap='Oranges', interpolation='nearest')
                 axs[y].set_title(f"Depth {i}")
 
         plt.savefig(f"results/{self.name}_grid_{grid}.png")
