@@ -15,3 +15,7 @@ def load_json_file(filePath):
     with open(filePath) as f:
         data = json.load(f)
     return data
+
+def save_json_file(filePath, data):
+    with open(filePath, 'w') as f:
+        json.dump(data, f)
