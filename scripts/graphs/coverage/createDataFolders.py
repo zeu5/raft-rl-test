@@ -11,9 +11,14 @@ def copyToFolder(sourceFile, destFile, targetFolder):
 targetFolder = sys.argv[1]
 
 experimentsFolder = targetFolder + "/experiments"
-destinationsFolder = targetFolder + "/coverageData"
-if not os.path.exists(destinationsFolder):
-    os.makedirs(destinationsFolder)
+
+destCoverageFolder = targetFolder + "/coverageData"
+if not os.path.exists(destCoverageFolder):
+    os.makedirs(destCoverageFolder)
+
+destRmStatsFolder = targetFolder + "/rmStatsData"
+if not os.path.exists(destRmStatsFolder):
+    os.makedirs(destRmStatsFolder)
 
 for file in listdir(experimentsFolder): # foreach experiment folder
     if os.path.isdir(experimentsFolder + "/" + file):
@@ -26,9 +31,12 @@ for file in listdir(experimentsFolder): # foreach experiment folder
     coverageFolder = experimentsFolder + "/" + file + "/coverage"
     for coverageFile in listdir(coverageFolder):
         if coverageFile == "0_data.json": # generic coverage
-            copyToFolder(coverageFolder + "/" + coverageFile, experimentName + ".json", destinationsFolder + "/generic")
+            copyToFolder(coverageFolder + "/" + coverageFile, experimentName + ".json", destCoverageFolder + "/generic")
         elif coverageFile.endswith("[1]0_data.json"):
             specificCoverageName = coverageFile.replace("[1]0_data.json", "")
-            copyToFolder(coverageFolder + "/" + coverageFile, experimentName + ".json", destinationsFolder + "/" + specificCoverageName)
+            copyToFolder(coverageFolder + "/" + coverageFile, experimentName + ".json", destCoverageFolder + "/" + specificCoverageName)
+        elif coverageFile.endswith("[1]_0.json"):
+            specificRmStatsName = coverageFile.replace("[1]_0.json", "")
+            copyToFolder(coverageFolder + "/" + coverageFile, experimentName + "_rmStats.json", destRmStatsFolder + "/" + specificRmStatsName)
         
     

@@ -286,6 +286,15 @@
             ],
             "jinja": true,
             "justMyCode": true
+        },
+        {
+            "name": "Python plot script",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            // "args": ["/RSE/RLDS/work/paperExp/pureExpl/coverageData/generic/"]
+            "args": ["/RSE/RLDS/work/paperExp/biasSet1/"]
         }
     ]
 }

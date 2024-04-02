@@ -28,8 +28,8 @@ func getSetOfMachines(command string) []string {
 			"CommittedEntries2(+Sync)[1]",
 			"baselines"}
 	case "set2":
-		return []string{"EntryInTerm2[1]", "EntryInTerm2[3]",
-			"MoreThanOneLeader[1]", "MoreThanOneCandidate[1]", "OneLeaderAndOneCandidate[1]", "OneLeaderAndOneCandidate[3]", "MoreThanOneLeader[4]",
+		return []string{"MoreThanOneLeader[1]", "MoreThanOneCandidate[1]", "OneLeaderAndOneCandidate[1]", "OneLeaderAndOneCandidate[3]",
+			"MoreThanOnePreCandidate[1]", "MoreThanOneCandidate[3]",
 			"InconsistentLogs[1]", "InconsistentLogs[2]",
 			"baselines"}
 	case "set3":
@@ -235,20 +235,33 @@ func getRedisPredicateHeirarchy(name string, rmRlConfig policies.RMRLConfig) (*p
 	// two nodes in the state "candidate"
 	case "MoreThanOneCandidate[1]":
 		// Having two different candidates to enable competing elections
-		machine = policies.NewRewardMachine(redisraft.NNodesInStateSameTerm(2, "candidate"), rmRlConfig)
+		machine = policies.NewRewardMachine(redisraft.NNodesInState(2, "candidate"), rmRlConfig)
+		oneTime = true
+
+	case "MoreThanOneCandidate[3]":
+		// Having two different candidates to enable competing elections
+		machine = policies.NewRewardMachine(redisraft.NNodesInState(2, "candidate"), rmRlConfig)
+		machine.AddState(redisraft.NNodesInState(1, "pre-candidate"), "TwoPreCandidates")
+		machine.AddState(redisraft.NNodesInState(2, "pre-candidate"), "TwoPreCandidates")
+		oneTime = true
+
+	// two nodes in the state "candidate"
+	case "MoreThanOnePreCandidate[1]":
+		// Having two different candidates to enable competing elections
+		machine = policies.NewRewardMachine(redisraft.NNodesInState(2, "pre-candidate"), rmRlConfig)
 		oneTime = true
 
 	// two nodes in the state "leader"
 	case "MoreThanOneLeader[1]":
 		// Possible if they are in different terms
-		machine = policies.NewRewardMachine(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 1, 1).And(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 2, 2)).And(redisraft.AllNodesTerms(1, 2)).And(redisraft.PendingRequestsAtLeast(2)), rmRlConfig)
+		machine = policies.NewRewardMachine(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 1, 1).And(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 2, 2)).And(redisraft.AllNodesTerms(1, 2)), rmRlConfig)
 		oneTime = true
 
 	case "MoreThanOneLeader[4]":
-		machine = policies.NewRewardMachine(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 1, 1).And(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 2, 2)).And(redisraft.AllNodesTerms(1, 2)).And(redisraft.PendingRequestsAtLeast(2)), rmRlConfig)
+		machine = policies.NewRewardMachine(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 1, 1).And(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 2, 2)).And(redisraft.AllNodesTerms(1, 2)), rmRlConfig)
 		machine.AddState(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 1, 1).And(redisraft.AtLeastOneNodeTerm(2, 2)).And(redisraft.AllNodesTerms(1, 2)).And(redisraft.PendingRequestsAtLeast(2)), "LeaderInT1&OneInT2")
-		machine.AddState(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 1, 1).And(redisraft.AtLeastOneNodeStatesInTerm([]string{"pre-candidate"}, 2, 2)).And(redisraft.AllNodesTerms(1, 2)).And(redisraft.PendingRequestsAtLeast(2)), "LeaderInT1&PCandidateInT2")
-		machine.AddState(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 1, 1).And(redisraft.AtLeastOneNodeStatesInTerm([]string{"candidate"}, 2, 2)).And(redisraft.AllNodesTerms(1, 2)).And(redisraft.PendingRequestsAtLeast(2)), "LeaderInT1&CandidateInT2")
+		machine.AddState(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 1, 1).And(redisraft.AtLeastOneNodeStatesInTerm([]string{"pre-candidate"}, 2, 2)).And(redisraft.AllNodesTerms(1, 2)), "LeaderInT1&PCandidateInT2")
+		machine.AddState(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 1, 1).And(redisraft.AtLeastOneNodeStatesInTerm([]string{"candidate"}, 2, 2)).And(redisraft.AllNodesTerms(1, 2)), "LeaderInT1&CandidateInT2")
 		oneTime = true
 
 	// one node in state leader and one in state candidate
@@ -258,8 +271,8 @@ func getRedisPredicateHeirarchy(name string, rmRlConfig policies.RMRLConfig) (*p
 
 	case "OneLeaderAndOneCandidate[3]":
 		machine = policies.NewRewardMachine(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 1, 3).And(redisraft.AtLeastOneNodeStatesInTerm([]string{"candidate"}, 1, 3)), rmRlConfig)
-		machine.AddState(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 1, 1).And(redisraft.AtLeastOneNodeTerm(2, 2)).And(redisraft.AllNodesTerms(1, 2)).And(redisraft.PendingRequestsAtLeast(2)), "LeaderInT1&OneInT2")
-		machine.AddState(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 1, 1).And(redisraft.AtLeastOneNodeStatesInTerm([]string{"pre-candidate"}, 2, 2)).And(redisraft.AllNodesTerms(1, 2)).And(redisraft.PendingRequestsAtLeast(2)), "LeaderInT1&PCandidateInT2")
+		machine.AddState(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 1, 1).And(redisraft.AtLeastOneNodeTerm(2, 2)).And(redisraft.AllNodesTerms(1, 2)), "LeaderInT1&OneInT2")
+		machine.AddState(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 1, 1).And(redisraft.AtLeastOneNodeStatesInTerm([]string{"pre-candidate"}, 2, 2)).And(redisraft.AllNodesTerms(1, 2)), "LeaderInT1&PCandidateInT2")
 		oneTime = true
 
 	// two inconsistent logs

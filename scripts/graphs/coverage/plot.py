@@ -66,8 +66,75 @@ def multilinePlotShortest(data, plotTitle, nEpisodes, horizon, legendLoc="lower 
 
         plt.plot(x, entries, label=expName, color=color, linestyle=style)
 
+    plt.legend(bbox_to_anchor=(1.04, 0.5), loc="center left")
+    
+    return plt
+
+def multilinePlotShortestCustom(data, plotTitle, nEpisodes, horizon, legendLoc="lower right"):
+    """
+    Plots the data in a multiline plot plotting only up to the shortest data length.
+    """
+    plt.figure()
+
+
+    plt.xlabel("Time steps")
+    plt.ylabel("Unique states")
+    plt.title(plotTitle)
+
+    dataLen = min([len(entries) for entries in data.values() if len(entries) > 0])
+    colorIndex = 0
+
+    for expName, entries in data.items():
+        entries = entries[:dataLen]
+        x = [i * horizon for i in range(dataLen)]
+
+        if expName in predefinedColors:
+            color = predefinedColors[expName]
+            style = predefinedStyles[expName]
+        else:
+            color = otherColors[colorIndex]
+            style = "solid"
+            colorIndex += 1
+
+        plt.plot(x, entries, label=expName, color=color, linestyle=style)
+
     # plt.legend(bbox_to_anchor=(1.04, 0.5), loc="center left")
     plt.legend(loc=legendLoc)
     
+    return plt
+
+def multilinePlotShortestCustomSD(data, sdData, sdCoefficient, plotTitle, nEpisodes, horizon, legendLoc="lower right"):
+    """
+    Plots the data in a multiline plot plotting only up to the shortest data length.
+    """
+    plt.figure()
+
+
+    plt.xlabel("Time steps")
+    plt.ylabel("Unique states")
+    plt.title(plotTitle)
+
+    dataLen = min([len(entries) for entries in data.values() if len(entries) > 0])
+    colorIndex = 0
+
+    for expName, entries in data.items():
+        entries = entries[:dataLen]
+        upperBound = [x + sdCoefficient * y for x, y in zip(entries, sdData[expName][:dataLen])]
+        lowerBound = [x - sdCoefficient * y for x, y in zip(entries, sdData[expName][:dataLen])]
+        x = [i * horizon for i in range(dataLen)]
+
+        if expName in predefinedColors:
+            color = predefinedColors[expName]
+            style = predefinedStyles[expName]
+        else:
+            color = otherColors[colorIndex]
+            style = "solid"
+            colorIndex += 1
+
+        plt.plot(x, entries, label=expName, color=color, linestyle=style)
+        plt.fill_between(x, lowerBound, upperBound, color=color, alpha=0.25)
+
+    # plt.legend(bbox_to_anchor=(1.04, 0.5), loc="center left")
+    plt.legend(loc=legendLoc)
     
     return plt
