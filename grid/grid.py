@@ -305,7 +305,7 @@ class Experiment:
         for i in range(self.env.grids):
             x,y = int(i//3), i%3
             axs[x,y].imshow(visits[:, :, i], cmap='Oranges', interpolation='nearest')
-            axs[x,y].set_title(f"Grid {i}")
+            axs[x,y].set_title(f"Cube {i}")
         
         plt.savefig(f"results/{self.name}.png")
 
@@ -349,10 +349,10 @@ def main():
             os.remove(f"results/{file}")
     
     
-    policy = NegRewardPolicy(0.1, 0.99, env.all_directions())
-    exp = Experiment("NegReward", env, policy)
-    exp.run(10000, 100)
-    exp.plot()
+    # policy = NegRewardPolicy(0.1, 0.99, env.all_directions())
+    # exp = Experiment("NegReward", env, policy)
+    # exp.run(10000, 100)
+    # exp.plot()
 
     policy = BonusMaxPolicy(0.1, 0.99, 0.025, env.all_directions())
     exp = Experiment("BonusMax", env, policy)
