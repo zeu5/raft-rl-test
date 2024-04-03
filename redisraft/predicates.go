@@ -356,7 +356,7 @@ func AllNodesStates(states []string) types.RewardFuncSingle {
 }
 
 // returns true if there is at least n nodes having the specified state.
-func NNodesInState(n int, state string) types.RewardFuncSingle {
+func NNodesInState(n int, sName string) types.RewardFuncSingle {
 	return func(s types.State) bool {
 		ps, ok := s.(*types.Partition)
 		if !ok {
@@ -366,7 +366,7 @@ func NNodesInState(n int, state string) types.RewardFuncSingle {
 		count := 0
 		for _, state := range ps.ReplicaStates {
 			rState := state.(*RedisNodeState)
-			if rState.State == state {
+			if rState.State == sName {
 				count++
 			}
 		}
@@ -375,7 +375,7 @@ func NNodesInState(n int, state string) types.RewardFuncSingle {
 }
 
 // returns true if there is at least n nodes having the specified state and all in the same term.
-func NNodesInStateSameTerm(n int, state string) types.RewardFuncSingle {
+func NNodesInStateSameTerm(n int, sName string) types.RewardFuncSingle {
 	return func(s types.State) bool {
 		ps, ok := s.(*types.Partition)
 		if !ok {
@@ -385,7 +385,7 @@ func NNodesInStateSameTerm(n int, state string) types.RewardFuncSingle {
 		termsCount := make(map[int]int)
 		for _, state := range ps.ReplicaStates {
 			rState := state.(*RedisNodeState)
-			if rState.State == state {
+			if rState.State == sName {
 				v, ok := termsCount[rState.Term]
 				if !ok {
 					termsCount[rState.Term] = 1
@@ -403,8 +403,7 @@ func NNodesInStateSameTerm(n int, state string) types.RewardFuncSingle {
 	}
 }
 
-// returns true if the difference in max and min term is at the least diff,
-// Nodes are in at least two different terms
+// returns true if the difference in max and min term is at the least diff
 func NodesInDifferentTerms(diff int) types.RewardFuncSingle {
 	return func(s types.State) bool {
 		ps, ok := s.(*types.Partition)

@@ -5,7 +5,7 @@ import json_manager
 import plot
 import numpy as np
 
-plotName = "PureExpl2"
+plotName = "PureExpl"
 horizon = 50
 
 f1 = []
