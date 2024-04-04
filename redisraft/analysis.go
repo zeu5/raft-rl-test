@@ -22,7 +22,14 @@ type redisRaftState struct {
 }
 
 func (r *redisRaftState) Hash() string {
-	bs, _ := json.Marshal(r.nodeStates)
+	colorMaps := make(map[string]int)
+	for _, s := range r.nodeStates {
+		bs, _ := json.Marshal(s)
+		hash := sha256.Sum256(bs)
+		colorMaps[hex.EncodeToString(hash[:])]++
+	}
+
+	bs, _ := json.Marshal(colorMaps)
 	hash := sha256.Sum256(bs)
 	return hex.EncodeToString(hash[:])
 }

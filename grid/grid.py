@@ -90,7 +90,59 @@ class Grid:
     def reset(self):
         self._cur_pos = Position(0, 0, 0, 0)
         return self._cur_pos
+
+class AbstractPosition:
+    def __init__(self, pos) -> None:
+        self.x = pos.x
+        self.y = pos.y
+        self.pos = pos
+        self.grid = pos.grid
+
+    def __eq__(self, other):
+        return self.x == other.x and self.y == other.y and self.grid == other.grid
+
+    def __hash__(self):
+        return hash((self.x, self.y, self.grid))
+
+    def __str__(self):
+        return f"{self.x}, {self.y}, {self.grid}"
+
+    def __repr__(self):
+        return f"{self.x}, {self.y}, {self.grid}"
+
+    def copy(self):
+        return AbstractPosition(self.pos)
+
+class AbstractGrid:
+    def __init__(self, grid, doors) -> None:
+        self.grid = grid
+        self.doors = {}
+        for k, v in doors.items():
+            self.doors[AbstractPosition(k)] = v
+
+    def _is_door(self, pos):
+        if pos in self.doors:
+            return True
+        
+    def move(self, direction):
+        a_pos = AbstractPosition(self.grid._cur_pos)
+        if direction == "into" and self._is_door(a_pos):
+            self.grid._cur_pos = self.doors[a_pos]
+
+        return self.grid.move(direction)
     
+    def directions(self, pos):
+        a_pos = AbstractPosition(pos)
+        directions = self.grid.directions(pos)
+        if self._is_door(a_pos) and "into" not in directions:
+            directions.append("into")
+        return directions
+
+    def all_directions(self):
+        return self.grid.all_directions()
+    
+    def reset(self):
+        return self.grid.reset()
 
 class Agent:
     def __init__(self, name, env, policy) -> None:
@@ -109,7 +161,10 @@ class Agent:
                 action = self.policy.pick(pos, actions)
                 next_pos = self.env.move(action)
                 self.policy.update_state(pos, action, next_pos)
-                trace.append((pos.copy(), action, next_pos.copy()))
+                if isinstance(pos, AbstractPosition):
+                    trace.append((pos.pos.copy(), action, next_pos.pos.copy()))
+                else:
+                    trace.append((pos.copy(), action, next_pos.copy()))
                 print(f"\r{self.name} - Episode: {episode+1}/{episodes}, Step: {step+1}/{horizon}",end="")
                 pos = next_pos
             self.policy.update(trace)
@@ -281,6 +336,42 @@ class PredHRLPolicy:
                 r = 2+(1/t) if reward else 1/t
                 self.q_tables[pred.name][(pos, action)] = (1-self.alpha)* q_value + self.alpha * max(r, self.gamma * next_q_value)
 
+class RewardBonusMaxPolicy:
+    def __init__(self, alpha, gamma, epsilon, actions, reward_func) -> None:
+        self.alpha = alpha
+        self.gamma = gamma
+        self.actions = actions
+        self.epsilon = epsilon
+        self.visits = {}
+        self.q = {}
+        self.reward_func = reward_func
+    
+    def reset_iter(self):
+        pass
+
+    def update_state(self, pos, action, next_pos):
+        pass
+
+    def pick(self, pos, actions):
+        if np.random.rand() < self.epsilon:
+            return np.random.choice(actions)
+        q_values = [self.q.get((pos, a), 1) for a in actions]
+        return actions[np.argmax(q_values)]
+    
+    
+    def update(self, trace):
+        for (i,(pos, action, next_pos)) in enumerate(trace):
+            q_value = self.q.get((pos, action), 1)
+            t = self.visits.get((next_pos, action), 0) + 1
+            self.visits[(next_pos, action)] = t
+            next_q_value = max([self.q.get((next_pos, a), 1) for a in self.actions])
+            if i == len(trace)-1:
+                next_q_value = max([self.q.get((next_pos, a), 0) for a in self.actions])
+            r = 1/t
+            if self.reward_func(pos):
+                r = 2+(1/t)
+            self.q[(pos, action)] = (1-self.alpha)* q_value + self.alpha * max(r, self.gamma * next_q_value)
+
 class Experiment:
     def __init__(self, name, env, policy) -> None:
         self.env = env
@@ -292,33 +383,35 @@ class Experiment:
         self.traces = self.agent.run(episodes, horizon)
         return self.traces
     
-    def plot(self):
+    def plot(self, dimensions):
+        (height, width, depth, grids) = dimensions
         # plot a heatmap for each grid viewed from the top. The color indicates the combined visits for all positions in that depth.
-        visits = np.zeros((self.env.height, self.env.width, self.env.grids))
+        visits = np.zeros((height, width, grids))
         for trace in self.traces:
             for (pos, action, next_pos) in trace:
                 visits[pos.x, pos.y, pos.grid] += 1
 
         # use subplots to plot each grid with 3 grids in a row
-        rows = math.ceil(self.env.grids/3)
+        rows = math.ceil(grids/3)
         fig, axs = plt.subplots(rows, 3)
-        for i in range(self.env.grids):
+        for i in range(grids):
             x,y = int(i//3), i%3
             axs[x,y].imshow(visits[:, :, i], cmap='Oranges', interpolation='nearest')
             axs[x,y].set_title(f"Cube {i}")
         
         plt.savefig(f"results/{self.name}.png")
 
-    def plot_grid(self, grid):
-        visits = np.zeros((self.env.height, self.env.width, self.env.depth))
+    def plot_grid(self, grid, dimensions):
+        (height, width, depth, grids) = dimensions
+        visits = np.zeros((height, width, depth))
         for trace in self.traces:
             for (pos, action, next_pos) in trace:
                 if pos.grid == grid:
                     visits[pos.x, pos.y, pos.z] += 1
         
-        rows = math.ceil(self.env.depth/3)
+        rows = math.ceil(depth/3)
         fig, axs = plt.subplots(rows, 3)
-        for i in range(self.env.depth):
+        for i in range(depth):
             x,y = int(i//3), i%3
             if x > 1:
                 axs[x,y].imshow(visits[:, :, i], cmap='Oranges', interpolation='nearest')
@@ -334,12 +427,14 @@ def main():
     height = 10
     width = 10
     depth = 3
+    dimensions = (height, width, depth, grids)
     doors = {
         Position(5, 5, 2, 0): Position(0, 0, 0, 1), 
         Position(5, 5, 2, 1): Position(0, 0, 0, 2),
         Position(5, 5, 2, 2): Position(0, 0, 0, 3)
     }
     env = Grid(grids, height, width, depth, doors)
+    abs_env = AbstractGrid(env, doors)
 
     # create a results folder, clear if it exists
     if not os.path.exists("results"):
@@ -357,13 +452,13 @@ def main():
     policy = BonusMaxPolicy(0.1, 0.99, 0.025, env.all_directions())
     exp = Experiment("BonusMax", env, policy)
     exp.run(10000, 100)
-    exp.plot()
-    exp.plot_grid(3)
+    exp.plot(dimensions)
+    exp.plot_grid(3, dimensions)
 
     policy = RandomPolicy()
     exp = Experiment("Random", env, policy)
     exp.run(10000, 100)
-    exp.plot()
+    exp.plot(dimensions)
 
     predicates = [
         Predicate("Grid1", lambda pos: pos.grid == 1),
@@ -373,8 +468,21 @@ def main():
     policy = PredHRLPolicy(0.1, 0.99, 0.025, env.all_directions(), predicates, one_time=True)
     exp = Experiment("PredHRL", env, policy)
     exp.run(10000, 100)
-    exp.plot()
-    exp.plot_grid(3)
+    exp.plot(dimensions)
+    exp.plot_grid(3, dimensions)
+
+    reward_func = lambda pos: pos.grid == 3
+    policy = RewardBonusMaxPolicy(0.1, 0.99, 0.025, env.all_directions(), reward_func)
+    exp = Experiment("RewardBonusMax", env, policy)
+    exp.run(10000, 100)
+    exp.plot(dimensions)
+    exp.plot_grid(3, dimensions)
+
+    policy = BonusMaxPolicy(0.1, 0.99, 0.025, env.all_directions())
+    exp = Experiment("BonusMaxAbs", abs_env, policy)
+    exp.run(10000, 100)
+    exp.plot(dimensions)
+    exp.plot_grid(3, dimensions)
 
 if __name__ == "__main__":
     main()
