@@ -18,6 +18,6 @@ for file in listdir(experimentsFolder): # foreach experiment folder
         experimentName = machineName + "_" + experimentName[0] + "_" + experimentName[-1]
 
     expFolder = experimentsFolder + "/" + file
-    copy_tree(expFolder + "/bugs", destFolder + "/" + expFolder + "/bugs")
-    copy_tree(expFolder + "/crash", destFolder + "/" + expFolder + "/crash")
+    copy_tree(expFolder + "/bugs", destFolder + "/" + experimentName + "/bugs")
+    copy_tree(expFolder + "/crash", destFolder + "/" + experimentName + "/crash")
     
