@@ -26,7 +26,7 @@ folder = sys.argv[1]
 folder = folder + "/rmStatsData"
 
 for expFolder in listdir(folder):
-    expFolderPath = folder + "/" + expFolder
+    expFolderPath = folder + "/" + expFolder # experiment folder
     if os.path.isdir(expFolderPath):
         destinationFolder = expFolderPath + "/outputs"
         if not os.path.exists(destinationFolder):
@@ -36,6 +36,7 @@ for expFolder in listdir(folder):
 
         dataSets = {}
 
+        # fill datasets with the data of all the json files
         for file in jsonFiles:
             data = json_manager.load_json_file(expFolderPath + "/" + file)
             for expName, expData in data.items():

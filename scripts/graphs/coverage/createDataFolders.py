@@ -32,11 +32,11 @@ for file in listdir(experimentsFolder): # foreach experiment folder
     for coverageFile in listdir(coverageFolder):
         if coverageFile == "0_data.json": # generic coverage
             copyToFolder(coverageFolder + "/" + coverageFile, experimentName + ".json", destCoverageFolder + "/generic")
-        elif coverageFile.endswith("[1]0_data.json"):
-            specificCoverageName = coverageFile.replace("[1]0_data.json", "")
+        elif coverageFile.endswith("[1]0_abstraction_data.json"):
+            specificCoverageName = coverageFile.replace("[1]0_abstraction_data.json", "")
             copyToFolder(coverageFolder + "/" + coverageFile, experimentName + ".json", destCoverageFolder + "/" + specificCoverageName)
-        elif coverageFile.endswith("[1]_0.json"):
-            specificRmStatsName = coverageFile.replace("[1]_0.json", "")
+        elif coverageFile.endswith("_0.json"):
+            specificRmStatsName = coverageFile.replace("_0.json", "")
             copyToFolder(coverageFolder + "/" + coverageFile, experimentName + "_rmStats.json", destRmStatsFolder + "/" + specificRmStatsName)
         
     

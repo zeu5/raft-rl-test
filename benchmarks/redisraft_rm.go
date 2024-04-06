@@ -41,11 +41,17 @@ func getSetOfMachines(command string) []string {
 			"MoreThanOnePreCandidate[1]", "MoreThanOneCandidate[3]", "MoreThanOneCandidateSameTerm[1]",
 			"baselines"}
 	case "set5":
-		return []string{"TermDiff2[1]", "TermDiff1[1]", "OneInTerm3[1]", "OneInTerm3PR[1]", "TermDiff2PR[1]", "TermDiff2PR[2]", "TermDiff1PR[1]",
+		return []string{"TermDiff2[1]", "AllInTerm3Sync[1]", "AllInTerm3PR[1]", "AllInTerm3[1]", "TermDiff2PR[1]", "TermDiff2PR[2]", "TermDiff2Sync[1]",
 			"baselines"}
 	case "set6":
 		return []string{"AllInTerm2[1]", "AllInTerm2PR[1]", "OneLeaderAndOneCandidate[1]", "OneLeaderAndOneCandidatePR[3]", "OneLeaderAndOneCandidatePR[1]",
 			"MoreThanOneCandidate[1]", "MoreThanOneCandidatePR[1]", "MoreThanOneCandidatePR[3]",
+			"baselines"}
+	case "set7":
+		return []string{"AllInTerm2[1]", "OneInTerm3[1]", "TermDiff2[1]", "OneLeaderAndOneCandidate[3]", "CommittedEntries2(+Sync)[1]", "EntryInTerm2[3]", "LogCommitDiff3[2]", "LogDiff1[1]", "LeaderInTerm2[1]",
+			"baselines"}
+	case "set8":
+		return []string{"LogCommitDiff3[1]", "LogCommitDiff3[4]", "EntryInTerm2[1]", "EntryInTerm2[3]", "LogCommitDiff3[2]", "LogDiff1[1]", "LeaderInTerm2[1]",
 			"baselines"}
 
 	// term diff 2
@@ -309,6 +315,12 @@ func getRedisPredicateHeirarchy(name string, rmRlConfig policies.RMRLConfig) (*p
 		machine = policies.NewRewardMachine(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 1, 3).And(redisraft.AtLeastOneNodeStatesInTerm([]string{"candidate"}, 1, 3)), rmRlConfig)
 		oneTime = true
 
+	case "OneLeaderAndOneCandidate[3]":
+		machine = policies.NewRewardMachine(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 1, 3).And(redisraft.AtLeastOneNodeStatesInTerm([]string{"candidate"}, 1, 3)), rmRlConfig)
+		machine.AddState(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 1, 1).And(redisraft.AtLeastOneNodeTerm(2, 2)).And(redisraft.AllNodesTerms(1, 2)), "LeaderInT1&OneInT2")
+		machine.AddState(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 1, 1).And(redisraft.AtLeastOneNodeStatesInTerm([]string{"pre-candidate"}, 2, 2)).And(redisraft.AllNodesTerms(1, 2)), "LeaderInT1&PCandidateInT2")
+		oneTime = true
+
 	case "OneLeaderAndOneCandidatePR[1]":
 		machine = policies.NewRewardMachine(redisraft.AtLeastOneNodeStatesInTerm([]string{"leader"}, 1, 3).And(redisraft.AtLeastOneNodeStatesInTerm([]string{"candidate"}, 1, 3)).And(redisraft.PendingRequestsAtLeast(2)), rmRlConfig)
 		oneTime = true
@@ -341,9 +353,26 @@ func getRedisPredicateHeirarchy(name string, rmRlConfig policies.RMRLConfig) (*p
 		machine = policies.NewRewardMachine(redisraft.AtLeastOneNodeTerm(3, 3).And(redisraft.PendingRequestsAtLeast(2)), rmRlConfig)
 		oneTime = true
 
+	// all nodes in term 3
+	case "AllInTerm3[1]":
+		machine = policies.NewRewardMachine(redisraft.AllNodesTerms(3, 3), rmRlConfig)
+		oneTime = true
+
+	case "AllInTerm3PR[1]":
+		machine = policies.NewRewardMachine(redisraft.AllNodesTerms(3, 3).And(redisraft.PendingRequestsAtLeast(2)), rmRlConfig)
+		oneTime = true
+
+	case "AllInTerm3Sync[1]":
+		machine = policies.NewRewardMachine(redisraft.AllNodesEntries(5, true, 1, 1, "").And(redisraft.AllNodesTerms(3, 3)), rmRlConfig)
+		oneTime = true
+
 	// gap of 2 terms
 	case "TermDiff2[1]":
 		machine = policies.NewRewardMachine(redisraft.NodesInDifferentTerms(2), rmRlConfig)
+		oneTime = true
+
+	case "TermDiff2Sync[1]":
+		machine = policies.NewRewardMachine(redisraft.AllNodesEntries(5, true, 1, 1, "").And(redisraft.NodesInDifferentTerms(2)), rmRlConfig)
 		oneTime = true
 
 	case "TermDiff2PR[1]":
@@ -425,11 +454,11 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		"commit",
 		"leader",
 		"vote",
-		"boundedTerm3",
+		"boundedTerm5",
 		"index",
 		// "snapshot",
 		// "log",
-		"boundedLog3",
+		"boundedLog5",
 	}
 
 	// create the color functions for the chosen abstraction
@@ -452,8 +481,8 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 		CrashLimit:             3,
 		MaxInactive:            1,
 
-		TerminalPredicate:            redisraft.MaxTerm(3),
-		TerminalPredicateDescription: "MaxTerm(3)",
+		TerminalPredicate:            redisraft.MaxTerm(5),
+		TerminalPredicateDescription: "MaxTerm(5)",
 	}
 
 	reportConfig := types.RepConfigStandard()

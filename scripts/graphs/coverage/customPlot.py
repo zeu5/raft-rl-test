@@ -4,6 +4,7 @@ import os
 import json_manager
 import plot
 import numpy as np
+import statTests
 
 plotName = "PureExpl"
 horizon = 50
@@ -11,16 +12,20 @@ horizon = 50
 f1 = []
 f2 = ["Term", "random", "bonusRlMax", "neg"]
 f3 = ["Diff", "random", "bonusRlMax", "neg"]
-f4 = ["", "random", "bonusRlMax", "neg", "negVisits"]
+f4 = ["Entry", "random", "bonusRlMax", "negVisits"]
+
+predRL = "OneLeaderAndOneCandidate[3]"
+f5 = ["random", "bonusRlMax", "negVisits", predRL]
 
 # list of names to include (enough to be included in the name), if empty include all
-filterNames = f3
+filterNames = f4
 
 # map of renaming rules for experiment names (key is the name to be replaced, value is the new name that will appear in the plot)
 renamingMap = {
     "bonusRlMax": "BonusMaxRL",
     "negVisits": "NegRLVisits",
     "neg": "NegRL",
+    predRL: "PredRL"
 }
 
 # target folder, it should contain all the target .json files
@@ -62,6 +67,7 @@ stdDevsSets = {}
 finalCoverage = {}
 finalCoverageAvg = {}
 finalCoverageSD = {}
+CoverageStatTests = {}
 
 for expName, expData in dataSets.items():
     avgData = []
@@ -79,9 +85,22 @@ for expName, expData in dataSets.items():
     avgDataSets[expName] = avgData
     stdDevsSets[expName] = stdDevs
 
+# calculate the statistical tests
+for expName, finalCovList in finalCoverage.items():
+    if expName not in {"random", "BonusMaxRL", "NegRLVisits"}:
+        if expName not in CoverageStatTests:
+            CoverageStatTests[expName] = {}
+        CoverageStatTests[expName]["mwu_" + expName + "_random"] = statTests.mwu_test_p(finalCoverage[expName], finalCoverage["random"])
+        CoverageStatTests[expName]["mwu_" + expName + "_BonusMaxRL"] = statTests.mwu_test_p(finalCoverage[expName], finalCoverage["BonusMaxRL"])
+        CoverageStatTests[expName]["mwu_" + expName + "_NegRLVisits"] = statTests.mwu_test_p(finalCoverage[expName], finalCoverage["NegRLVisits"])
 
 # create the plot
-p = plot.multilinePlotShortestCustomSD(avgDataSets, stdDevsSets, 2, "", 0, horizon, "upper left")
+p = plot.multilinePlotShortestCustomSD(avgDataSets, stdDevsSets, 1, "", 0, horizon, "upper left")
+p.savefig(targetFolder + "/" + plotName.replace(" ","_") + "_SD" + ".png", bbox_inches="tight")
+p.savefig(targetFolder + "/" + plotName.replace(" ","_") + "_SD" +".pdf", bbox_inches="tight")
+p.close()
+
+p = plot.multilinePlotShortestCustom(avgDataSets, "", 0, horizon, "upper left")
 p.savefig(targetFolder + "/" + plotName.replace(" ","_") + ".png", bbox_inches="tight")
 p.savefig(targetFolder + "/" + plotName.replace(" ","_") + ".pdf", bbox_inches="tight")
 p.close()
@@ -91,6 +110,7 @@ final = {}
 final["coverage"] = finalCoverage
 final["coverageAvg"] = finalCoverageAvg
 final["coverageSD"] = finalCoverageSD
+final["statTests"] = CoverageStatTests
 json_manager.save_json_file(targetFolder + "/" + plotName.replace(" ","_") + "_final.json", final)
 
 
