@@ -476,9 +476,9 @@ func (c *ClusterConfig) SetDefaults() {
 		c.RedisServerBinaryPath = path.Join(exPath, "/redisraft/redis-server")
 		// "/home/snagendra/Fuzzing/redis/src/redis-server"
 	}
-	if c.WorkingDir == "" {
-		c.WorkingDir = "/home/snagendra/Fuzzing/redisraft-fuzzing/tests/tmp"
-	}
+	// if c.WorkingDir == "" {
+	// 	c.WorkingDir = "/home/snagendra/Fuzzing/redisraft-fuzzing/tests/tmp"
+	// }
 	if _, err := os.Stat(c.WorkingDir); err == nil {
 		os.RemoveAll(c.WorkingDir)
 	}
