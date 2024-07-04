@@ -23,15 +23,32 @@ guide to import an OVF file with VirtualBox: https://docs.oracle.com/en/virtuali
 Go to the tool main folder $INSTALLATION_PATH/raft-rl-test/ (/home/user/app/raft-rl-test/ in the provided VM).
 
 Run:
+    
     ./scripts/run/redis-test.sh
 
-The tool will run for the specified number of episodes (it should take a few minutes at most)
+The tool will run for the specified number of episodes (it should take a few minutes at most) and then process the output folder generating the plots inside the coverage folders.
+
+Run:
+    
+    ./scripts/run/redis-test-multi.sh
+
+For a short test repeated 3 times, with plots and final json files having averaged results.
 
 ### Processing the output
 
 ## Experiments Instructions
 
 ### RedisRaft benchmark
+
+Run:
+    
+    ./scripts/run/redis-benchmark.sh $(SET) $(TIMELIMIT)
+
+SET: set7, set8 \\
+most of the experimental evaluation waypoints sequences are contained in one of these two sets.
+
+TIMELIMIT: short, medium, std, flash  \\
+respectively 30m, 1h, 8h, 5m. If not specified, reads the value specified in the benchmark file benchmarks/redisraft_rm.go customizable by changing the variable comparisonTimeBudget.
 
 ## Reusability
 
