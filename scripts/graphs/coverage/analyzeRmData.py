@@ -21,6 +21,8 @@ def aggregateStats(dataSet):
 
     return result
 
+# call it on the outer folder of a set of experiments, after processing it with createDataFolders.py
+
 # target folder, it should contain all the target .json files
 folder = sys.argv[1]
 folder = folder + "/rmStatsData"

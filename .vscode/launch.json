@@ -5,6 +5,7 @@
     "version": "0.2.0",
     "configurations": [
 
+
         {
             "name": "Run Grid reward machine",
             "type": "go",
@@ -294,7 +295,7 @@
             "program": "${file}",
             "console": "integratedTerminal",
             // "args": ["/RSE/RLDS/work/paperExp/pureExpl/coverageData/generic/"]
-            "args": ["/RSE/RLDS/work/paperExp/biasSet1/coverageData/generic/"]
+            "args": ["results-2/ph/coverageData/"]
         }
     ]
 }
