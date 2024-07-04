@@ -58,7 +58,7 @@ func getSetOfMachines(command string) []string {
 	// one in term3
 	// all in term
 	case "set0":
-		return []string{"EntryInTerm2[3]", "MoreThanOneLeader[4]", "OneLeaderAndOneCandidate[3]", "InconsistentLogs[3]", "LogCommitDiff3[4]"}
+		return []string{"EntryInTerm2[3]", "MoreThanOneLeader[4]", "OneLeaderAndOneCandidate[3]", "InconsistentLogs[3]", "LogCommitDiff3[4]", "baselines"}
 	case "total":
 		return []string{"LeaderInTerm2[1]", "LeaderInTerm2[2]",
 			"LogDiff1[1]", "LogDiff1[1]WithLeader",
@@ -489,6 +489,16 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 	reportConfig.SetPrintLastEpisodes(20)
 
 	comparisonTimeBudget := 8 * time.Hour
+	if timeLimit == "short" {
+		comparisonTimeBudget = 30 * time.Minute
+	} else if timeLimit == "medium" {
+		comparisonTimeBudget = 1 * time.Hour
+	} else if timeLimit == "std" {
+		comparisonTimeBudget = 8 * time.Hour
+	} else if timeLimit == "flash" {
+		comparisonTimeBudget = 5 * time.Minute
+	}
+
 	c := types.NewComparison(&types.ComparisonConfig{
 		Runs:       runs,
 		Episodes:   episodes,

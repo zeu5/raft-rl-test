@@ -7,10 +7,11 @@ import (
 )
 
 var (
-	episodes int
-	horizon  int
-	saveFile string
-	runs     int
+	episodes  int
+	horizon   int
+	saveFile  string
+	runs      int
+	timeLimit string
 
 	cpuprofile string
 	memprofile string
@@ -22,6 +23,7 @@ func GetRootCommand() *cobra.Command {
 	rootCommand.PersistentFlags().IntVar(&horizon, "horizon", 100, "Horizon of each episode")
 	rootCommand.PersistentFlags().StringVarP(&saveFile, "save", "s", "results", "Save the result data in the specified folder")
 	rootCommand.PersistentFlags().IntVar(&runs, "runs", 1, "Number of experiment runs")
+	rootCommand.PersistentFlags().StringVarP(&timeLimit, "timelimit", "t", "none", "Sets the experiment timelimit - short: 30m, medium: 1h, std: 8h")
 
 	// profiling
 	rootCommand.PersistentFlags().StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to file")
