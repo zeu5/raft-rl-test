@@ -1,5 +1,5 @@
 ## Intro
-... is a tool to test distributed consensus protocols implementations. It locally executes an instrumented implementation under test while simulating the network layer and, at fixed intervals throughout the execution, controlling system events (client requests, network partitions, node failures). It allows to choose among different strategies for picking which system events will happen throughout the execution. In particular, it includes our Reinforcement Learning based approach which leverages exploration incentiving reward scheme and enables the injection of execution waypoints to guide testing towards specific executions.
+This is a tool to test distributed consensus protocols implementations. It locally executes an instrumented implementation under test while simulating the network layer and, at fixed intervals throughout the execution, controlling system events (client requests, network partitions, node failures). It allows to choose among different strategies for picking which system events will happen throughout the execution. In particular, it includes our Reinforcement Learning based approach which leverages exploration incentiving reward scheme and enables the injection of execution waypoints to guide testing towards specific executions.
 The tool is implemented in Go.
 
 When illustrating through concrete examples, this overview will mostly refer to the specific testing implementation for the RedisRaft benchmark (https://github.com/RedisLabs/redisraft). RedisRaft is the main production-code benchmark in our experimental evaluation and, since it's written in a different language (C) from our tool implementation, it allows to show all the required steps to test a generic implementation.
@@ -22,6 +22,9 @@ The provided VM image already contains all the dependencies to run the benchmark
 
 #### Installation
 To build the tool on another machine, the only requirement is installing Go (https://go.dev/doc/install). Python3 and the library matplotlib are required to run the scripts to process the output and make the plots.
+
+To run the redisraft benchmark, the instrumented code should be built on the machine. In case of linux systems, the pre-built file already contained in the tool might work.
+*WE DON'T HAVE DOCUMENTATION ON HOW TO BUILD IT, USING THE PROVIDED VM IS PREFERRED*
 
 ### Running a short experiment
 Go to the tool main folder $INSTALLATION_PATH/raft-rl-test/ (/home/user/app/raft-rl-test/ in the provided VM).
@@ -71,7 +74,38 @@ Respectively 30m, 1h, 8h, 5m. If not specified, reads the value specified in the
 Number of times the experiment is executed sequentially. Results will be averaged by output processing scripts.
 
 ## Reusability
+The required steps to test a new implementation are the following:
+- instrument the implementation to test
+- implement the intercept network functionalities
+- map these functionalities in a Reinforcement Learning environment
+- define abstractions and predicates
+- write the benchmark go file with all the running configurations
 
 ### Instrumenting a new implementation
+This step is specific of the implementation to test. In practice, it is sufficient to redirect the outgoing messages of the nodes to the intercept network and expose the nodes states and eventual functionalities.
+In other words, the intercept network (implemented in Go in the tool), should receive all the messages sent by the nodes, receive or be able to query the node states, and be able to send a client request or crash/stop a node.
+
+### Implementing the intercept network
+The intercept network functionalities should be implemented as shown in the files **/redisraft/network.go** and **/redisraft/cluster.go**. 
+In practice, this code should implement the following functionalities:
+- receiving, parsing and sending nodes messages
+- starting, stopping and crashing nodes, and restart the whole cluster at each new episode
+- sending client requests to the nodes
+- querying/receiving and parsing the nodes states
+
+### Defining the RL environment
+Once all the functionalities of the intercept network are defined, these should be mapped into a reinforcement learning environment. This can be seen in the file **/redisraft/env.go**.
+In other words, the system should run in episodes consisting in sequences of states and actions. The code of the environment implement actions like:
+- restart: recreate the cluster and start a new episode
+- step(action): apply the chosen action for the duration of a timestep (ex. deliver messages according to the chosen partition, send a client request to a node, stop a node, ...)
+- after each step, it should return the state of the cluster read from the nodes
+
+### Defining abstractions and predicates
+Abstractions are defined as colors, they are ways to define which parts of the state is considered while testing. Predicates are boolean functions over states, they are used to define waypoints in the state space.
+The user can define many and then use them during testing with different configurations. The code is shown in files **/redisraft/color.go** and **/redisraft/predicates.go**.
+
+### Writing the benchmark file
+The benchmark file, where the experiment can be designed and all the configurations and parameters can be set, can be written starting from **/benchmarks/benchmark_template.go**. The file contains minimal parts of the specific code for redisraft that should be substituted with the code implemented for the new benchmark.
+The analyzers are implemented in the redisraft code, but the code is completely generic except from the type of 'colors' they accept. It is sufficient to copypaste the code and change the type of abstractions they use with the newly defined ones for the benchmark. [future plan to polish the code and properly modularize it]
 
 ### 
