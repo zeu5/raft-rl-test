@@ -16,6 +16,7 @@ import (
 )
 
 // return the list of predicates sequences to use in the experiment, returns empty list if unknown value
+// each Predicate Sequence is a separated experiment
 func getPredicatesSeqSet(command string) []string {
 	switch command {
 	// case ...:
@@ -52,9 +53,10 @@ func getPredicateSequence(name string, rmRlConfig policies.RMRLConfig) (*policie
 func RunBenchmark(sequencesSet string, episodes, horizon int, saveFile string, ctx context.Context) {
 
 	// benchmark configuration
+	numberOfNodes := 3
 	clusterBaseConfig := &redisraft.ClusterBaseConfig{
 		// number of nodes and output path
-		NumNodes: 3,
+		NumNodes: numberOfNodes,
 		SavePath: saveFile,
 
 		// message ports to use
@@ -64,10 +66,10 @@ func RunBenchmark(sequencesSet string, episodes, horizon int, saveFile string, c
 		InterceptListenPort: 7074,
 
 		// raft-specific config, nodes timeouts
-		RequestTimeout:  50,
+		RequestTimeout:  50,  // milliseconds
 		ElectionTimeout: 200, // new election timeout in milliseconds
-		NumRequests:     3,
-		TickLength:      25,
+		NumRequests:     3,   // number of client requests
+		TickLength:      25,  // milliseconds
 	}
 	envConstructor := redisraft.RedisRaftEnvConstructor(saveFile) // call the specific function to get the underlying environment constructor of that benchmark
 
@@ -75,8 +77,8 @@ func RunBenchmark(sequencesSet string, episodes, horizon int, saveFile string, c
 	availableColors := make(map[string]redisraft.RedisRaftColorFunc)
 	// availableColors["NAME"] = BENCHMARK_STATE_INFO_EXTRACT_FUNCTION
 	availableColors["state"] = redisraft.ColorState()   // replica internal state
-	availableColors["commit"] = redisraft.ColorCommit() // number of committed entries? includes config changes, leader elect, request entry
-	availableColors["leader"] = redisraft.ColorLeader() // if a replica is leader? boolean?
+	availableColors["commit"] = redisraft.ColorCommit() // number of committed entries in a replica's log
+	availableColors["leader"] = redisraft.ColorLeader()
 	availableColors["boundedLog3"] = redisraft.ColorBoundedLog(3)
 	availableColors["boundedLog5"] = redisraft.ColorBoundedLog(5)
 
@@ -103,22 +105,23 @@ func RunBenchmark(sequencesSet string, episodes, horizon int, saveFile string, c
 		EnvBaseConfig: clusterBaseConfig, // underlying environment config (benchmark-specific)
 
 		// ticks, messages, ...
-		TicketBetweenPartition: 4,   // how many ticks between two actions (partitions)
-		MaxMessagesPerTick:     100, // max amount of delivered messages per tick (nodes in the same partition)
-		StaySameStateUpto:      5,   // max value of consecutive steps in the same configuration
-		NumReplicas:            3,   // number of nodes
+		TicketBetweenPartition: 4,             // how many ticks between two actions (partitions)
+		MaxMessagesPerTick:     100,           // max amount of delivered messages per tick (nodes in the same partition)
+		StaySameStateUpto:      5,             // max value of consecutive steps in the same configuration
+		NumReplicas:            numberOfNodes, // number of nodes
 
 		// crashes configuration
 		WithCrashes: true, // enabled
 		CrashLimit:  3,    // max number of nodes crashed per episode
 		MaxInactive: 1,    // max amount of simultaneous inactive nodes
 
-		// search space boundaries, episodes will end when out of the boundaries
-		TerminalPredicate:            redisraft.MaxTerm(5), // constant false to not set any boundary
+		// search space bound, episodes will end when out of bound
+		TerminalPredicate:            redisraft.MaxTerm(5), // constant false predicate to not set any bound
 		TerminalPredicateDescription: "MaxTerm(5)",
 	}
 
 	// additional execution information, ticks timings, number of messages, episodes outcomes and traces...
+	// stored in the output folder, can be used to check learned policy
 	reportConfig := types.RepConfigStandard()
 	reportConfig.SetPrintLastEpisodes(20)
 
