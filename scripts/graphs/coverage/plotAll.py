@@ -16,6 +16,7 @@ renamingMap = {
     "bonusRlMax": "BonusMaxRL",
     "negVisits": "NegRLVisits",
     "neg": "NegRL",
+    "random": "Random",
 }
 
 # target folder, it should contain all the target .json files
