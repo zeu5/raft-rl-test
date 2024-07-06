@@ -39,16 +39,19 @@ for expFolder in listdir(folder):
             data = json_manager.load_json_file(os.path.join(expPath, file))
             for expName, expData in data.items():
 
-                # eventually rename the policy (for the final plot)
-                if expName in renamingMap:
-                    expName = renamingMap[expName]
-                # if not existing, create a list of data sets for the policy
-                if expName not in dataSets:
-                    dataSets[expName] = []
-                # add the data set to the list
-                dataSets[expName].append(expData)
-                if len(expData) < shortestLen: # keep track of the shortest data set
-                    shortestLen = len(expData)
+                if expName in renamingMap or expName == expFolder:
+                    # eventually rename the policy (for the final plot)
+                    if expName in renamingMap:
+                        expName = renamingMap[expName]
+                    else:
+                        expName = "PredRL_" + expName
+                    # if not existing, create a list of data sets for the policy
+                    if expName not in dataSets:
+                        dataSets[expName] = []
+                    # add the data set to the list
+                    dataSets[expName].append(expData)
+                    if len(expData) < shortestLen: # keep track of the shortest data set
+                        shortestLen = len(expData)
 
         # calculate the average of the data
         avgDataSets = {}
