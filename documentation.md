@@ -56,6 +56,9 @@ ex. redis-set7
     each of the output folder will contain averaged coverage plots (with and without standard deviation)
 - ./scripts/graphs/coverage/analyzeRmData.py redis-set7 : will produce some aggregated json files with more info about waypoints sequences
 
+There is an additional script to produce customized plots:
+- ./scripts/graphs/coverage/customPlot.py : it should be called directly in a subfolder of coverageData (relative to a single waypoint sequence). By changing the filters and renaming maps inside the script, it is possible to define what should be plotted
+
 ## Experiments Instructions
 
 ### RedisRaft benchmark
@@ -72,6 +75,8 @@ Respectively 30m, 1h, 8h, 5m. If not specified, reads the value specified in the
 
 - ITERATIONS: integer value\
 Number of times the experiment is executed sequentially. Results will be averaged by output processing scripts.
+
+The obtain results similar to the evalutation, these should be run for 8hours and at least 10 iterations.
 
 ## Reusability
 The required steps to test a new implementation are the following:
