@@ -26,9 +26,10 @@ class Position:
     def __hash__(self):
         return hash((self.x, self.y, self.z, self.grid))
 
+# the full environment?
 class Grid:
     def __init__(self, grids, height, width, depth, doors = {}):
-        self.grids = grids
+        self.grids = grids # number of grids?
         self.height = height
         self.width = width
         self.depth = depth
@@ -61,11 +62,12 @@ class Grid:
             if pos.x > 0:
                 pos.x -= 1
         elif direction == "into" and self._is_door(self._cur_pos):
-            pos = self.doors[pos]
+            pos = self.doors[pos].copy()
 
-        self._cur_pos = pos
+        self._cur_pos = pos.copy()
         return self._cur_pos.copy()
     
+    # available actions
     def directions(self, pos):
         directions = []
         if pos.z < self.depth-1:
@@ -89,7 +91,7 @@ class Grid:
         
     def reset(self):
         self._cur_pos = Position(0, 0, 0, 0)
-        return self._cur_pos
+        return self._cur_pos.copy()
 
 class AbstractPosition:
     def __init__(self, pos) -> None:
@@ -151,7 +153,7 @@ class Agent:
         self.name = name
         self.traces = []
     
-    def run(self,episodes, horizon):
+    def run(self, episodes, horizon):
         for episode in range(episodes):
             pos = self.env.reset()
             trace = []
@@ -161,10 +163,13 @@ class Agent:
                 action = self.policy.pick(pos, actions)
                 next_pos = self.env.move(action)
                 self.policy.update_state(pos, action, next_pos)
+
+                # always append the real position (not the abstract one)
                 if isinstance(pos, AbstractPosition):
                     trace.append((pos.pos.copy(), action, next_pos.pos.copy()))
                 else:
                     trace.append((pos.copy(), action, next_pos.copy()))
+
                 print(f"\r{self.name} - Episode: {episode+1}/{episodes}, Step: {step+1}/{horizon}",end="")
                 pos = next_pos
             self.policy.update(trace)
@@ -243,8 +248,12 @@ class BonusMaxPolicy:
         if np.random.rand() < self.epsilon:
             return np.random.choice(actions)
         q_values = [self.q.get((pos, a), 1) for a in actions]
-        return actions[np.argmax(q_values)]
-    
+        max_actions = np.argwhere(q_values == np.max(q_values)).flatten()
+        if len(max_actions) > 1:
+            return actions[np.random.choice(max_actions)]
+        else:
+            return actions[max_actions[0]]
+        # return actions[max_actions[0]]   
     
     def update(self, trace):
         for (i,(pos, action, next_pos)) in enumerate(trace):
@@ -253,7 +262,7 @@ class BonusMaxPolicy:
             self.visits[(next_pos, action)] = t
             next_q_value = max([self.q.get((next_pos, a), 1) for a in self.actions])
             if i == len(trace)-1:
-                next_q_value = max([self.q.get((next_pos, a), 0) for a in self.actions])
+                next_q_value = 0
 
             self.q[(pos, action)] = (1-self.alpha)* q_value + self.alpha * max(1/t, self.gamma * next_q_value)
 
@@ -298,7 +307,12 @@ class PredHRLPolicy:
         if np.random.rand() < self.epsilon:
             return np.random.choice(actions)
         q_values = [self.q_tables[self._cur_pred_name].get((pos, a), 1) for a in actions]
-        return actions[np.argmax(q_values)]
+        max_actions = np.argwhere(q_values == np.max(q_values)).flatten()
+        if len(max_actions) > 1:
+            return actions[np.random.choice(max_actions)]
+        else:
+            return actions[max_actions[0]]
+        # return actions[max_actions[0]]    
     
     def update_state(self, pos, action, next_pos):
         reward = False
@@ -331,7 +345,7 @@ class PredHRLPolicy:
                 self.visit_tables[pred.name][(next_pos, action)] = t
                 next_q_value = max([self.q_tables[pred.name].get((next_pos, a), 1) for a in self.actions])
                 if out_of_space or i == trace_seg_len-1:
-                    next_q_value = max([self.q_tables[pred.name].get((next_pos, a), 0) for a in self.actions])
+                    next_q_value = 0
                 
                 r = 2+(1/t) if reward else 1/t
                 self.q_tables[pred.name][(pos, action)] = (1-self.alpha)* q_value + self.alpha * max(r, self.gamma * next_q_value)
@@ -356,7 +370,12 @@ class RewardBonusMaxPolicy:
         if np.random.rand() < self.epsilon:
             return np.random.choice(actions)
         q_values = [self.q.get((pos, a), 1) for a in actions]
-        return actions[np.argmax(q_values)]
+        max_actions = np.argwhere(q_values == np.max(q_values)).flatten()
+        if len(max_actions) > 1:
+            return actions[np.random.choice(max_actions)]
+        else:
+            return actions[max_actions[0]]
+        # return actions[max_actions[0]]     
     
     
     def update(self, trace):
@@ -366,7 +385,7 @@ class RewardBonusMaxPolicy:
             self.visits[(next_pos, action)] = t
             next_q_value = max([self.q.get((next_pos, a), 1) for a in self.actions])
             if i == len(trace)-1:
-                next_q_value = max([self.q.get((next_pos, a), 0) for a in self.actions])
+                next_q_value = 0
             r = 1/t
             if self.reward_func(pos):
                 r = 2+(1/t)
@@ -386,17 +405,18 @@ class Experiment:
     def plot(self, dimensions):
         (height, width, depth, grids) = dimensions
         # plot a heatmap for each grid viewed from the top. The color indicates the combined visits for all positions in that depth.
-        visits = np.zeros((height, width, grids))
+        visits = np.zeros((height, width, depth, grids))
         for trace in self.traces:
             for (pos, action, next_pos) in trace:
-                visits[pos.x, pos.y, pos.grid] += 1
+                visits[pos.x, pos.y, pos.z, pos.grid] = 1
+        visits = np.sum(visits, axis=2)
 
         # use subplots to plot each grid with 3 grids in a row
         rows = math.ceil(grids/3)
         fig, axs = plt.subplots(rows, 3)
         for i in range(grids):
             x,y = int(i//3), i%3
-            axs[x,y].imshow(visits[:, :, i], cmap='Oranges', interpolation='nearest')
+            axs[x,y].imshow(visits[:, :, i], cmap='Oranges', interpolation='nearest', vmin=0, vmax=3)
             axs[x,y].set_title(f"Cube {i}")
         
         plt.savefig(f"results/{self.name}.png")
@@ -407,20 +427,41 @@ class Experiment:
         for trace in self.traces:
             for (pos, action, next_pos) in trace:
                 if pos.grid == grid:
-                    visits[pos.x, pos.y, pos.z] += 1
+                    visits[pos.x, pos.y, pos.z] = 1
         
         rows = math.ceil(depth/3)
         fig, axs = plt.subplots(rows, 3)
         for i in range(depth):
             x,y = int(i//3), i%3
             if x > 1:
-                axs[x,y].imshow(visits[:, :, i], cmap='Oranges', interpolation='nearest')
+                axs[x,y].imshow(visits[:, :, i], cmap='Oranges', interpolation='nearest', vmin=0, vmax=1)
                 axs[x,y].set_title(f"Depth {i}")
             else:
-                axs[y].imshow(visits[:, :, i], cmap='Oranges', interpolation='nearest')
+                axs[y].imshow(visits[:, :, i], cmap='Oranges', interpolation='nearest', vmin=0, vmax=1)
                 axs[y].set_title(f"Depth {i}")
 
         plt.savefig(f"results/{self.name}_grid_{grid}.png")
+
+def plot_test(dimensions):
+        (height, width, depth, grids) = dimensions
+        # plot a heatmap for each grid viewed from the top. The color indicates the combined visits for all positions in that depth.
+        visits = np.zeros((height, width, grids))
+
+        visits[0, 0, 0] = 1
+        visits[0, width - 1, 0] = 10
+
+        visits[0, 0, 1] = 1
+        visits[0, width - 1, 1] = 1
+
+        # use subplots to plot each grid with 3 grids in a row
+        rows = math.ceil(grids/3)
+        fig, axs = plt.subplots(rows, 3)
+        for i in range(grids):
+            x,y = int(i//3), i%3
+            axs[x,y].imshow(visits[:, :, i], cmap='Oranges', interpolation='nearest', vmin=0, vmax=10)
+            axs[x,y].set_title(f"Cube {i}")
+        
+        plt.savefig(f"results/test.png")
 
 def main():
     grids = 6
@@ -436,6 +477,8 @@ def main():
     env = Grid(grids, height, width, depth, doors)
     abs_env = AbstractGrid(env, doors)
 
+    episodes = 1000
+
     # create a results folder, clear if it exists
     if not os.path.exists("results"):
         os.makedirs("results")
@@ -443,21 +486,22 @@ def main():
         for file in os.listdir("results"):
             os.remove(f"results/{file}")
     
-    
+    # plot_test(dimensions)
+
     # policy = NegRewardPolicy(0.1, 0.99, env.all_directions())
     # exp = Experiment("NegReward", env, policy)
     # exp.run(10000, 100)
     # exp.plot()
 
-    policy = BonusMaxPolicy(0.1, 0.99, 0.025, env.all_directions())
+    policy = BonusMaxPolicy(0.1, 0.9, 0.025, env.all_directions())
     exp = Experiment("BonusMax", env, policy)
-    exp.run(10000, 100)
+    exp.run(episodes, 100)
     exp.plot(dimensions)
     exp.plot_grid(3, dimensions)
 
     policy = RandomPolicy()
     exp = Experiment("Random", env, policy)
-    exp.run(10000, 100)
+    exp.run(episodes, 100)
     exp.plot(dimensions)
 
     predicates = [
@@ -467,20 +511,20 @@ def main():
     ]
     policy = PredHRLPolicy(0.1, 0.99, 0.025, env.all_directions(), predicates, one_time=True)
     exp = Experiment("PredHRL", env, policy)
-    exp.run(10000, 100)
+    exp.run(episodes, 100)
     exp.plot(dimensions)
     exp.plot_grid(3, dimensions)
 
     reward_func = lambda pos: pos.grid == 3
     policy = RewardBonusMaxPolicy(0.1, 0.99, 0.025, env.all_directions(), reward_func)
     exp = Experiment("RewardBonusMax", env, policy)
-    exp.run(10000, 100)
+    exp.run(episodes, 100)
     exp.plot(dimensions)
     exp.plot_grid(3, dimensions)
 
     policy = BonusMaxPolicy(0.1, 0.99, 0.025, env.all_directions())
     exp = Experiment("BonusMaxAbs", abs_env, policy)
-    exp.run(10000, 100)
+    exp.run(episodes, 100)
     exp.plot(dimensions)
     exp.plot_grid(3, dimensions)
 
