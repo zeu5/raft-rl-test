@@ -20,6 +20,8 @@ func getSetOfMachines(command string) []string {
 	switch command {
 	case "debug":
 		return []string{"MoreThanOneCandidate[3]"}
+	case "expl-rl":
+		return []string{"baselines"}
 	case "expl":
 		return []string{"neg", "baselines"}
 	case "set1":
@@ -605,16 +607,16 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 			policies.NewBonusPolicyGreedy(0.2, 0.95, 0.05, true),
 			types.NewPartitionEnv(partitionEnvConfig),
 		))
-		c.AddExperiment(types.NewExperiment(
-			"random",
-			types.NewRandomPolicy(),
-			types.NewPartitionEnv(partitionEnvConfig),
-		))
-		c.AddExperiment(types.NewExperiment(
-			"negVisits",
-			policies.NewSoftMaxNegFreqPolicy(0.3, 0.7, 1, false),
-			types.NewPartitionEnv(partitionEnvConfig),
-		))
+		// c.AddExperiment(types.NewExperiment(
+		// 	"random",
+		// 	types.NewRandomPolicy(),
+		// 	types.NewPartitionEnv(partitionEnvConfig),
+		// ))
+		// c.AddExperiment(types.NewExperiment(
+		// 	"negVisits",
+		// 	policies.NewSoftMaxNegFreqPolicy(0.3, 0.7, 1, false),
+		// 	types.NewPartitionEnv(partitionEnvConfig),
+		// ))
 		if neg {
 			c.AddExperiment(types.NewExperiment(
 				"neg",

@@ -57,17 +57,17 @@ func RedisRaftExploration(episodes, horizon int, saveFile string, ctx context.Co
 	c.AddAnalysis("plot", redisraft.CoverageAnalyzerCtor(horizon, colors...), redisraft.CoverageComparator(saveFile, horizon))
 	c.AddAnalysis("bugs", redisraft.BugAnalyzerCtor(saveFile), redisraft.BugComparator())
 
-	c.AddExperiment(types.NewExperiment(
-		"NegReward",
-		policies.NewSoftMaxNegFreqPolicy(0.1, 0.99, 1, false),
-		partitionEnv,
-	))
+	// c.AddExperiment(types.NewExperiment(
+	// 	"NegReward",
+	// 	policies.NewSoftMaxNegFreqPolicy(0.1, 0.99, 1, false),
+	// 	partitionEnv,
+	// ))
 
-	c.AddExperiment(types.NewExperiment(
-		"Random",
-		types.NewRandomPolicy(),
-		partitionEnv,
-	))
+	// c.AddExperiment(types.NewExperiment(
+	// 	"Random",
+	// 	types.NewRandomPolicy(),
+	// 	partitionEnv,
+	// ))
 
 	c.AddExperiment(types.NewExperiment(
 		"BonusMax",

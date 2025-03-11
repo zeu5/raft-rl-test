@@ -63,8 +63,9 @@ type InterceptNetwork struct {
 	ctx    context.Context
 	server *http.Server
 
-	lock  *sync.Mutex
-	nodes map[uint64]string
+	lock       *sync.Mutex
+	nodes      map[uint64]string
+	eventTrace *EventTrace
 	// Make this bag of messages
 	messages map[string]Message
 }
@@ -72,11 +73,12 @@ type InterceptNetwork struct {
 func NewInterceptNetwork(ctx context.Context, addr string) *InterceptNetwork {
 
 	f := &InterceptNetwork{
-		Addr:     addr,
-		ctx:      ctx,
-		lock:     new(sync.Mutex),
-		nodes:    make(map[uint64]string),
-		messages: make(map[string]Message),
+		Addr:       addr,
+		ctx:        ctx,
+		lock:       new(sync.Mutex),
+		eventTrace: NewEventTrace(),
+		nodes:      make(map[uint64]string),
+		messages:   make(map[string]Message),
 	}
 
 	gin.SetMode(gin.ReleaseMode)
@@ -123,8 +125,19 @@ func (n *InterceptNetwork) handleMessage(c *gin.Context) {
 	n.lock.Lock()
 	n.messages[m.ID] = m
 	n.lock.Unlock()
+	receiveEvent := Event{
+		Name:   "SendMessage",
+		Node:   int(m.From()),
+		Params: n.getMessageEventParams(m),
+	}
+	n.eventTrace.Add(receiveEvent)
 
 	c.JSON(http.StatusOK, gin.H{"message": "ok"})
+}
+
+func (n *InterceptNetwork) getMessageEventParams(m Message) map[string]interface{} {
+	params := make(map[string]interface{})
+	return params
 }
 
 func (n *InterceptNetwork) handleReplica(c *gin.Context) {
