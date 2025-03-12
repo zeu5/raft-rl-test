@@ -67,7 +67,9 @@ type InterceptNetwork struct {
 	nodes      map[uint64]string
 	eventTrace *EventTrace
 	// Make this bag of messages
-	messages map[string]Message
+	messages   map[string]Message
+	requests   map[string]int
+	requestCtr int
 }
 
 func NewInterceptNetwork(ctx context.Context, addr string) *InterceptNetwork {
@@ -79,12 +81,14 @@ func NewInterceptNetwork(ctx context.Context, addr string) *InterceptNetwork {
 		eventTrace: NewEventTrace(),
 		nodes:      make(map[uint64]string),
 		messages:   make(map[string]Message),
+		requests:   make(map[string]int),
+		requestCtr: 0,
 	}
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.POST("/replica", f.handleReplica)
-	r.POST("/event", dummyHandler)
+	r.POST("/event", f.handleEvent)
 	r.POST("/message", f.handleMessage)
 	f.server = &http.Server{
 		Addr:    addr,
@@ -94,8 +98,101 @@ func NewInterceptNetwork(ctx context.Context, addr string) *InterceptNetwork {
 	return f
 }
 
-func dummyHandler(c *gin.Context) {
+func (n *InterceptNetwork) handleEvent(c *gin.Context) {
+	event := make(map[string]interface{})
+	if err := c.ShouldBindJSON(&event); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to unmarshal request"})
+		return
+	}
+	nodeID := 0
+	nodeIDI, ok := event["replica"]
+	if !ok {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+		return
+	}
+	nodeIDS, ok := nodeIDI.(string)
+	if !ok {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+		return
+	}
+	nodeID, err := strconv.Atoi(nodeIDS)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+		return
+	}
+
+	eventTypeI, ok := event["type"]
+	if !ok {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+		return
+	}
+	eventType, ok := eventTypeI.(string)
+	if !ok {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+		return
+	}
+
+	e := Event{
+		Name:   eventType,
+		Node:   nodeID,
+		Params: n.mapEventToParams(eventType, event),
+	}
+
+	n.eventTrace.Add(e)
 	c.JSON(http.StatusOK, gin.H{"message": "ok"})
+}
+
+func (n *InterceptNetwork) getRequestNumber(req string) int {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
+	ctr, ok := n.requests[req]
+	if !ok {
+		ctr = n.requestCtr
+		n.requests[req] = ctr
+		n.requestCtr += 1
+	}
+
+	return ctr
+}
+
+func (n *InterceptNetwork) mapEventToParams(eventType string, event map[string]interface{}) map[string]interface{} {
+	params := make(map[string]interface{})
+	eParams := event["params"].(map[string]interface{})
+	switch eventType {
+	case "ClientRequest":
+		leader, _ := strconv.Atoi(eParams["leader"].(string))
+		params["leader"] = leader
+		params["request"] = n.getRequestNumber(eParams["request"].(string))
+	case "BecomeLeader":
+		node, _ := strconv.Atoi(eParams["node"].(string))
+		term, _ := strconv.Atoi(eParams["term"].(string))
+		params["node"] = node
+		params["term"] = term
+	case "Timeout":
+		node, _ := strconv.Atoi(eParams["node"].(string))
+		params["node"] = node
+	case "MembershipChange":
+		nodeI, ok := eParams["node"]
+		if !ok || nodeI == nil {
+			return params
+		}
+		node, _ := strconv.Atoi(nodeI.(string))
+		actionI, ok := eParams["action"]
+		if !ok || actionI == nil {
+			return params
+		}
+		params["action"] = actionI.(string)
+		params["node"] = node
+	case "UpdateSnapshot":
+		node, _ := strconv.Atoi(eParams["node"].(string))
+		params["node"] = node
+		params["snapshot_index"] = int(eParams["snapshot_index"].(float64))
+	default:
+		params = eParams
+	}
+
+	return params
 }
 
 // copies all the messages from the InterceptNetwork, should not affect the network or other episodes
@@ -135,8 +232,64 @@ func (n *InterceptNetwork) handleMessage(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "ok"})
 }
 
+type entry struct {
+	Term int    `json:"Term"`
+	Data string `json:"Data"`
+}
+
 func (n *InterceptNetwork) getMessageEventParams(m Message) map[string]interface{} {
 	params := make(map[string]interface{})
+
+	params["term"] = int(m.ParsedMessage["term"].(float64))
+	params["from"] = int(m.From())
+	params["to"] = int(m.To())
+
+	switch m.Type {
+	case "append_entries_request":
+		params["type"] = "MsgApp"
+		params["log_term"] = m.ParsedMessage["prev_log_term"]
+		entries := make([]entry, 0)
+		for _, eI := range m.ParsedMessage["entries"].([]interface{}) {
+			e := eI.(map[string]interface{})
+			data := e["data"].(string)
+			if data == "" {
+				continue
+			}
+			eTermI, ok := e["term"]
+			if !ok {
+				continue
+			}
+			entries = append(entries, entry{
+				Term: int(eTermI.(float64)),
+				Data: strconv.Itoa(n.getRequestNumber(data)),
+			})
+		}
+		params["entries"] = entries
+		params["index"] = m.ParsedMessage["prev_log_idx"]
+		params["commit"] = m.ParsedMessage["leader_commit"]
+		params["reject"] = false
+	case "append_entries_response":
+		params["type"] = "MsgAppResp"
+		params["log_term"] = 0
+		params["entries"] = []entry{}
+		params["index"] = m.ParsedMessage["current_idx"]
+		params["commit"] = 0
+		params["reject"] = int(m.ParsedMessage["success"].(float64)) == 0
+	case "request_vote_request":
+		params["type"] = "MsgVote"
+		params["log_term"] = m.ParsedMessage["last_log_term"]
+		params["entries"] = []entry{}
+		params["index"] = m.ParsedMessage["last_log_idx"]
+		params["commit"] = 0
+		params["reject"] = false
+	case "request_vote_response":
+		params["type"] = "MsgVoteResp"
+		params["log_term"] = 0
+		params["entries"] = []entry{}
+		params["index"] = 0
+		params["commit"] = 0
+		params["reject"] = int(m.ParsedMessage["vote_granted"].(float64)) == 0
+	}
 	return params
 }
 
@@ -195,12 +348,17 @@ func (n *InterceptNetwork) Start() {
 }
 
 // re-create the messages and nodes maps for the network
-func (n *InterceptNetwork) Reset() {
+func (n *InterceptNetwork) Reset(epCtx *types.EpisodeContext) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
 	n.messages = make(map[string]Message)
 	n.nodes = make(map[uint64]string)
+	if epCtx.ShouldRecordEventTrace() {
+		epCtx.RecordEventTrace(n.eventTrace)
+	}
+
+	n.eventTrace.Reset()
 }
 
 // wait until the specified number of nodes get connected, return false if it does not happen within the internal specified timeout
@@ -274,13 +432,22 @@ func (n *InterceptNetwork) SendMessage(id string, epCtx *types.EpisodeContext) e
 	} else {
 		return fmt.Errorf(fmt.Sprintf("SendMessage : error with post operation \n%s", err))
 	}
-
+	receiveEvent := Event{
+		Name:   "DeliverMessage",
+		Node:   int(m.To()),
+		Params: n.getMessageEventParams(m),
+	}
+	n.eventTrace.Add(receiveEvent)
 	// take the lock and delete the sent message from the list
 	n.lock.Lock()
 	delete(n.messages, id)
 	n.lock.Unlock()
 
 	return nil
+}
+
+func (n *InterceptNetwork) AddEvent(e Event) {
+	n.eventTrace.Add(e)
 }
 
 // delete a message from the list given its id, if there is no such message => no-op

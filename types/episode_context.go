@@ -2,6 +2,7 @@ package types
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path"
 	"sync"
@@ -113,6 +114,22 @@ func (e *EpisodeContext) SetToPrintReport(value bool) {
 	e.ToPrintReport = value
 }
 
+func (e *EpisodeContext) ShouldRecordEventTrace() bool {
+	return e.reportPrintConfig.RecordTraces
+}
+
+func (e *EpisodeContext) RecordEventTrace(marshaller json.Marshaler) {
+	if !e.reportPrintConfig.RecordTraces {
+		return
+	}
+	bs, err := marshaller.MarshalJSON()
+	if err != nil {
+		return
+	}
+	savePath := path.Join(e.reportSavePath, "traces", fmt.Sprintf("traces_%s_%d.json", e.ExperimentName, e.Episode))
+	util.WriteToFile(savePath, string(bs))
+}
+
 // record the report of the episode. Based on the reason (error, timeout, randomly sampled) and the printing configuration (standard, only values, timeline), the report is printed.
 func (e *EpisodeContext) RecordReport() {
 	// TODO: complete this function
@@ -162,6 +179,7 @@ type ReportsPrintConfig struct {
 
 	PrintIfError   bool // print the report if an error occurs
 	PrintIfTimeout bool // print the report if a timeout occurs
+	RecordTraces   bool
 
 	Sampling          float32 // rate of randomly printed reports (for successful episodes)
 	PrintLastEpisodes int     // number of last episodes to print
@@ -195,6 +213,7 @@ func RepConfigStandard() *ReportsPrintConfig {
 
 		PrintIfError:   true,
 		PrintIfTimeout: true,
+		RecordTraces:   true,
 
 		Sampling: 0.02,
 	}

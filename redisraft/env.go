@@ -161,7 +161,7 @@ func (r *RedisRaftEnv) Reset(epCtx *types.EpisodeContext) (types.PartitionedSyst
 		}
 	}
 
-	r.network.Reset()
+	r.network.Reset(epCtx)
 
 	r.cluster = NewCluster(r.clusterConfig)
 
@@ -182,7 +182,7 @@ func (r *RedisRaftEnv) Reset(epCtx *types.EpisodeContext) (types.PartitionedSyst
 			if r.cluster != nil {
 				r.cluster.DestroyCtx(epCtx)
 			}
-			r.network.Reset()
+			r.network.Reset(epCtx)
 			r.cluster = NewCluster(r.clusterConfig)
 			trials++
 			time.Sleep(500 * time.Millisecond)
@@ -268,6 +268,13 @@ func (r *RedisRaftEnv) Start(nodeID uint64, epCtx *types.EpisodeContext) error {
 	if e != nil {
 		return e
 	}
+	r.network.AddEvent(Event{
+		Name: "Add",
+		Node: int(nodeID),
+		Params: map[string]interface{}{
+			"i": int(nodeID),
+		},
+	})
 
 	dur := time.Since(start)
 
@@ -291,6 +298,13 @@ func (r *RedisRaftEnv) Stop(nodeID uint64, epCtx *types.EpisodeContext) error {
 	if e != nil {
 		return e
 	}
+	r.network.AddEvent(Event{
+		Name: "Remove",
+		Node: int(nodeID),
+		Params: map[string]interface{}{
+			"i": int(nodeID),
+		},
+	})
 
 	dur := time.Since(start)
 
