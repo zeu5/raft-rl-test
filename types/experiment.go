@@ -514,6 +514,10 @@ func NewComparison(config *ComparisonConfig) *Comparison {
 	foldersToCreate = append(foldersToCreate, "epReports")
 	foldersToCreate = append(foldersToCreate, "coverage")
 
+	if config.ReportConfig.RecordTraces {
+		foldersToCreate = append(foldersToCreate, "eventTraces")
+	}
+
 	if config.RecordTraces {
 		foldersToCreate = append(foldersToCreate, "traces")
 	}

@@ -126,7 +126,7 @@ func (e *EpisodeContext) RecordEventTrace(marshaller json.Marshaler) {
 	if err != nil {
 		return
 	}
-	savePath := path.Join(e.reportSavePath, "traces", fmt.Sprintf("traces_%s_%d.json", e.ExperimentName, e.Episode))
+	savePath := path.Join(e.reportSavePath, "eventTraces", fmt.Sprintf("traces_%s_%d.json", e.ExperimentName, e.Episode))
 	util.WriteToFile(savePath, string(bs))
 }
 
