@@ -490,13 +490,13 @@ func RedisRaftRM(machine string, episodes, horizon int, saveFile string, ctx con
 	reportConfig := types.RepConfigStandard()
 	reportConfig.SetPrintLastEpisodes(20)
 
-	comparisonTimeBudget := 8 * time.Hour
+	comparisonTimeBudget := 12 * time.Hour
 	if timeLimit == "short" {
 		comparisonTimeBudget = 30 * time.Minute
 	} else if timeLimit == "medium" {
 		comparisonTimeBudget = 1 * time.Hour
 	} else if timeLimit == "std" {
-		comparisonTimeBudget = 8 * time.Hour
+		comparisonTimeBudget = 12 * time.Hour
 	} else if timeLimit == "flash" {
 		comparisonTimeBudget = 5 * time.Minute
 	}
