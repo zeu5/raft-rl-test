@@ -29,6 +29,13 @@ def collate_occurrences(parent_dir):
                 if (algo, bug) not in data:
                     data[(algo, bug)] = []
                 data[(algo,bug)].append(instances)
+
+    with open("bug_data.json", "w") as bug_file:
+        json_data = {}
+        for (algo, bug) in data:
+            key = "{}_{}".format(algo, bug)
+            json_data[key] = data[(algo, bug)]
+        json.dump(json_data, bug_file)
     
     avg_occurence = {}
     df_data = {

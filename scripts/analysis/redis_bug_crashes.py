@@ -3,6 +3,7 @@ import sys
 import os
 import numpy as np
 import pandas as pd
+import json 
 
 def get_stack_trace(log_lines):
     started = False
@@ -154,6 +155,13 @@ def collate_occurrences(parent_dir):
                 if (algo, bug) not in data:
                     data[(algo, bug)] = []
                 data[(algo,bug)].append(instances)
+
+    with open("crashes_data.json", "w") as crashes_file:
+        json_data = {}
+        for (algo, bug) in data:
+            key = "{}_{}".format(algo, bug)
+            json_data[key] = data[(algo, bug)]
+        json.dump(json_data, crashes_file)
     
     avg_occurence = {}
     df_data = {

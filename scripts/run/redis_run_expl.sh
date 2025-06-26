@@ -10,7 +10,7 @@
 parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
 cd "$parent_path"
 
-results_path=$3
+results_path="../../results_redis"
 
 if [ -d $results_path ]; then
     rm -rf $results_path
